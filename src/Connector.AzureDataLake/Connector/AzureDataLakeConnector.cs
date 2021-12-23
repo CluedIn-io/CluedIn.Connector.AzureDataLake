@@ -94,7 +94,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
 
         private async Task Flush(ExecutionContext executionContext, Guid providerDefinitionId, string containerName,
-            List<object> bulk, bool scheduled = false)
+            List<object> bulk)
         {
             executionContext.Log.LogDebug(
                 $"AzureDataLakeConnector.Flush: providerDefinitionId: {providerDefinitionId}, containerName: {containerName}, bulkSize: {bulk.Count}");
