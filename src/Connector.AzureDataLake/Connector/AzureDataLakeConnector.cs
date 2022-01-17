@@ -1,28 +1,30 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
-using Azure.Storage;
-using Azure.Storage.Files.DataLake;
-using Azure.Storage.Files.DataLake.Models;
+﻿using CluedIn.Connector.Common.Batching;
 using CluedIn.Connector.Common.Connectors;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.DataStore;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace CluedIn.Connector.AzureDataLake.Connector
 {
     public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>
     {
-        private readonly Dictionary<string, List<object>> _bulkCache = new Dictionary<string, List<object>>();
-
         public readonly int Threshold = 1000;
+        private readonly ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> _cachingService;
+        private readonly object _cacheLock = new object();
 
-        public AzureDataLakeConnector(IConfigurationRepository repository, ILogger<AzureDataLakeConnector> logger,
-            IAzureDataLakeClient client, IAzureDataLakeConstants constants)
+        public AzureDataLakeConnector(IConfigurationRepository repository,
+            ILogger<AzureDataLakeConnector> logger,
+            IAzureDataLakeClient client,
+            IAzureDataLakeConstants constants,
+            ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> batchingService)
             : base(repository, logger, client, constants.ProviderId)
         {
+            _cachingService = batchingService;
         }
 
         public override async Task StoreData(ExecutionContext executionContext, Guid providerDefinitionId,
@@ -31,11 +33,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             data["ProviderDefinitionId"] = providerDefinitionId;
             data["ContainerName"] = containerName;
 
-            var bulk = AddDataToCache(providerDefinitionId, containerName, data);
+            var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
+            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, containerName);
 
-            if (bulk.Count >= Threshold)
+            lock (_cacheLock)
             {
-                await Flush(executionContext, providerDefinitionId, containerName, bulk);
+                _cachingService.AddItem(data, configurations);
+            }
+
+            if (_cachingService.Count() >= Threshold)
+            {
+                Flush();
             }
 
             executionContext.Log.LogDebug(
@@ -53,11 +61,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 {"Edges", edges}
             };
 
-            var bulk = AddDataToCache(providerDefinitionId, containerName, data, true);
+            var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
+            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, $"{containerName}.edges");
 
-            if (bulk.Count >= Threshold)
+            lock (_cacheLock)
             {
-                await Flush(executionContext, providerDefinitionId, $"{containerName}.edges", bulk);
+                _cachingService.AddItem(data, configurations);
+            }
+
+            if (_cachingService.Count() >= Threshold)
+            {
+                Flush();
             }
 
             executionContext.Log.LogDebug(
@@ -67,111 +81,27 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         public override async Task<bool> VerifyConnection(ExecutionContext executionContext,
             IDictionary<string, object> authenticationData)
         {
-            await EnsureDataLakeDirectoryClientAsync(new AzureDataLakeConnectorJobData(authenticationData));
+            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(authenticationData));
+
             return true;
         }
 
-
-        private List<object> AddDataToCache(Guid providerDefinitionId, string containerName,
-            IDictionary<string, object> data, bool isEdges = false)
+        private void Flush()
         {
-            var bulkCacheKeyName = $"{providerDefinitionId}-{containerName}";
-            if (isEdges)
+            lock (_cacheLock)
             {
-                bulkCacheKeyName += "-edges";
+                var bulkData = _cachingService.GetItems().GroupBy(pair => pair.Value);
+                foreach (var grouping in bulkData)
+                {
+                    var configuration = grouping.Key;
+                    var content = JsonUtility.SerializeIndented(grouping.Select(g => g.Key));
+
+                    _client.SaveData(configuration, content).GetAwaiter().GetResult();
+                }
+
+                _cachingService.Clear();
             }
-
-            if (!_bulkCache.TryGetValue(bulkCacheKeyName, out var bulk))
-            {
-                bulk = new List<object>();
-                _bulkCache[bulkCacheKeyName] = bulk;
-            }
-
-            bulk.Add(data);
-
-            return bulk;
         }
-
-
-        private async Task Flush(ExecutionContext executionContext, Guid providerDefinitionId, string containerName,
-            List<object> bulk)
-        {
-            executionContext.Log.LogDebug(
-                $"AzureDataLakeConnector.Flush: providerDefinitionId: {providerDefinitionId}, containerName: {containerName}, bulkSize: {bulk.Count}");
-
-            List<object> copy;
-            lock (bulk)
-            {
-                copy = new List<object>(bulk);
-                bulk.Clear();
-            }
-
-            var connection = await base.GetAuthenticationDetails(executionContext, providerDefinitionId);
-            var jobData = new AzureDataLakeConnectorJobData(connection.Authentication);
-            var directoryClient = await EnsureDataLakeDirectoryClientAsync(jobData);
-
-            var content = JsonUtility.SerializeIndented(copy);
-            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
-            var fileName = $"{containerName}.{timestamp}.json";
-
-            var dataLakeFileClient = directoryClient.GetFileClient(fileName);
-
-            await using var memoryStream = new MemoryStream();
-            await using var streamWriter = new StreamWriter(memoryStream);
-            await streamWriter.WriteAsync(content);
-            memoryStream.Position = 0;
-
-            var options = new DataLakeFileUploadOptions
-            {
-                HttpHeaders = new PathHttpHeaders {ContentType = "application/json"}
-            };
-
-            await dataLakeFileClient.UploadAsync(memoryStream, options);
-
-            executionContext.Log.LogDebug(
-                $"AzureDataLakeConnector.Flush: providerDefinitionId: {providerDefinitionId}, containerName: {containerName}\n{JsonUtility.SerializeIndented(bulk)}\n");
-        }
-
-        #region Azure Data Lake Gen2 client
-
-        public static DataLakeServiceClient GetDataLakeServiceClient(AzureDataLakeConnectorJobData jobData)
-        {
-            return new DataLakeServiceClient(
-                new Uri($"https://{jobData.AccountName}.dfs.core.windows.net"),
-                new StorageSharedKeyCredential(jobData.AccountName, jobData.AccountKey));
-        }
-
-        public static async Task<DataLakeFileSystemClient> EnsureDataLakeFileSystemClientAsync(
-            AzureDataLakeConnectorJobData jobData)
-        {
-            var dataLakeServiceClient = GetDataLakeServiceClient(jobData);
-
-            var dataLakeFileSystemClient = dataLakeServiceClient.GetFileSystemClient(jobData.FileSystemName);
-
-            if (!await dataLakeFileSystemClient.ExistsAsync())
-            {
-                dataLakeFileSystemClient = await dataLakeServiceClient.CreateFileSystemAsync(jobData.FileSystemName);
-            }
-
-            return dataLakeFileSystemClient;
-        }
-
-        public static async Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryClientAsync(
-            AzureDataLakeConnectorJobData jobData)
-        {
-            var dataLakeFileSystemClient = await EnsureDataLakeFileSystemClientAsync(jobData);
-
-            var directoryClient = dataLakeFileSystemClient.GetDirectoryClient(jobData.DirectoryName);
-
-            if (!await directoryClient.ExistsAsync())
-            {
-                directoryClient = await dataLakeFileSystemClient.CreateDirectoryAsync(jobData.DirectoryName);
-            }
-
-            return directoryClient;
-        }
-
-        #endregion
 
         #region Not supported overrides
 
