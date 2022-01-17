@@ -1,28 +1,34 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace CluedIn.Connector.Common.Batching
 {
     public interface ICachingService<TItem, TConfiguration>
     {
         /// <summary>
-        /// Add single item to batch
+        /// Add single item to cache
         /// </summary>
-        void AddItem(TItem item, TConfiguration configuration);
+        Task AddItem(TItem item, TConfiguration configuration);
 
         /// <summary>
-        /// Get all items from batch
+        /// Get all items from cache
         /// </summary>
-        IQueryable<KeyValuePair<TItem, TConfiguration>> GetItems();
+        Task<IQueryable<KeyValuePair<TItem, TConfiguration>>> GetItems();
 
         /// <summary>
-        /// Return current number of items in batch
+        /// Return current number of items in cache
         /// </summary>        
-        int Count();
+        Task<int> Count();
 
         /// <summary>
-        /// Clear all items from batch
+        /// Clear all items from cache
         /// </summary>
-        void Clear();
+        Task Clear();
+
+        /// <summary>
+        /// Clear items from cache related to target configuration
+        /// </summary>        
+        Task Clear(TConfiguration configuration);
     }
 }

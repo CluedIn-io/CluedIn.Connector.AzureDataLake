@@ -1,35 +1,48 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace CluedIn.Connector.Common.Batching
 {
     public class InMemoryCachingService<TItem, TConfiguration> : ICachingService<TItem, TConfiguration>
+        where TConfiguration : class
     {
-        private readonly List<KeyValuePair<TItem, TConfiguration>> _storage;
+        private List<KeyValuePair<TItem, TConfiguration>> _storage;
 
         public InMemoryCachingService()
         {
             _storage = new List<KeyValuePair<TItem, TConfiguration>>();
         }
 
-        public void AddItem(TItem item, TConfiguration configuration)
+        public Task AddItem(TItem item, TConfiguration configuration)
         {
             _storage.Add(new KeyValuePair<TItem, TConfiguration>(item, configuration));
+
+            return Task.CompletedTask;
         }
 
-        public void Clear()
+        public Task Clear()
         {
             _storage.Clear();
+
+            return Task.CompletedTask;
         }
 
-        public int Count()
+        public Task Clear(TConfiguration configuration)
         {
-            return _storage.Count;
+            _storage = _storage.Where(x => x.Value != configuration).ToList();
+
+            return Task.CompletedTask;
         }
 
-        public IQueryable<KeyValuePair<TItem, TConfiguration>> GetItems()
+        public Task<int> Count()
         {
-            return _storage.AsQueryable();
+            return Task.FromResult(_storage.Count);
+        }
+
+        public Task<IQueryable<KeyValuePair<TItem, TConfiguration>>> GetItems()
+        {
+            return Task.FromResult(_storage.AsQueryable());
         }
     }
 }

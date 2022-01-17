@@ -38,10 +38,10 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             lock (_cacheLock)
             {
-                _cachingService.AddItem(data, configurations);
+                _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
             }
 
-            if (_cachingService.Count() >= Threshold)
+            if (await _cachingService.Count() >= Threshold)
             {
                 Flush();
             }
@@ -66,10 +66,10 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             lock (_cacheLock)
             {
-                _cachingService.AddItem(data, configurations);
+                _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
             }
 
-            if (_cachingService.Count() >= Threshold)
+            if (await _cachingService.Count() >= Threshold)
             {
                 Flush();
             }
@@ -90,16 +90,18 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         {
             lock (_cacheLock)
             {
-                var bulkData = _cachingService.GetItems().GroupBy(pair => pair.Value);
-                foreach (var grouping in bulkData)
+                var cachedItems = _cachingService.GetItems().GetAwaiter().GetResult();
+                var cachedItemsByConfigurations = cachedItems.GroupBy(pair => pair.Value)
+                    .ToList();
+
+                foreach (var group in cachedItemsByConfigurations)
                 {
-                    var configuration = grouping.Key;
-                    var content = JsonUtility.SerializeIndented(grouping.Select(g => g.Key));
-
+                    var configuration = group.Key;
+                    var content = JsonUtility.SerializeIndented(group.Select(g => g.Key));
+                    
                     _client.SaveData(configuration, content).GetAwaiter().GetResult();
+                    _cachingService.Clear(configuration).GetAwaiter().GetResult();
                 }
-
-                _cachingService.Clear();
             }
         }
 
