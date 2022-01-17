@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace CluedIn.Connector.Common.Batching
+namespace CluedIn.Connector.Common.Caching
 {
     public interface ICachingService<TItem, TConfiguration>
     {

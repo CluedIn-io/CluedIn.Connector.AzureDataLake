@@ -1,4 +1,4 @@
-﻿using CluedIn.Connector.Common.Batching;
+﻿using CluedIn.Connector.Common.Caching;
 using CluedIn.Connector.Common.Connectors;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
@@ -13,7 +13,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 {
     public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>
     {
-        public readonly int Threshold = 1000;
+        public readonly int Threshold = 3;
         private readonly ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> _cachingService;
         private readonly object _cacheLock = new object();
 
