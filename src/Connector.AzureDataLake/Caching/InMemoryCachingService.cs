@@ -30,7 +30,7 @@ namespace CluedIn.Connector.Common.Caching
 
         public Task Clear(TConfiguration configuration)
         {
-            _storage = _storage.Where(x => x.Value != configuration).ToList();
+            _storage = _storage.Where(x => !x.Value.Equals(configuration)).ToList();
 
             return Task.CompletedTask;
         }
