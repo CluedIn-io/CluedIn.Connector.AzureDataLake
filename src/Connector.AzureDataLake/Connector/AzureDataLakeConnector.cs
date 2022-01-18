@@ -107,9 +107,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             lock (_cacheLock)
             {
                 _logger.LogInformation($"AzureDataLakeConnector.Flush: lock aquired {threadId}");
+                var itemsCount = _cachingService.Count().GetAwaiter().GetResult();
+                if(itemsCount < Threshold)
+                {
+                    _logger.LogInformation($"AzureDataLakeConnector.Flush: Not enough IC-({itemsCount}). lock almost released {threadId}");
+                    return;
+                }
+
                 var cachedItems = _cachingService.GetItems().GetAwaiter().GetResult();
                 var cachedItemsByConfigurations = cachedItems.GroupBy(pair => pair.Value)
                     .ToList();
+                _logger.LogInformation($"AzureDataLakeConnector.Flush group count {cachedItemsByConfigurations.Count}");
 
                 foreach (var group in cachedItemsByConfigurations)
                 {
@@ -119,7 +127,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     _client.SaveData(configuration, content).GetAwaiter().GetResult();
                     _cachingService.Clear(configuration).GetAwaiter().GetResult();
                 }
-                _logger.LogInformation($"AzureDataLakeConnector.Flush: lock almost released {threadId}");
+
+                itemsCount = _cachingService.Count().GetAwaiter().GetResult();
+                _logger.LogInformation($"AzureDataLakeConnector.Flush: IC-{itemsCount} lock almost released {threadId}");
             }
 
             _logger.LogInformation($"AzureDataLakeConnector.Flush: exit {threadId}");

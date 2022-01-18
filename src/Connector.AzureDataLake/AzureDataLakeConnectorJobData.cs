@@ -19,7 +19,7 @@ namespace CluedIn.Connector.AzureDataLake
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(AccountName, AccountKey, FileSystemName, DirectoryName);
+            return HashCode.Combine(AccountName, AccountKey, FileSystemName, DirectoryName, ContainerName);
         }
 
         public override bool Equals(object obj)
@@ -33,7 +33,9 @@ namespace CluedIn.Connector.AzureDataLake
                 AccountName == other.AccountName &&
                 AccountKey == other.AccountKey &&
                 FileSystemName == other.FileSystemName &&
-                DirectoryName == other.DirectoryName;
+                DirectoryName == other.DirectoryName &&
+                ContainerName == other.ContainerName;
+                
         }
     }
 }
