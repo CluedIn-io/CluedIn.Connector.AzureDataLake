@@ -1,8 +1,10 @@
 ﻿using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
+using Serilog;
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CluedIn.Connector.AzureDataLake.Connector
@@ -23,6 +25,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public async Task SaveData(AzureDataLakeConnectorJobData configuration, string content)
         {
+            Log.Information($"AzureDataLakeClient.SaveData content length {content.Length} on thread {Thread.CurrentThread.ManagedThreadId}");
             var directoryClient = await EnsureDataLakeDirectoryExist(configuration);
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
