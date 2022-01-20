@@ -13,7 +13,7 @@ using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.AzureDataLake.Connector
 {
-    public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>
+    public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>, IScheduledSyncs
     {
         public readonly int Threshold = 50;
         private readonly ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> _cachingService;
@@ -32,9 +32,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         public override async Task StoreData(ExecutionContext executionContext, Guid providerDefinitionId,
             string containerName, IDictionary<string, object> data)
         {
-            var threadId = Thread.CurrentThread.ManagedThreadId;
-            _logger.LogInformation($"AzureDataLakeConnector.StoreData: entry {threadId}");
-
             data["ProviderDefinitionId"] = providerDefinitionId;
             data["ContainerName"] = containerName;
 
@@ -43,25 +40,18 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             lock (_cacheLock)
             {
-                _logger.LogInformation($"AzureDataLakeConnector.StoreData: lock aquired {threadId}");
                 _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
-                _logger.LogInformation($"AzureDataLakeConnector.StoreData: lock almost released {threadId}");
             }
 
             if (await _cachingService.Count() >= Threshold)
             {
                 Flush();
             }
-
-            _logger.LogInformation($"AzureDataLakeConnector.StoreData: exit {threadId}");
         }
 
         public override async Task StoreEdgeData(ExecutionContext executionContext, Guid providerDefinitionId,
             string containerName, string originEntityCode, IEnumerable<string> edges)
         {
-            var threadId = Thread.CurrentThread.ManagedThreadId;
-            _logger.LogInformation($"AzureDataLakeConnector.StoreEdgeData: entry {threadId}");
-
             var data = new Dictionary<string, object>
             {
                 {"ProviderDefinitionId", providerDefinitionId.ToString()},
@@ -74,18 +64,14 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, $"{containerName}.edges");
 
             lock (_cacheLock)
-            {
-                _logger.LogInformation($"AzureDataLakeConnector.StoreEdgeData: lock aquired {threadId}");
-                _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
-                _logger.LogInformation($"AzureDataLakeConnector.StoreEdgeData: lock almost released {threadId}");
+            {   
+                _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();             
             }
 
             if (await _cachingService.Count() >= Threshold)
             {
                 Flush();
-            }
-
-            _logger.LogInformation($"AzureDataLakeConnector.StoreEdgeData: exit {threadId}");
+            }            
         }
 
         public override async Task<bool> VerifyConnection(ExecutionContext executionContext,
@@ -100,19 +86,26 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return true;
         }
 
+        public async Task Sync()
+        {
+            _logger.LogInformation($"AzureDataLakeConnector.Sync: entry");
+
+            if (await _cachingService.Count() == 0)
+                return;
+
+            Flush();
+        }
+
         private void Flush()
         {
             var threadId = Thread.CurrentThread.ManagedThreadId;
             _logger.LogInformation($"AzureDataLakeConnector.Flush: entry {threadId}");
             lock (_cacheLock)
             {
-                _logger.LogInformation($"AzureDataLakeConnector.Flush: lock aquired {threadId}");
                 var itemsCount = _cachingService.Count().GetAwaiter().GetResult();
-                if(itemsCount < Threshold)
-                {
-                    _logger.LogInformation($"AzureDataLakeConnector.Flush: Not enough IC-({itemsCount}). lock almost released {threadId}");
+                _logger.LogInformation($"AzureDataLakeConnector.Flush: IC-{itemsCount} lock aquired {threadId}");
+                if (itemsCount == 0)
                     return;
-                }
 
                 var cachedItems = _cachingService.GetItems().GetAwaiter().GetResult();
                 var cachedItemsByConfigurations = cachedItems.GroupBy(pair => pair.Value)
@@ -123,7 +116,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 {
                     var configuration = group.Key;
                     var content = JsonUtility.SerializeIndented(group.Select(g => g.Key));
-                    
+
                     _client.SaveData(configuration, content).GetAwaiter().GetResult();
                     _cachingService.Clear(configuration).GetAwaiter().GetResult();
                 }
@@ -173,7 +166,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             _logger.LogInformation($"AzureDataLakeConnector.EmptyContainer: entry");
 
             throw new NotImplementedException(nameof(EmptyContainer));
-        }        
+        }
 
         public override Task RenameContainer(ExecutionContext executionContext, Guid providerDefinitionId,
             string id, string newName)
