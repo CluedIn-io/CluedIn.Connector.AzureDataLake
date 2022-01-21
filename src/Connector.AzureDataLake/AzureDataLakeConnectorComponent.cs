@@ -1,8 +1,8 @@
 using CluedIn.Connector.AzureDataLake.Connector;
 using CluedIn.Core;
+using CluedIn.Core.Configuration;
 using ComponentHost;
 using Connector.Common;
-using System;
 using System.Timers;
 
 namespace CluedIn.Connector.AzureDataLake
@@ -20,14 +20,16 @@ namespace CluedIn.Connector.AzureDataLake
         {
             base.Start();
 
+            var configurations = Container.Resolve<IAzureDataLakeConstants>();
+            var cacheIntervalValue = ConfigurationManagerEx.AppSettings.GetValue(configurations.CacheSyncIntervalKeyName, configurations.CacheSyncIntervalDefaultValue);
             var syncService = Container.Resolve<IScheduledSyncs>();
-            var backgroundExportTimer = new Timer
+            var backgroundCacheSyncTimer = new Timer
             {
-                Interval = TimeSpan.FromMinutes(1).TotalMilliseconds,
+                Interval = cacheIntervalValue,
                 AutoReset = true
             };
-            backgroundExportTimer.Elapsed += (_, __) => { syncService.Sync().GetAwaiter().GetResult(); };
-            backgroundExportTimer.Start();
+            backgroundCacheSyncTimer.Elapsed += (_, __) => { syncService.Sync().GetAwaiter().GetResult(); };
+            backgroundCacheSyncTimer.Start();
         }
 
         protected override string ComponentName => "Azure Data Lake Storage Gen2";

@@ -19,8 +19,8 @@ namespace CluedIn.Connector.AzureDataLake
                 .ImplementedBy<InMemoryCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>>()
                 .LifestyleSingleton());
 
-            var ADLConnector = container.ResolveAll<IConnector>().Single(c => c.GetType() == typeof(AzureDataLakeConnector)) as AzureDataLakeConnector;
-            container.Register(Component.For<IScheduledSyncs>().Instance(ADLConnector).Named($"{nameof(IScheduledSyncs)}.{nameof(AzureDataLakeConnector)}"));
+            var connector = container.ResolveAll<IConnector>().Single(c => c.GetType() == typeof(AzureDataLakeConnector)) as AzureDataLakeConnector;
+            container.Register(Component.For<IScheduledSyncs>().Instance(connector).Named($"{nameof(IScheduledSyncs)}.{nameof(AzureDataLakeConnector)}"));
         }
     }
 }
