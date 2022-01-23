@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Azure.Storage;
 using Azure.Storage.Files.DataLake;
@@ -67,6 +69,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         public override async Task<bool> VerifyConnection(ExecutionContext executionContext,
             IDictionary<string, object> authenticationData)
         {
+            ValidateAuthenticationData(authenticationData);
+
             await EnsureDataLakeDirectoryClientAsync(new AzureDataLakeConnectorJobData(authenticationData));
             return true;
         }
@@ -123,7 +127,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             var options = new DataLakeFileUploadOptions
             {
-                HttpHeaders = new PathHttpHeaders {ContentType = "application/json"}
+                HttpHeaders = new PathHttpHeaders { ContentType = "application/json" }
             };
 
             await dataLakeFileClient.UploadAsync(memoryStream, options);
@@ -218,5 +222,43 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         }
 
         #endregion
+
+        private void ValidateAuthenticationData(IDictionary<string, object> authenticationData)
+        {
+            if (authenticationData == null)
+            {
+                throw new ArgumentNullException("Authentication Data is empty!");
+            }
+
+            ValidateAccountKey(authenticationData[AzureDataLakeConstants.AccountKey].ToString());
+            ValidateFileSystemName(authenticationData[AzureDataLakeConstants.FileSystemName].ToString());
+        }
+
+        public void ValidateAccountKey(string accountKey)
+        {
+            //Is Base64
+            var buffer = new Span<byte>(new byte[accountKey.Length]);
+
+            if (!Convert.TryFromBase64String(accountKey, buffer, out _))
+            {
+                throw new ArgumentException("Account Key is not a base 64 value");
+            }
+        }
+
+        public void ValidateFileSystemName(string fileSystemName)
+        {
+            //FileSystem Length must be 3 to 63
+            if (!Enumerable.Range(3, 63).Contains(fileSystemName.Length))
+            {
+                throw new ArgumentException("File System Name did not meet the required length.");
+            }
+
+            //var regEx = new Regex("^[a-z0-9](?:[a-z0-9]|(\\-(?!\\-))){1,61}[a-z0-9]$|^\\$root$");
+            var regEx = new Regex("^[a-z0-9]+(-[a-z0-9]+)*$");
+            if (!regEx.IsMatch(fileSystemName))
+            {
+                throw new ArgumentException("Invalid File System Name");
+            }
+        }
     }
 }
