@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using AutoFixture.Xunit2;
 using CluedIn.Connector.AzureDataLake;
 using CluedIn.Connector.AzureDataLake.Connector;
+using CluedIn.Connector.Common.Caching;
 using CluedIn.Core.DataStore;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -15,13 +16,15 @@ namespace Connector.AzureDataLakeTests
     {
         private readonly Mock<IConfigurationRepository> repository;
         public readonly Mock<ILogger<AzureDataLakeConnector>> logger;
+        private readonly Mock<ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>> cachingService;
         private readonly AzureDataLakeConnector connector;
 
         public AzureDataLakeConnectorTest()
         {
             repository = new Mock<IConfigurationRepository>();
             logger = new Mock<ILogger<AzureDataLakeConnector>>();
-            connector = new AzureDataLakeConnector(repository.Object, logger.Object, new AzureDataLakeClient(), new AzureDataLakeConstants());
+            cachingService = new Mock<ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>>();
+            connector = new AzureDataLakeConnector(repository.Object, logger.Object, new AzureDataLakeClient(), new AzureDataLakeConstants(), cachingService.Object);
         }
 
         [Fact]
@@ -29,10 +32,10 @@ namespace Connector.AzureDataLakeTests
         {
             var authenticationData = new Dictionary<string, object>
             {
-                { "AccountName", "adlsg2testingapac" },
-                { "AccountKey", "Z2doSCJflj6NP+6J0r4uwP/ydLs9VhZdqevtesYyvVpjzR1+shCcMbYaCvsJ++Lb4Mr6bpySvb3DlmUSdf1G3g==" },
-                { "FileSystemName", "chadfilessystem" },
-                { "DirectoryName", "chaddir" },
+                { "AccountName", "name" },
+                { "AccountKey", "token" },
+                { "FileSystemName", "file" },
+                { "DirectoryName", "dir" },
             };
             connector.VerifyConnection(null, authenticationData).Result.ShouldBeTrue();
         }
