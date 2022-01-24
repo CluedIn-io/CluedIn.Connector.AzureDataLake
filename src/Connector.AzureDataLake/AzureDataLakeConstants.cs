@@ -1,5 +1,6 @@
 using CluedIn.Connector.Common;
 using CluedIn.Connector.Common.Configurations;
+using CluedIn.Core;
 using CluedIn.Core.Providers;
 using System;
 // ReSharper disable ArgumentsStyleStringLiteral
@@ -31,29 +32,29 @@ namespace CluedIn.Connector.AzureDataLake
             {
                 new Control
                 {
-                    name = AccountName,
-                    displayName = AccountName,
+                    name = AccountName.ToCamelCase(),
+                    displayName = "Account Name",
                     type = "input",
                     isRequired = true
                 },
                 new Control
                 {
-                    name = AccountKey,
-                    displayName = AccountKey,
+                    name = AccountKey.ToCamelCase(),
+                    displayName = "Account Key",
                     type = "password",
                     isRequired = true
                 },
                 new Control
                 {
-                    name = FileSystemName,
-                    displayName = FileSystemName,
+                    name = FileSystemName.ToCamelCase(),
+                    displayName ="File System Name",
                     type = "input",
                     isRequired = true
                 },
                 new Control
                 {
-                    name = DirectoryName,
-                    displayName = DirectoryName,
+                    name = DirectoryName.ToCamelCase(),
+                    displayName ="Directory Name",
                     type = "input",
                     isRequired = true
                 }
