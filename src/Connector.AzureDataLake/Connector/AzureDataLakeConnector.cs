@@ -24,10 +24,10 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             ILogger<AzureDataLakeConnector> logger,
             IAzureDataLakeClient client,
             IAzureDataLakeConstants constants,
-            ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> batchingService)
+            ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> cachingService)
             : base(repository, logger, client, constants.ProviderId)
         {
-            _cachingService = batchingService;
+            _cachingService = cachingService;
             _cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
         }
 

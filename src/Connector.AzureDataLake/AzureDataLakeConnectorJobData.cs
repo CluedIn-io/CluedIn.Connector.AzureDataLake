@@ -6,7 +6,7 @@ namespace CluedIn.Connector.AzureDataLake
 {
     public class AzureDataLakeConnectorJobData : CrawlJobDataWrapper
     {
-        public AzureDataLakeConnectorJobData(IDictionary<string, object> configuration, string containerName = null) : base(configuration)
+        public AzureDataLakeConnectorJobData(IDictionary<string, object> configurations, string containerName = null) : base(configurations)
         {
             ContainerName = containerName;
         }
