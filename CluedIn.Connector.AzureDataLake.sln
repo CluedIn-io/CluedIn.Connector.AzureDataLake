@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31321.278
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.32014.148
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake", "src\Connector.AzureDataLake\Connector.AzureDataLake.csproj", "{98AD320B-8415-4605-98A0-3F479F05CA95}"
 EndProject
@@ -39,6 +39,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{5256D9B9-8A1
 		src\Connector.AzureDataLake\Directory.Build.props = src\Connector.AzureDataLake\Directory.Build.props
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{C8C59C1F-147E-4ACA-BA61-24EE5D44DE3A}"
+	ProjectSection(SolutionItems) = preProject
+		test\Directory.Build.props = test\Directory.Build.props
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake.Test", "test\Connector.AzureDataLake.Test\Connector.AzureDataLake.Test.csproj", "{3114C1E7-3E4E-49B1-AAE0-568E66CA85D1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -49,6 +56,10 @@ Global
 		{98AD320B-8415-4605-98A0-3F479F05CA95}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{98AD320B-8415-4605-98A0-3F479F05CA95}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{98AD320B-8415-4605-98A0-3F479F05CA95}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3114C1E7-3E4E-49B1-AAE0-568E66CA85D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3114C1E7-3E4E-49B1-AAE0-568E66CA85D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3114C1E7-3E4E-49B1-AAE0-568E66CA85D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3114C1E7-3E4E-49B1-AAE0-568E66CA85D1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -59,6 +70,7 @@ Global
 		{9C4B34BE-212C-426D-8256-FD497E912220} = {9919A6B5-BBA9-4A88-9084-E6C099025F41}
 		{965438B9-94E3-42BD-AAC6-BD1804D535CB} = {9919A6B5-BBA9-4A88-9084-E6C099025F41}
 		{56F1F857-9E4F-4D49-B538-0F5CFBEB958D} = {9919A6B5-BBA9-4A88-9084-E6C099025F41}
+		{3114C1E7-3E4E-49B1-AAE0-568E66CA85D1} = {C8C59C1F-147E-4ACA-BA61-24EE5D44DE3A}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E6A866CB-824C-4271-8EA6-053B7FC4B134}

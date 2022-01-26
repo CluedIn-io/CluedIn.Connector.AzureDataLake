@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -78,6 +79,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             IDictionary<string, object> authenticationData)
         {
             _logger.LogInformation($"AzureDataLakeConnector.VerifyConnection: entry");
+            
+            ValidateAuthenticationData(authenticationData);
 
             await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(authenticationData));
 
@@ -185,5 +188,30 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         }
 
         #endregion
+
+        private void ValidateAuthenticationData(IDictionary<string, object> authenticationData)
+        {
+            if (authenticationData == null)
+            {
+                throw new ArgumentNullException("Authentication Data is empty!");
+            }
+
+            ValidateFileSystemName(authenticationData[AzureDataLakeConstants.FileSystemName].ToString());
+        }
+
+        public void ValidateFileSystemName(string fileSystemName)
+        {
+            //FileSystem Length must be 3 to 63
+            if (!Enumerable.Range(3, 63).Contains(fileSystemName.Length))
+            {
+                throw new ArgumentException("File System Name did not meet the required length.");
+            }
+
+            var regEx = new Regex("^[a-z0-9]+(-[a-z0-9]+)*$");
+            if (!regEx.IsMatch(fileSystemName))
+            {
+                throw new ArgumentException("Invalid File System Name");
+            }
+        }
     }
 }
