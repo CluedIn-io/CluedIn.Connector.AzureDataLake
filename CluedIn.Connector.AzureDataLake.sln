@@ -43,7 +43,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{CCFA12D5
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "integration", "integration", "{9A48CD57-CDE1-454C-AE55-8ABD15908E81}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AzureDataLake.Tests.Integration", "Connector.AzureDataLake.Tests.Integration\Connector.AzureDataLake.Tests.Integration.csproj", "{2A8809B0-1184-40B5-B10F-DAF2531AE642}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake.Tests.Integration", "tests\Connector.AzureDataLake.Tests.Integration\Connector.AzureDataLake.Tests.Integration.csproj", "{22BA9D9A-8613-435D-A066-253B14E4EC44}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -55,10 +55,10 @@ Global
 		{98AD320B-8415-4605-98A0-3F479F05CA95}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{98AD320B-8415-4605-98A0-3F479F05CA95}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{98AD320B-8415-4605-98A0-3F479F05CA95}.Release|Any CPU.Build.0 = Release|Any CPU
-		{2A8809B0-1184-40B5-B10F-DAF2531AE642}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2A8809B0-1184-40B5-B10F-DAF2531AE642}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{2A8809B0-1184-40B5-B10F-DAF2531AE642}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{2A8809B0-1184-40B5-B10F-DAF2531AE642}.Release|Any CPU.Build.0 = Release|Any CPU
+		{22BA9D9A-8613-435D-A066-253B14E4EC44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{22BA9D9A-8613-435D-A066-253B14E4EC44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{22BA9D9A-8613-435D-A066-253B14E4EC44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{22BA9D9A-8613-435D-A066-253B14E4EC44}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -70,7 +70,7 @@ Global
 		{965438B9-94E3-42BD-AAC6-BD1804D535CB} = {9919A6B5-BBA9-4A88-9084-E6C099025F41}
 		{56F1F857-9E4F-4D49-B538-0F5CFBEB958D} = {9919A6B5-BBA9-4A88-9084-E6C099025F41}
 		{9A48CD57-CDE1-454C-AE55-8ABD15908E81} = {CCFA12D5-D843-46A6-B7AC-AC90C14EEE14}
-		{2A8809B0-1184-40B5-B10F-DAF2531AE642} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
+		{22BA9D9A-8613-435D-A066-253B14E4EC44} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E6A866CB-824C-4271-8EA6-053B7FC4B134}
