@@ -16,11 +16,11 @@ namespace CluedIn.Connector.AzureDataLake
             container.Register(Component.For<IAzureDataLakeClient>().ImplementedBy<AzureDataLakeClient>().OnlyNewServices());
             container.Register(Component.For<IAzureDataLakeConstants>().ImplementedBy<AzureDataLakeConstants>().LifestyleSingleton());
             container.Register(Component.For<ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>>()
-                .ImplementedBy<InMemoryCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>>()
+                .UsingFactoryMethod(x => SqlServerCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>.CreateCachingService().GetAwaiter().GetResult())
                 .LifestyleSingleton());
 
-            var ADLConnector = container.ResolveAll<IConnector>().Single(c => c.GetType() == typeof(AzureDataLakeConnector)) as AzureDataLakeConnector;
-            container.Register(Component.For<IScheduledSyncs>().Instance(ADLConnector).Named($"{nameof(IScheduledSyncs)}.{nameof(AzureDataLakeConnector)}"));
+            var connector = container.ResolveAll<IConnector>().Single(c => c.GetType() == typeof(AzureDataLakeConnector)) as AzureDataLakeConnector;
+            container.Register(Component.For<IScheduledSyncs>().Instance(connector).Named($"{nameof(IScheduledSyncs)}.{nameof(AzureDataLakeConnector)}"));
         }
     }
 }
