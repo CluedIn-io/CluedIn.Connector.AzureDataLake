@@ -1,8 +1,4 @@
 <Project>
-  <PropertyGroup Label="Dependency Versions">
-    <_CluedIn>3.3.0-alpha.12</_CluedIn>
-  </PropertyGroup>
-
   <ItemGroup>
     <!--
         Specified versions for dependencies across the solution
@@ -11,7 +7,7 @@
     -->
     <PackageReference Update="Azure.Messaging.EventHubs" Version="5.6.2" />
     <PackageReference Update="Azure.Storage.Files.DataLake" Version="12.8.0" />
-    <PackageReference Update="CluedIn.Connector.Common" Version="$(_CluedIn)" />
+    <PackageReference Update="CluedIn.Connector.Common" Version="3.4.0-alpha.*" />
     <PackageReference Update="Microsoft.Azure.Management.DataLake.Store" Version="2.2.1" />
   </ItemGroup>
 

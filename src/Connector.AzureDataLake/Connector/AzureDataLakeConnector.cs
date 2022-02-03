@@ -15,7 +15,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
     public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>, IScheduledSyncs
     {
         private readonly ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> _cachingService;
-        private readonly object _cacheLock = new object();
+        private readonly object _cacheLock;
         private readonly int _cacheRecordsThreshold;
 
         public AzureDataLakeConnector(IConfigurationRepository repository,
@@ -26,6 +26,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             : base(repository, logger, client, constants.ProviderId)
         {
             _cachingService = cachingService;
+            _cacheLock = _cachingService.Locker;
             _cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
         }
 

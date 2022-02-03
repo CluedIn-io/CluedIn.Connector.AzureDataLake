@@ -3,9 +3,7 @@ using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 using CluedIn.Connector.AzureDataLake.Connector;
 using CluedIn.Connector.Common.Caching;
-using CluedIn.Core.Connectors;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace CluedIn.Connector.AzureDataLake
 {
@@ -19,8 +17,7 @@ namespace CluedIn.Connector.AzureDataLake
                 .UsingFactoryMethod(x => SqlServerCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>.CreateCachingService().GetAwaiter().GetResult())
                 .LifestyleSingleton());
 
-            var connector = container.ResolveAll<IConnector>().Single(c => c.GetType() == typeof(AzureDataLakeConnector)) as AzureDataLakeConnector;
-            container.Register(Component.For<IScheduledSyncs>().Instance(connector).Named($"{nameof(IScheduledSyncs)}.{nameof(AzureDataLakeConnector)}"));
+            container.Register(Component.For<IScheduledSyncs>().ImplementedBy<AzureDataLakeConnector>().Named($"{nameof(IScheduledSyncs)}.{nameof(AzureDataLakeConnector)}").LifestyleSingleton());
         }
     }
 }
