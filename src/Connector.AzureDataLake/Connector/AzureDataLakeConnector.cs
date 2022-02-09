@@ -125,6 +125,19 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         public override Task ArchiveContainer(ExecutionContext executionContext, Guid providerDefinitionId,
             string id)
         {
+            lock (_cacheLock)
+            {
+                try
+                {
+                    Flush();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"{nameof(AzureDataLakeConnector)} fails to save entities before reprocessing");
+                    _cachingService.Clear().GetAwaiter().GetResult();
+                }
+            }
+
             return Task.CompletedTask;
         }
 
