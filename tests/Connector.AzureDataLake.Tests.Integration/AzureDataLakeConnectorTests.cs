@@ -31,7 +31,7 @@ namespace Connector.AzureDataLake.Tests.Integration
             var logger = new Mock<ILogger<AzureDataLakeConnector>>().Object;
             var client = new AzureDataLakeClient();
             var constants = new AzureDataLakeConstants();
-            var cachingService = SqlServerCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>.CreateCachingService().GetAwaiter().GetResult();
+            var cachingService = SqlServerCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>.CreateCachingService(nameof(AzureDataLakeConnector)).GetAwaiter().GetResult();
 
             var connector = new AzureDataLakeConnector(configRepo, logger, client, constants, cachingService);
 
