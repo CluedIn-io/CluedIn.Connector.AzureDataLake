@@ -15,7 +15,7 @@ namespace CluedIn.Connector.AzureDataLake
         public AzureDataLakeConstants() : base(Guid.Parse("F6178E19-7168-449C-B4B6-F9810E86C1C2"),
             providerName: "Azure DataLake Connector",
             componentName: "AzureDataLakeConnector",
-            icon: "Resources.azuredatalake.png",
+            icon: "Resources.azuredatalake.svg",
             domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
             about: "Supports publishing of data to Azure Data Lake Storage Gen2.",
             authMethods: AzureDataLaleAuthMethods,
