@@ -28,17 +28,21 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
             var dataLakeFileClient = directoryClient.GetFileClient(fileName);
-            await using var memoryStream = new MemoryStream();
-            await using var streamWriter = new StreamWriter(memoryStream);
-            await streamWriter.WriteAsync(content);
-            memoryStream.Position = 0;
-
-            var options = new DataLakeFileUploadOptions
+            await using (var memoryStream = new MemoryStream())
             {
-                HttpHeaders = new PathHttpHeaders { ContentType = "application/json" }
-            };
+                await using (var streamWriter = new StreamWriter(memoryStream, default, -1, true))
+                {
+                    await streamWriter.WriteAsync(content);
+                }
+                memoryStream.Position = 0;
 
-            await dataLakeFileClient.UploadAsync(memoryStream, options);
+                var options = new DataLakeFileUploadOptions
+                {
+                    HttpHeaders = new PathHttpHeaders { ContentType = "application/json" }
+                };
+
+                await dataLakeFileClient.UploadAsync(memoryStream, options);
+            }
         }
 
         private DataLakeServiceClient GetDataLakeServiceClient(AzureDataLakeConnectorJobData configuration)
