@@ -72,9 +72,9 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
             azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
 
-            var accountName = Environment.GetEnvironmentVariable("ADL2_AccountName");
+            var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
-            var accountKey = Environment.GetEnvironmentVariable("ADL2_AccountKey");
+            var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
             Assert.NotNull(accountKey);
 
             var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}";
@@ -197,9 +197,9 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 Console.WriteLine($"{environmentVariable.Key}:{environmentVariable.Value}");
             }
 
-            var accountName = Environment.GetEnvironmentVariable("ADL2_AccountName");
+            var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
-            var accountKey = Environment.GetEnvironmentVariable("ADL2_AccountKey");
+            var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
             Assert.NotNull(accountKey);
 
             var fileSystemName = "test";
