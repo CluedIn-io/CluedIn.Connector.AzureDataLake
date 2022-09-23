@@ -191,12 +191,6 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
             azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(1000);
 
-            var environmentVariables = Environment.GetEnvironmentVariables();
-            foreach (DictionaryEntry environmentVariable in environmentVariables)
-            {
-                Console.WriteLine($"{environmentVariable.Key}:{environmentVariable.Value}");
-            }
-
             var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
             var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
