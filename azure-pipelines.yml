@@ -27,7 +27,7 @@ pool:
 
 variables:
   - name: testFolderPath
-    value: '$(Build.SourcesDirectory)/tests'
+    value: '$(Build.SourcesDirectory)/test'
   - name: DOTNET_SKIP_FIRST_TIME_EXPERIENCE
     value: true
   - name: DOTNET_CLI_TELEMETRY_OPTOUT
