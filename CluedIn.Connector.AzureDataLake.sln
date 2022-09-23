@@ -43,7 +43,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{CCFA12D5
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "integration", "integration", "{9A48CD57-CDE1-454C-AE55-8ABD15908E81}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake.Tests.Integration", "tests\Connector.AzureDataLake.Tests.Integration\Connector.AzureDataLake.Tests.Integration.csproj", "{22BA9D9A-8613-435D-A066-253B14E4EC44}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake.Tests.Integration", "tests\unit\Connector.AzureDataLake.Tests.Integration\Connector.AzureDataLake.Tests.Integration.csproj", "{22BA9D9A-8613-435D-A066-253B14E4EC44}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
