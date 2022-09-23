@@ -42,6 +42,5 @@ steps:
     displayName: 'Authenticate with nuget'
 
   - template: crawler.build.yml@templates
-    variables:
-      - name: Testing
-        value: 'test'
+    parameters:
+      TestingParams: 'test'
