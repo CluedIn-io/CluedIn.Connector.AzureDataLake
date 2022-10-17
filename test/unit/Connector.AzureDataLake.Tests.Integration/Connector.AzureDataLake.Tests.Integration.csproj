@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Connector.AzureDataLake\Connector.AzureDataLake.csproj" />
+    <ProjectReference Include="..\..\..\src\Connector.AzureDataLake\Connector.AzureDataLake.csproj" />
   </ItemGroup>
 
 </Project>
