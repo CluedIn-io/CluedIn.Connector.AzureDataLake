@@ -15,6 +15,5 @@
     <PackageReference Include="Azure.Messaging.EventHubs" />
     <PackageReference Include="Azure.Storage.Files.DataLake" />
     <PackageReference Include="CluedIn.Connector.Common" />
-    <PackageReference Include="Microsoft.Azure.Management.DataLake.Store" />
   </ItemGroup>
 </Project>
