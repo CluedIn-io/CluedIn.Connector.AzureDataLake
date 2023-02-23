@@ -148,7 +148,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     var configuration = group.Key;
                     var content = JsonConvert.SerializeObject(group.Select(g => g.Key), settings);
 
-                    var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
+                    var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fff");
                     var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
                     ActionExtensions.ExecuteWithRetry(() =>
