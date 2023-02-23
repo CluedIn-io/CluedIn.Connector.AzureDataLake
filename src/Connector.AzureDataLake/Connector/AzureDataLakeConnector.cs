@@ -43,9 +43,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 while (true)
                 {
+                    _backgroundFlushingCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
                     lock (_cacheLock)
                     {
-                    _backgroundFlushingCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
 
                         if (_backgroundFlushingCancellationTokenSource.IsCancellationRequested)
                         {
