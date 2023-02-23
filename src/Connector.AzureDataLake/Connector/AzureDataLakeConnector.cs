@@ -17,7 +17,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 {
     public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>
     {
-        private readonly ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> _cachingService;
+        private readonly InMemoryCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> _cachingService;
         private readonly object _cacheLock;
         private readonly int _cacheRecordsThreshold;
 
@@ -29,7 +29,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             ILogger<AzureDataLakeConnector> logger,
             IAzureDataLakeClient client,
             IAzureDataLakeConstants constants,
-            ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> cachingService)
+            InMemoryCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> cachingService)
             : base(repository, logger, client, constants.ProviderId)
         {
             _cachingService = cachingService;
@@ -45,7 +45,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 {
                     lock (_cacheLock)
                     {
-                        _backgroundFlushingCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
+                    _backgroundFlushingCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
 
                         if (_backgroundFlushingCancellationTokenSource.IsCancellationRequested)
                         {
