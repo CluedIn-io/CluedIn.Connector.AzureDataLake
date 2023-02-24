@@ -3,6 +3,7 @@ using CluedIn.Connector.Common.Connectors;
 using CluedIn.Core;
 using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
+using CluedIn.Core.Data;
 using CluedIn.Core.DataStore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -185,6 +186,29 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
 
             return Task.CompletedTask;
+        }
+        public override async Task DeleteData(ExecutionContext executionContext, Guid providerDefinitionId, string containerName, string originEntityCode, IList<IEntityCode> codes, Guid entityId)
+        {
+            var data = new Dictionary<string, object>();
+            data["ProviderDefinitionId"] = providerDefinitionId;
+            data["ContainerName"] = containerName;
+            data["OriginEntityCode"] = originEntityCode;
+            data["EntityId"] = entityId;
+
+            var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
+            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, $"{containerName}.deletions");
+
+            lock (_cacheLock)
+            {
+                _lastStoreDataAt = DateTime.Now;
+                _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
+                var count = _cachingService.Count().GetAwaiter().GetResult();
+
+                if (count >= _cacheRecordsThreshold)
+                {
+                    Flush();
+                }
+            }
         }
 
         #region Not supported overrides
