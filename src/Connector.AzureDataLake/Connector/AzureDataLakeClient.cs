@@ -2,6 +2,7 @@
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -12,10 +13,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         public async Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(AzureDataLakeConnectorJobData configuration)
         {
             var dataLakeFileSystemClient = await EnsureDataLakeFileSystemClientAsync(configuration);
-            var directoryClient = dataLakeFileSystemClient.GetDirectoryClient(configuration.DirectoryName);
+            var dayDirectory = "/" + DateTime.UtcNow.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
+            var directoryClient = dataLakeFileSystemClient.GetDirectoryClient(configuration.DirectoryName + dayDirectory);
             if (!await directoryClient.ExistsAsync())
             {
-                directoryClient = await dataLakeFileSystemClient.CreateDirectoryAsync(configuration.DirectoryName);
+                directoryClient = await dataLakeFileSystemClient.CreateDirectoryAsync(configuration.DirectoryName + dayDirectory);
             }
 
             return directoryClient;
