@@ -5,18 +5,25 @@ using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.DataStore;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.AzureDataLake.Connector
 {
-    public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>, IScheduledSyncs
+    public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>
     {
         private readonly ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> _cachingService;
         private readonly object _cacheLock;
         private readonly int _cacheRecordsThreshold;
+
+        private DateTime _lastStoreDataAt;
+
+        private readonly CancellationTokenSource _backgroundFlushingCancellationTokenSource;
 
         public AzureDataLakeConnector(IConfigurationRepository repository,
             ILogger<AzureDataLakeConnector> logger,
@@ -28,6 +35,37 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             _cachingService = cachingService;
             _cacheLock = _cachingService.Locker;
             _cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
+            var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
+
+            _backgroundFlushingCancellationTokenSource = new CancellationTokenSource();
+
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    lock (_cacheLock)
+                    {
+                        _backgroundFlushingCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
+
+                        if (_backgroundFlushingCancellationTokenSource.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        if (DateTime.Now.Subtract(_lastStoreDataAt).TotalMilliseconds > backgroundFlushMaxIdleDefaultValue)
+                        {
+                            Flush();
+                        }
+                    }
+                }
+            }, _backgroundFlushingCancellationTokenSource.Token);
+        }
+
+        ~AzureDataLakeConnector()
+        {
+            _backgroundFlushingCancellationTokenSource.Cancel();
+
+            Flush();
         }
 
         public override async Task StoreData(ExecutionContext executionContext, Guid providerDefinitionId,
@@ -41,12 +79,14 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             lock (_cacheLock)
             {
+                _lastStoreDataAt = DateTime.Now;
                 _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
-            }
+                var count = _cachingService.Count().GetAwaiter().GetResult();
 
-            if (await _cachingService.Count() >= _cacheRecordsThreshold)
-            {
-                Flush();
+                if (count >= _cacheRecordsThreshold)
+                {
+                    Flush();
+                }
             }
         }
 
@@ -67,11 +107,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             lock (_cacheLock)
             {
                 _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
-            }
+                var count = _cachingService.Count().GetAwaiter().GetResult();
 
-            if (await _cachingService.Count() >= _cacheRecordsThreshold)
-            {
-                Flush();
+                if (count >= _cacheRecordsThreshold)
+                {
+                    Flush();
+                }
             }
         }
 
@@ -81,16 +122,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(authenticationData));
 
             return true;
-        }
-
-        public async Task Sync()
-        {
-            if (await _cachingService.Count() == 0)
-            {
-                return;
-            }
-
-            Flush();
         }
 
         private void Flush()
@@ -106,12 +137,26 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 var cachedItems = _cachingService.GetItems().GetAwaiter().GetResult();
                 var cachedItemsByConfigurations = cachedItems.GroupBy(pair => pair.Value).ToList();
 
+                var settings = new JsonSerializerSettings
+                {
+                    TypeNameHandling = TypeNameHandling.None,
+                    Formatting = Formatting.Indented,
+                };
+
                 foreach (var group in cachedItemsByConfigurations)
                 {
                     var configuration = group.Key;
-                    var content = JsonUtility.SerializeIndented(group.Select(g => g.Key));
+                    var content = JsonConvert.SerializeObject(group.Select(g => g.Key), settings);
 
-                    _client.SaveData(configuration, content).GetAwaiter().GetResult();
+                    var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
+                    var fileName = $"{configuration.ContainerName}.{timestamp}.json";
+
+                    ActionExtensions.ExecuteWithRetry(() =>
+                    {
+                        _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
+                    });
+
+
                     _cachingService.Clear(configuration).GetAwaiter().GetResult();
                 }
             }

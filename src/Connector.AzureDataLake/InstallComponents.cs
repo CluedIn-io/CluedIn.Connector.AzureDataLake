@@ -16,8 +16,6 @@ namespace CluedIn.Connector.AzureDataLake
             container.Register(Component.For<ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>>()
                 .UsingFactoryMethod(x => SqlServerCachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData>.CreateCachingService(nameof(AzureDataLakeConnector)).GetAwaiter().GetResult())
                 .LifestyleSingleton());
-
-            container.Register(Component.For<IScheduledSyncs>().ImplementedBy<AzureDataLakeConnector>().Named($"{nameof(IScheduledSyncs)}.{nameof(AzureDataLakeConnector)}").LifestyleSingleton());
         }
     }
 }
