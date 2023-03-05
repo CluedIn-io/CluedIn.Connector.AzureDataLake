@@ -6,15 +6,13 @@
     <IsCluedInServerComponent>true</IsCluedInServerComponent>
   </PropertyGroup>
   <ItemGroup>
-    <None Remove="Resources\azuredatalake.png" />
+    <None Remove="Resources\azuredatalake.svg" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Resources\azuredatalake.png" />
+    <EmbeddedResource Include="Resources\azuredatalake.svg" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Azure.Messaging.EventHubs" />
     <PackageReference Include="Azure.Storage.Files.DataLake" />
     <PackageReference Include="CluedIn.Connector.Common" />
-    <PackageReference Include="Microsoft.Azure.Management.DataLake.Store" />
   </ItemGroup>
 </Project>

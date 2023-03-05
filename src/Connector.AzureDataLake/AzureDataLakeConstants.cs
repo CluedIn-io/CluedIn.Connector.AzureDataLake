@@ -1,4 +1,3 @@
-using CluedIn.Connector.Common;
 using CluedIn.Connector.Common.Configurations;
 using CluedIn.Core.Providers;
 using System;
@@ -16,7 +15,7 @@ namespace CluedIn.Connector.AzureDataLake
         public AzureDataLakeConstants() : base(Guid.Parse("F6178E19-7168-449C-B4B6-F9810E86C1C2"),
             providerName: "Azure DataLake Connector",
             componentName: "AzureDataLakeConnector",
-            icon: "Resources.azuredatalake.png",
+            icon: "Resources.azuredatalake.svg",
             domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
             about: "Supports publishing of data to Azure Data Lake Storage Gen2.",
             authMethods: AzureDataLaleAuthMethods,
@@ -24,6 +23,26 @@ namespace CluedIn.Connector.AzureDataLake
             guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
         {
         }
+
+        /// <summary>
+        /// Environment key name for cache sync interval
+        /// </summary>
+        public string CacheSyncIntervalKeyName => "Streams.AzureDataLakeConnector.CacheSyncInterval";
+
+        /// <summary>
+        /// Default value for Cache sync interval in milliseconds
+        /// </summary>
+        public int CacheSyncIntervalDefaultValue => 60_000;
+
+        /// <summary>
+        /// Environment key name for cache records threshold
+        /// </summary>
+        public string CacheRecordsThresholdKeyName => "Streams.AzureDataLakeConnector.CacheRecordsThreshold";
+
+        /// <summary>
+        /// Default value for Cache records threshold
+        /// </summary>
+        public int CacheRecordsThresholdDefaultValue => 50;
 
         private static AuthMethods AzureDataLaleAuthMethods => new AuthMethods
         {
