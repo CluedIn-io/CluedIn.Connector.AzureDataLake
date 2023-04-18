@@ -44,4 +44,4 @@ steps:
   - template: crawler.build.yml@templates
     parameters:
       githubReleaseInMaster: true
-      publicReleaseForMaster: false
+      publicReleaseForMaster: true
