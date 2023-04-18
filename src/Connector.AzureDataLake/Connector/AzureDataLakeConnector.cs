@@ -9,6 +9,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using ExecutionContext = CluedIn.Core.ExecutionContext;
@@ -33,7 +34,18 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             : base(repository, logger, client, constants.ProviderId)
         {
             _cachingService = cachingService;
-            _cacheLock = _cachingService.Locker;
+
+            var lockerPropertyInfo = _cachingService.GetType().GetProperty("Locker", BindingFlags.Public | BindingFlags.Instance);
+
+            if (lockerPropertyInfo?.GetMethod != null) // 3.4.0
+            {
+                _cacheLock = lockerPropertyInfo.GetMethod.Invoke(_cachingService, null);
+            }
+            else
+            {
+                _cacheLock = new object();
+            }
+
             _cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
 
