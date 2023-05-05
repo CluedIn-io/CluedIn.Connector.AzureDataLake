@@ -1,205 +1,244 @@
-﻿using CluedIn.Connector.Common.Caching;
-using CluedIn.Connector.Common.Connectors;
-using CluedIn.Core;
-using CluedIn.Core.Configuration;
+﻿using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.DataStore;
+using CluedIn.Core.Processing;
+using CluedIn.Core.Streams.Models;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.AzureDataLake.Connector
 {
-    public class AzureDataLakeConnector : CommonConnectorBase<AzureDataLakeConnector, IAzureDataLakeClient>
+    public class AzureDataLakeConnector : ConnectorBaseV2
     {
-        private readonly ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> _cachingService;
-        private readonly object _cacheLock;
-        private readonly int _cacheRecordsThreshold;
+        private readonly ILogger<AzureDataLakeConnector> _logger;
+        private readonly IAzureDataLakeClient _client;
 
-        private DateTime _lastStoreDataAt;
+        //private DateTime _lastStoreDataAt;
 
-        private readonly CancellationTokenSource _backgroundFlushingCancellationTokenSource;
+        private readonly PartitionedBuffer<(IReadOnlyConnectorEntityData, AzureDataLakeConnectorJobData)> _buffer;
 
-        public AzureDataLakeConnector(IConfigurationRepository repository,
+        //private readonly CancellationTokenSource _backgroundFlushingCancellationTokenSource;
+
+        public AzureDataLakeConnector(
             ILogger<AzureDataLakeConnector> logger,
             IAzureDataLakeClient client,
-            IAzureDataLakeConstants constants,
-            ICachingService<IDictionary<string, object>, AzureDataLakeConnectorJobData> cachingService)
-            : base(repository, logger, client, constants.ProviderId)
+            IAzureDataLakeConstants constants)
+            : base(constants.ProviderId, false)
         {
-            _cachingService = cachingService;
+            _logger = logger;
+            _client = client;
 
-            var lockerPropertyInfo = _cachingService.GetType().GetProperty("Locker", BindingFlags.Public | BindingFlags.Instance);
 
-            if (lockerPropertyInfo?.GetMethod != null) // 3.4.0
-            {
-                _cacheLock = lockerPropertyInfo.GetMethod.Invoke(_cachingService, null);
-            }
-            else
-            {
-                _cacheLock = new object();
-            }
-
-            _cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
+            var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
 
-            _backgroundFlushingCancellationTokenSource = new CancellationTokenSource();
+            _buffer = new PartitionedBuffer<(IReadOnlyConnectorEntityData, AzureDataLakeConnectorJobData)>(cacheRecordsThreshold,
+                backgroundFlushMaxIdleDefaultValue, Flush);
 
-            Task.Run(() =>
-            {
-                while (true)
-                {
-                    lock (_cacheLock)
-                    {
-                        _backgroundFlushingCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
+            //_backgroundFlushingCancellationTokenSource = new CancellationTokenSource();
 
-                        if (_backgroundFlushingCancellationTokenSource.IsCancellationRequested)
-                        {
-                            return;
-                        }
+            //Task.Run(() =>
+            //{
+            //    while (true)
+            //    {
+            //        lock (_cacheLock)
+            //        {
+            //            _backgroundFlushingCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
 
-                        if (DateTime.Now.Subtract(_lastStoreDataAt).TotalMilliseconds > backgroundFlushMaxIdleDefaultValue)
-                        {
-                            Flush();
-                        }
-                    }
-                }
-            }, _backgroundFlushingCancellationTokenSource.Token);
+            //            if (_backgroundFlushingCancellationTokenSource.IsCancellationRequested)
+            //            {
+            //                return;
+            //            }
+
+            //            if (DateTime.Now.Subtract(_lastStoreDataAt).TotalMilliseconds > backgroundFlushMaxIdleDefaultValue)
+            //            {
+            //                Flush();
+            //            }
+            //        }
+            //    }
+            //}, _backgroundFlushingCancellationTokenSource.Token);
         }
 
         ~AzureDataLakeConnector()
         {
-            _backgroundFlushingCancellationTokenSource.Cancel();
+            _buffer.Dispose();
+            //_backgroundFlushingCancellationTokenSource.Cancel();
 
-            Flush();
+            //Flush();
         }
 
-        public override async Task StoreData(ExecutionContext executionContext, Guid providerDefinitionId,
-            string containerName, IDictionary<string, object> data)
+        public override Task VerifyExistingContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
-            data["ProviderDefinitionId"] = providerDefinitionId;
-            data["ContainerName"] = containerName;
+            return Task.FromResult(0);
+        }
+
+        public override async Task<SaveResult> StoreData(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData)
+        {
+            var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+            var containerName = streamModel.ContainerName;
 
             var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, containerName);
+            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName);
 
-            lock (_cacheLock)
-            {
-                _lastStoreDataAt = DateTime.Now;
-                _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
-                var count = _cachingService.Count().GetAwaiter().GetResult();
+            await _buffer.Add((connectorEntityData, configurations), JsonConvert.SerializeObject(configurations));
 
-                if (count >= _cacheRecordsThreshold)
-                {
-                    Flush();
-                }
-            }
+            return SaveResult.Success;
+
+            //data["ProviderDefinitionId"] = providerDefinitionId;
+            //data["ContainerName"] = containerName;
+
+            //var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
+            //var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, containerName);
+
+            //lock (_cacheLock)
+            //{
+            //    _lastStoreDataAt = DateTime.Now;
+            //    _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
+            //    var count = _cachingService.Count().GetAwaiter().GetResult();
+
+            //    if (count >= _cacheRecordsThreshold)
+            //    {
+            //        Flush();
+            //    }
+            //}
         }
 
-        public override async Task StoreEdgeData(ExecutionContext executionContext, Guid providerDefinitionId,
-            string containerName, string originEntityCode, IEnumerable<string> edges)
+        public override Task<ConnectorLatestEntityPersistInfo> GetLatestEntityPersistInfo(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, Guid entityId)
         {
-            var data = new Dictionary<string, object>
+            throw new NotImplementedException();
+        }
+
+        public override Task<IAsyncEnumerable<ConnectorLatestEntityPersistInfo>> GetLatestEntityPersistInfos(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        {
+            throw new NotImplementedException();
+        }
+
+        //public override async Task StoreEdgeData(ExecutionContext executionContext, Guid providerDefinitionId,
+        //    string containerName, string originEntityCode, IEnumerable<string> edges)
+        //{
+        //    var data = new Dictionary<string, object>
+        //    {
+        //        {"ProviderDefinitionId", providerDefinitionId.ToString()},
+        //        {"ContainerName", containerName},
+        //        {"OriginEntityCode", originEntityCode},
+        //        {"Edges", edges}
+        //    };
+
+        //    var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
+        //    var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, $"{containerName}.edges");
+
+        //    lock (_cacheLock)
+        //    {
+        //        _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
+        //        var count = _cachingService.Count().GetAwaiter().GetResult();
+
+        //        if (count >= _cacheRecordsThreshold)
+        //        {
+        //            Flush();
+        //        }
+        //    }
+        //}
+
+        public override async Task<ConnectionVerificationResult> VerifyConnection(ExecutionContext executionContext, IReadOnlyDictionary<string, object> config)
+        {
+            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(config.ToDictionary(x => x.Key, x => x.Value)));
+
+            return new ConnectionVerificationResult(true);
+        }
+
+        private void Flush((IReadOnlyConnectorEntityData, AzureDataLakeConnectorJobData)[] obj)
+        {
+            if (obj == null)
             {
-                {"ProviderDefinitionId", providerDefinitionId.ToString()},
-                {"ContainerName", containerName},
-                {"OriginEntityCode", originEntityCode},
-                {"Edges", edges}
+                return;
+            }
+
+            if (obj.Length == 0)
+            {
+                return;
+            }
+
+            var configuration = obj[0].Item2;  // all connection data should be the same in the batch so use the first
+
+            var settings = new JsonSerializerSettings
+            {
+                TypeNameHandling = TypeNameHandling.None,
+                Formatting = Formatting.Indented,
             };
 
-            var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, $"{containerName}.edges");
+            var content = JsonConvert.SerializeObject(obj.Select(x => x.Item1), settings);
 
-            lock (_cacheLock)
-            {
-                _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
-                var count = _cachingService.Count().GetAwaiter().GetResult();
+            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
+            var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-                if (count >= _cacheRecordsThreshold)
-                {
-                    Flush();
-                }
-            }
+            _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
         }
 
-        public override async Task<bool> VerifyConnection(ExecutionContext executionContext,
-            IDictionary<string, object> authenticationData)
-        {
-            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(authenticationData));
+        //private void Flush()
+        //{
+        //    lock (_cacheLock)
+        //    {
+        //        var itemsCount = _cachingService.Count().GetAwaiter().GetResult();
+        //        if (itemsCount == 0)
+        //        {
+        //            return;
+        //        }
 
-            return true;
-        }
+        //        var cachedItems = _cachingService.GetItems().GetAwaiter().GetResult();
+        //        var cachedItemsByConfigurations = cachedItems.GroupBy(pair => pair.Value).ToList();
 
-        private void Flush()
-        {
-            lock (_cacheLock)
-            {
-                var itemsCount = _cachingService.Count().GetAwaiter().GetResult();
-                if (itemsCount == 0)
-                {
-                    return;
-                }
+        //        var settings = new JsonSerializerSettings
+        //        {
+        //            TypeNameHandling = TypeNameHandling.None,
+        //            Formatting = Formatting.Indented,
+        //        };
 
-                var cachedItems = _cachingService.GetItems().GetAwaiter().GetResult();
-                var cachedItemsByConfigurations = cachedItems.GroupBy(pair => pair.Value).ToList();
+        //        foreach (var group in cachedItemsByConfigurations)
+        //        {
+        //            var configuration = group.Key;
+        //            var content = JsonConvert.SerializeObject(group.Select(g => g.Key), settings);
 
-                var settings = new JsonSerializerSettings
-                {
-                    TypeNameHandling = TypeNameHandling.None,
-                    Formatting = Formatting.Indented,
-                };
+        //            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
+        //            var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-                foreach (var group in cachedItemsByConfigurations)
-                {
-                    var configuration = group.Key;
-                    var content = JsonConvert.SerializeObject(group.Select(g => g.Key), settings);
-
-                    var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
-                    var fileName = $"{configuration.ContainerName}.{timestamp}.json";
-
-                    ActionExtensions.ExecuteWithRetry(() =>
-                    {
-                        _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
-                    });
+        //            ActionExtensions.ExecuteWithRetry(() =>
+        //            {
+        //                _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
+        //            });
 
 
-                    _cachingService.Clear(configuration).GetAwaiter().GetResult();
-                }
-            }
-        }
+        //            _cachingService.Clear(configuration).GetAwaiter().GetResult();
+        //        }
+        //    }
+        //}
 
-        public override Task CreateContainer(ExecutionContext executionContext, Guid providerDefinitionId,
-            CreateContainerModel model)
+        public override Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
             return Task.CompletedTask;
         }
 
-        public override Task ArchiveContainer(ExecutionContext executionContext, Guid providerDefinitionId,
-            string id)
+        public override Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
-            lock (_cacheLock)
-            {
-                try
-                {
-                    Flush();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"{nameof(AzureDataLakeConnector)} fails to save entities before reprocessing");
-                    _cachingService.Clear().GetAwaiter().GetResult();
-                }
-            }
+            //lock (_cacheLock)
+            //{
+            //    try
+            //    {
+            //        Flush();
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        _logger.LogError(ex, $"{nameof(AzureDataLakeConnector)} fails to save entities before reprocessing");
+            //        _cachingService.Clear().GetAwaiter().GetResult();
+            //    }
+            //}
 
             return Task.CompletedTask;
         }
-
-        #region Not supported overrides
 
         public override Task<IEnumerable<IConnectorContainer>> GetContainers(ExecutionContext executionContext,
             Guid providerDefinitionId)
@@ -209,38 +248,54 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             throw new NotImplementedException(nameof(GetContainers));
         }
 
-        public override Task<IEnumerable<IConnectionDataType>> GetDataTypes(ExecutionContext executionContext,
-            Guid providerDefinitionId, string containerId)
-        {
-            _logger.LogInformation($"AzureDataLakeConnector.GetDataTypes: entry");
+        //public override Task<IEnumerable<IConnectionDataType>> GetDataTypes(ExecutionContext executionContext,
+        //    Guid providerDefinitionId, string containerId)
+        //{
+        //    _logger.LogInformation($"AzureDataLakeConnector.GetDataTypes: entry");
 
-            throw new NotImplementedException(nameof(GetDataTypes));
-        }
+        //    throw new NotImplementedException(nameof(GetDataTypes));
+        //}
 
-        public override Task EmptyContainer(ExecutionContext executionContext, Guid providerDefinitionId,
-            string id)
+        public override async Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             _logger.LogInformation($"AzureDataLakeConnector.EmptyContainer: entry");
 
             throw new NotImplementedException(nameof(EmptyContainer));
         }
 
-        public override Task RenameContainer(ExecutionContext executionContext, Guid providerDefinitionId,
-            string id, string newName)
+        public override async Task RenameContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, string oldContainerName)
         {
             _logger.LogInformation($"AzureDataLakeConnector.RenameContainer: entry");
 
             throw new NotImplementedException(nameof(RenameContainer));
         }
 
-        public override Task RemoveContainer(ExecutionContext executionContext, Guid providerDefinitionId,
-            string id)
+        public override Task<string> GetValidMappingDestinationPropertyName(ExecutionContext executionContext, Guid connectorProviderDefinitionId,
+            string propertyName)
+        {
+            return Task.FromResult(propertyName);
+        }
+
+        public override Task<string> GetValidContainerName(ExecutionContext executionContext, Guid connectorProviderDefinitionId, string containerName)
+        {
+            return Task.FromResult(containerName);
+        }
+
+        public override IReadOnlyCollection<StreamMode> GetSupportedModes()
+        {
+            return new[] { StreamMode.Sync };
+        }
+
+        public override async Task RemoveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             _logger.LogInformation($"AzureDataLakeConnector.RemoveContainer: entry");
 
             throw new NotImplementedException(nameof(RemoveContainer));
         }
 
-        #endregion
+        public virtual async Task<IConnectorConnectionV2> GetAuthenticationDetails(ExecutionContext executionContext, Guid providerDefinitionId)
+        {
+            return await AuthenticationDetailsHelper.GetAuthenticationDetails(executionContext, providerDefinitionId);
+        }
     }
 }
