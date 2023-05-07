@@ -6,52 +6,6 @@ using System.Threading;
 
 namespace CluedIn.Connector.AzureDataLake
 {
-    internal class PartitionedBuffer<TItem> : IDisposable
-    {
-        private readonly int _maxSize;
-        private readonly int _timeout;
-        private readonly Action<TItem[]> _bulkAction;
-        private readonly Dictionary<object, Buffer<TItem>> _buffers;
-
-        public PartitionedBuffer(int maxSize, int timeout, Action<TItem[]> bulkAction)
-        {
-            _maxSize = maxSize;
-            _timeout = timeout;
-            _bulkAction = bulkAction;
-            _buffers = new Dictionary<object, Buffer<TItem>>();
-        }
-
-        public async Task Add(TItem item, object partition)
-        {
-            Buffer<TItem> buffer;
-            lock (_buffers)
-            {
-                if (!_buffers.TryGetValue(partition, out buffer))
-                {
-                    _buffers.Add(partition, buffer = new Buffer<TItem>(_maxSize, _timeout, _bulkAction));
-                }
-            }
-
-            await buffer.Add(item);
-        }
-
-        public void Dispose()
-        {
-            foreach (var buffer in _buffers)
-            {
-                buffer.Value.Dispose();
-            }
-        }
-
-        public async Task Flush()
-        {
-            foreach (var buffer in _buffers)
-            {
-                await buffer.Value.Flush();
-            }
-        }
-    }
-
     internal class Buffer<T> : IDisposable
     {
         private readonly int _initialMaxSize;
@@ -80,9 +34,9 @@ namespace CluedIn.Connector.AzureDataLake
 
         private readonly CancellationTokenSource _idleCancellationTokenSource;
 
-        private readonly int _maxSizeAutoDetectionSampleSize = 10;
+        private readonly int _autoMaxSizeDetectionSampleSize = 3;   // can be no less than 2
 
-        private readonly List<(int itemCount, DateTime flushedAt)> _idleFlushHistory = new List<(int, DateTime)>();
+        private readonly List<(int itemCount, DateTime flushedAt, TimeSpan flushDuration)> _idleFlushHistory = new List<(int, DateTime, TimeSpan)>();
 
         private DateTime _autoMaxSizeSetAt;
 
@@ -98,7 +52,7 @@ namespace CluedIn.Connector.AzureDataLake
             _addingCompleteSemaphore = new SemaphoreSlim(0, maxSize - 1);
             _idleCancellationTokenSource = new CancellationTokenSource();
 
-            for (int i = 0; i < _addingTaskSemaphores.Length; i++)
+            for (var i = 0; i < _addingTaskSemaphores.Length; i++)
             {
                 _addingTaskSemaphores[i] = new SemaphoreSlim(0, 1);
             }
@@ -121,9 +75,11 @@ namespace CluedIn.Connector.AzureDataLake
                 await Task.Delay(100, _idleCancellationTokenSource.Token);
 
                 if (!_idleCancellationTokenSource.IsCancellationRequested && DateTime.Now.Subtract(_lastAdded).TotalMilliseconds < _timeout)
+                {
                     continue;
+                }
 
-                int acquiredCount = 0;
+                var acquiredCount = 0;
 
                 try
                 {
@@ -133,7 +89,9 @@ namespace CluedIn.Connector.AzureDataLake
                     }
 
                     if (_currentCount == 0)
+                    {
                         return;
+                    }
 
                     await Flush(true);
 
@@ -143,7 +101,7 @@ namespace CluedIn.Connector.AzureDataLake
                 {
                     _idleTask = null;
 
-                    for (int i = 0; i < acquiredCount; i++)
+                    for (var i = 0; i < acquiredCount; i++)
                     {
                         _addingSemaphore.Release();
                     }
@@ -208,39 +166,11 @@ namespace CluedIn.Connector.AzureDataLake
         {
             try
             {
-                if (idle)
-                {
-                    _idleFlushHistory.Add((_currentCount, DateTime.Now));
-
-                    if (_idleFlushHistory.Count > _maxSizeAutoDetectionSampleSize)
-                    {
-                        _idleFlushHistory.RemoveAt(0);
-                    }
-
-                    if (_idleFlushHistory.Count == _maxSizeAutoDetectionSampleSize &&
-                        _idleFlushHistory.All(h => h.itemCount == _idleFlushHistory[0].itemCount))
-                    {
-                        var allIdleFlushesExecutedInMinimumTime =
-                            _idleFlushHistory.Last().flushedAt.Subtract(_idleFlushHistory.First().flushedAt)
-                                .TotalMilliseconds <
-                            _idleFlushHistory.Count * _timeout +
-                            100; // +100 as there will be random millisecond delays
-
-                        if (allIdleFlushesExecutedInMinimumTime)
-                        {
-                            _maxSize = _idleFlushHistory[0].itemCount;
-                            _autoMaxSizeSetAt = DateTime.Now;
-                        }
-                    }
-                }
-
-                // periodically reset maxSize back to initialMaxSize just in case the auto detection incorrectly reduced it
-                if (_maxSize != _initialMaxSize && DateTime.Now.Subtract(_autoMaxSizeSetAt).TotalMinutes > 10)
-                {
-                    _maxSize = _initialMaxSize;
-                }
+                var flushStartedAt = DateTime.Now;
 
                 _bulkAction(_items.Take(_currentCount).ToArray());
+
+                AutoAdjustMaxSize(idle, flushStartedAt);
             }
             catch (Exception ex)
             {
@@ -250,17 +180,17 @@ namespace CluedIn.Connector.AzureDataLake
             {
                 var c = idle ? _currentCount : _currentCount - 1;
 
-                for (int idx = 0; idx < c; idx++)
+                for (var idx = 0; idx < c; idx++)
                 {
                     _addingTaskSemaphores[idx].Release();
                 }
 
-                for (int idx = 0; idx < c; idx++)
+                for (var idx = 0; idx < c; idx++)
                 {
                     await _addingCompleteSemaphore.WaitAsync();
                 }
 
-                for (int idx = 0; idx < c; idx++)
+                for (var idx = 0; idx < c; idx++)
                 {
                     await _addingTaskSemaphores[idx].WaitAsync();
                 }
@@ -269,6 +199,51 @@ namespace CluedIn.Connector.AzureDataLake
                 var count = _currentCount;
                 _currentCount = 0;
                 _addingSemaphore.Release(count);
+            }
+        }
+
+        /// <summary>
+        /// if the stream prefetch is less that the _maxSize then the buffer will be waiting for more items
+        /// while the core application will be waiting for the buffer to flush resulting in a low throughput.
+        /// This code attempts to detect this situation and compensate by reducing _maxSize
+        /// </summary>
+        /// <param name="idle"></param>
+        /// <param name="flushStartedAt"></param>
+        private void AutoAdjustMaxSize(bool idle, DateTime flushStartedAt)
+        {
+            if (idle)
+            {
+                _idleFlushHistory.Add((_currentCount, flushStartedAt, DateTime.Now.Subtract(flushStartedAt)));
+
+                if (_idleFlushHistory.Count > _autoMaxSizeDetectionSampleSize)
+                {
+                    _idleFlushHistory.RemoveAt(0);
+                }
+
+                if (_idleFlushHistory.Count == _autoMaxSizeDetectionSampleSize &&
+                    _idleFlushHistory.All(h => h.itemCount == _idleFlushHistory[0].itemCount))
+                {
+                    var allIdleFlushesExecutedInMinimumTime =
+                        _idleFlushHistory.Last().flushedAt.Subtract(_idleFlushHistory.First().flushedAt)
+                            .TotalMilliseconds <
+                        (_idleFlushHistory.Count - 1) * _timeout +
+                        _idleFlushHistory.Take(_idleFlushHistory.Count - 1)
+                            .Sum(x => x.flushDuration.TotalMilliseconds) +
+                        _currentCount *
+                        20; // time is needed to populate the items between flushes so lets pick an arbitrary 20ms per item
+
+                    if (allIdleFlushesExecutedInMinimumTime)
+                    {
+                        _maxSize = _idleFlushHistory[0].itemCount;
+                        _autoMaxSizeSetAt = DateTime.Now;
+                    }
+                }
+            }
+
+            // periodically reset maxSize back to initialMaxSize just in case the auto detection incorrectly reduced it
+            if (_maxSize != _initialMaxSize && DateTime.Now.Subtract(_autoMaxSizeSetAt).TotalMinutes > 10)
+            {
+                _maxSize = _initialMaxSize;
             }
         }
     }
