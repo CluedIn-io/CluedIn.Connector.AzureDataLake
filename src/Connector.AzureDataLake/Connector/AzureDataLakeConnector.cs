@@ -1,6 +1,6 @@
-﻿using CluedIn.Core.Configuration;
+﻿using CluedIn.Core;
+using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
-using CluedIn.Core.DataStore;
 using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
 using Microsoft.Extensions.Logging;
@@ -17,12 +17,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
     {
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
-
-        //private DateTime _lastStoreDataAt;
-
         private readonly PartitionedBuffer<(IReadOnlyConnectorEntityData, AzureDataLakeConnectorJobData)> _buffer;
-
-        //private readonly CancellationTokenSource _backgroundFlushingCancellationTokenSource;
 
         public AzureDataLakeConnector(
             ILogger<AzureDataLakeConnector> logger,
@@ -39,37 +34,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             _buffer = new PartitionedBuffer<(IReadOnlyConnectorEntityData, AzureDataLakeConnectorJobData)>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush);
-
-            //_backgroundFlushingCancellationTokenSource = new CancellationTokenSource();
-
-            //Task.Run(() =>
-            //{
-            //    while (true)
-            //    {
-            //        lock (_cacheLock)
-            //        {
-            //            _backgroundFlushingCancellationTokenSource.Token.WaitHandle.WaitOne(1000);
-
-            //            if (_backgroundFlushingCancellationTokenSource.IsCancellationRequested)
-            //            {
-            //                return;
-            //            }
-
-            //            if (DateTime.Now.Subtract(_lastStoreDataAt).TotalMilliseconds > backgroundFlushMaxIdleDefaultValue)
-            //            {
-            //                Flush();
-            //            }
-            //        }
-            //    }
-            //}, _backgroundFlushingCancellationTokenSource.Token);
         }
 
         ~AzureDataLakeConnector()
         {
             _buffer.Dispose();
-            //_backgroundFlushingCancellationTokenSource.Cancel();
-
-            //Flush();
         }
 
         public override Task VerifyExistingContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
@@ -88,24 +57,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             await _buffer.Add((connectorEntityData, configurations), JsonConvert.SerializeObject(configurations));
 
             return SaveResult.Success;
-
-            //data["ProviderDefinitionId"] = providerDefinitionId;
-            //data["ContainerName"] = containerName;
-
-            //var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-            //var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, containerName);
-
-            //lock (_cacheLock)
-            //{
-            //    _lastStoreDataAt = DateTime.Now;
-            //    _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
-            //    var count = _cachingService.Count().GetAwaiter().GetResult();
-
-            //    if (count >= _cacheRecordsThreshold)
-            //    {
-            //        Flush();
-            //    }
-            //}
         }
 
         public override Task<ConnectorLatestEntityPersistInfo> GetLatestEntityPersistInfo(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, Guid entityId)
@@ -117,32 +68,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         {
             throw new NotImplementedException();
         }
-
-        //public override async Task StoreEdgeData(ExecutionContext executionContext, Guid providerDefinitionId,
-        //    string containerName, string originEntityCode, IEnumerable<string> edges)
-        //{
-        //    var data = new Dictionary<string, object>
-        //    {
-        //        {"ProviderDefinitionId", providerDefinitionId.ToString()},
-        //        {"ContainerName", containerName},
-        //        {"OriginEntityCode", originEntityCode},
-        //        {"Edges", edges}
-        //    };
-
-        //    var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-        //    var configurations = new AzureDataLakeConnectorJobData(connection.Authentication, $"{containerName}.edges");
-
-        //    lock (_cacheLock)
-        //    {
-        //        _cachingService.AddItem(data, configurations).GetAwaiter().GetResult();
-        //        var count = _cachingService.Count().GetAwaiter().GetResult();
-
-        //        if (count >= _cacheRecordsThreshold)
-        //        {
-        //            Flush();
-        //        }
-        //    }
-        //}
 
         public override async Task<ConnectionVerificationResult> VerifyConnection(ExecutionContext executionContext, IReadOnlyDictionary<string, object> config)
         {
@@ -171,7 +96,43 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 Formatting = Formatting.Indented,
             };
 
-            var content = JsonConvert.SerializeObject(obj.Select(x => x.Item1), settings);
+            var content = JsonConvert.SerializeObject(obj.Select(x => x.Item1).Select(connectorEntityData =>
+            {
+                // matching output format of previous version of the connector
+                var data = connectorEntityData.Properties.ToDictionary(x => x.Name, x => x.Value);
+                data.Add("Id", connectorEntityData.EntityId);
+
+                if (connectorEntityData.PersistInfo != null)
+                {
+                    data.Add("PersistHash", connectorEntityData.PersistInfo.PersistHash);
+                }
+
+                if (connectorEntityData.OriginEntityCode != null)
+                {
+                    data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode.ToString());
+                }
+
+                if (connectorEntityData.EntityType != null)
+                {
+                    data.Add("EntityType", connectorEntityData.EntityType.ToString());
+                }
+                data.Add("Codes", connectorEntityData.EntityCodes.Select(c => c.ToString()));
+                // end match previous version of the connector
+
+                if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
+                {
+                    data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
+                }
+
+                if (connectorEntityData.IncomingEdges.SafeEnumerate().Any())
+                {
+                    data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
+                }
+
+                data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
+
+                return data;
+            }), settings);
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";

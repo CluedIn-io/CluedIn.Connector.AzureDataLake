@@ -4,20 +4,17 @@ using Azure.Storage.Files.DataLake.Models;
 using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 using CluedIn.Connector.AzureDataLake.Connector;
-using CluedIn.Connector.Common.Caching;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
 using CluedIn.Core.Caching;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data;
 using CluedIn.Core.Data.Parts;
-using CluedIn.Core.DataStore;
 using CluedIn.Core.Streams.Models;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Newtonsoft.Json;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -162,25 +159,9 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             Assert.Equal($@"[
   {{
-    ""ChangeType"": 2,
-    ""StreamMode"": 1,
-    ""EntityId"": ""00000000-0000-0000-0000-000000000000"",
-    ""PersistInfo"": null,
-    ""PreviousPersistInfo"": null,
-    ""OriginEntityCode"": null,
-    ""EntityType"": null,
-    ""Properties"": [
-      {{
-        ""Name"": ""test"",
-        ""Value"": ""hello world"",
-        ""DataType"": {{
-          ""Type"": ""System.String, System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e""
-        }}
-      }}
-    ],
-    ""EntityCodes"": [],
-    ""IncomingEdges"": [],
-    ""OutgoingEdges"": []
+    ""test"": ""hello world"",
+    ""ProviderDefinitionId"": ""{providerDefinitionId}"",
+    ""ContainerName"": null
   }}
 ]", content);
 

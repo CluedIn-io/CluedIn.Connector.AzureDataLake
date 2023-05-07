@@ -46,7 +46,9 @@ namespace CluedIn.Connector.AzureDataLake
 
     internal class Buffer<T> : IDisposable
     {
-        private readonly int _maxSize;
+        private readonly int _initialMaxSize;
+
+        private int _maxSize;
 
         private readonly int _timeout;
 
@@ -70,8 +72,15 @@ namespace CluedIn.Connector.AzureDataLake
 
         private readonly CancellationTokenSource _idleCancellationTokenSource;
 
+        private readonly int _maxSizeAutoDetectionSampleSize = 10;
+
+        private readonly List<(int itemCount, DateTime flushedAt)> _idleFlushHistory = new List<(int, DateTime)>();
+
+        private DateTime _autoMaxSizeSetAt;
+
         public Buffer(int maxSize, int timeout, Action<T[]> bulkAction)
         {
+            _initialMaxSize = maxSize;
             _maxSize = maxSize;
             _timeout = timeout;
             _bulkAction = bulkAction;
@@ -119,7 +128,7 @@ namespace CluedIn.Connector.AzureDataLake
                     if (_currentCount == 0)
                         return;
 
-                    await Flush(false);
+                    await Flush(true);
 
                     return;
                 }
@@ -159,7 +168,7 @@ namespace CluedIn.Connector.AzureDataLake
 
             if (maxSizeReached)
             {
-                await Flush(true);
+                await Flush(false);
             }
             else
             {
@@ -177,10 +186,42 @@ namespace CluedIn.Connector.AzureDataLake
             }
         }
 
-        private async Task Flush(bool taskHasAdded)
+        private async Task Flush(bool idle)
         {
             try
             {
+                if (idle)
+                {
+                    _idleFlushHistory.Add((_currentCount, DateTime.Now));
+
+                    if (_idleFlushHistory.Count > _maxSizeAutoDetectionSampleSize)
+                    {
+                        _idleFlushHistory.RemoveAt(0);
+                    }
+
+                    if (_idleFlushHistory.Count == _maxSizeAutoDetectionSampleSize &&
+                        _idleFlushHistory.All(h => h.itemCount == _idleFlushHistory[0].itemCount))
+                    {
+                        var allIdleFlushesExecutedInMinimumTime =
+                            _idleFlushHistory.Last().flushedAt.Subtract(_idleFlushHistory.First().flushedAt)
+                                .TotalMilliseconds <
+                            _idleFlushHistory.Count * _timeout +
+                            100; // +100 as there will be random millisecond delays
+
+                        if (allIdleFlushesExecutedInMinimumTime)
+                        {
+                            _maxSize = _idleFlushHistory[0].itemCount;
+                            _autoMaxSizeSetAt = DateTime.Now;
+                        }
+                    }
+                }
+
+                // periodically reset maxSize back to initialMaxSize just in case the auto detection incorrectly reduced it
+                if (_maxSize != _initialMaxSize && DateTime.Now.Subtract(_autoMaxSizeSetAt).TotalMinutes > 10)
+                {
+                    _maxSize = _initialMaxSize;
+                }
+
                 _bulkAction(_items.Take(_currentCount).ToArray());
             }
             catch (Exception ex)
@@ -189,7 +230,7 @@ namespace CluedIn.Connector.AzureDataLake
             }
             finally
             {
-                var c = taskHasAdded ? _currentCount - 1 : _currentCount;
+                var c = idle ? _currentCount : _currentCount - 1;
 
                 for (int idx = 0; idx < c; idx++)
                 {
