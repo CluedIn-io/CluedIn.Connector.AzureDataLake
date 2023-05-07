@@ -94,6 +94,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 TypeNameHandling = TypeNameHandling.None,
                 Formatting = Formatting.Indented,
+                PreserveReferencesHandling = PreserveReferencesHandling.Objects,
             };
 
             var content = JsonConvert.SerializeObject(obj.Select(x => x.Item1).Select(connectorEntityData =>
