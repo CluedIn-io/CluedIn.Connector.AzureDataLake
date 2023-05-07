@@ -42,7 +42,7 @@ namespace CluedIn.Connector.AzureDataLake
         /// <summary>
         /// Default value for Cache records threshold
         /// </summary>
-        public int CacheRecordsThresholdDefaultValue => 500;
+        public int CacheRecordsThresholdDefaultValue => 50;
 
         private static AuthMethods AzureDataLaleAuthMethods => new AuthMethods
         {
