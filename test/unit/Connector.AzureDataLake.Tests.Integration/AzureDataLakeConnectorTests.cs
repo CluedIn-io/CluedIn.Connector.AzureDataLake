@@ -44,12 +44,12 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             Assert.NotNull(jobData.Configurations);
         }
-        
+
         [Fact]
         public async void VerifyStoreData()
         {
             var organizationId = Guid.NewGuid();
-            var providerDefinitionId = Guid.NewGuid();
+            var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
 
             var container = new WindsorContainer();
 
@@ -103,9 +103,17 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var connector = connectorMock.Object;
 
             var data = new Dictionary<string, object>();
-            data.Add("test", "hello world");
+            data.Add("user.lastName", "Picard");
+            data.Add("Name", "Jean Luc Picard");
+            data.Add("Id", "f55c66dc-7881-55c9-889f-344992e71cb8");
+            data.Add("PersistHash", "etypzcezkiehwq8vw4oqog==");
+            data.Add("OriginEntityCode", "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0");
+            data.Add("EntityType", "/Person");
+            data.Add("Codes", new[] { "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0" });
+            data.Add("ProviderDefinitionId", "c444cda8-d9b5-45cc-a82d-fef28e08d55c");
+            data.Add("ContainerName", "test");
 
-            await connector.StoreData(context, providerDefinitionId, null, data);
+            await connector.StoreData(context, providerDefinitionId, "test", data);
 
             var client = new DataLakeServiceClient(new Uri($"https://{accountName}.dfs.core.windows.net"),
                 new StorageSharedKeyCredential(accountName, accountKey));
@@ -121,7 +129,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                     throw new TimeoutException();
                 }
 
-                if(client.GetFileSystems().All(fs => fs.Name != fileSystemName))
+                if (client.GetFileSystems().All(fs => fs.Name != fileSystemName))
                 {
                     continue;
                 }
@@ -155,9 +163,17 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             Assert.Equal($@"[
   {{
-    ""test"": ""hello world"",
-    ""ProviderDefinitionId"": ""{providerDefinitionId}"",
-    ""ContainerName"": null
+    ""user.lastName"": ""Picard"",
+    ""Name"": ""Jean Luc Picard"",
+    ""Id"": ""f55c66dc-7881-55c9-889f-344992e71cb8"",
+    ""PersistHash"": ""etypzcezkiehwq8vw4oqog=="",
+    ""OriginEntityCode"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
+    ""EntityType"": ""/Person"",
+    ""Codes"": [
+      ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0""
+    ],
+    ""ProviderDefinitionId"": ""c444cda8-d9b5-45cc-a82d-fef28e08d55c"",
+    ""ContainerName"": ""test""
   }}
 ]", content);
 
