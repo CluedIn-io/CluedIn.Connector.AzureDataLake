@@ -34,7 +34,7 @@ namespace CluedIn.Connector.AzureDataLake
 
         private readonly CancellationTokenSource _idleCancellationTokenSource;
 
-        private readonly int _autoMaxSizeDetectionSampleSize = 3;   // can be no less than 2
+        private readonly int _autoMaxSizeDetectionSampleSize = 3;   // twice is a coincidence, three times is a pattern
 
         private readonly List<(int itemCount, DateTime flushedAt, TimeSpan flushDuration)> _idleFlushHistory = new List<(int, DateTime, TimeSpan)>();
 
