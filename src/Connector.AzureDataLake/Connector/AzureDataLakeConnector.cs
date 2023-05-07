@@ -5,6 +5,7 @@ using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +18,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
     {
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
-        private readonly PartitionedBuffer<(IReadOnlyConnectorEntityData, AzureDataLakeConnectorJobData)> _buffer;
+        private readonly PartitionedBuffer<(string, AzureDataLakeConnectorJobData)> _buffer;
 
         public AzureDataLakeConnector(
             ILogger<AzureDataLakeConnector> logger,
@@ -32,7 +33,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
 
-            _buffer = new PartitionedBuffer<(IReadOnlyConnectorEntityData, AzureDataLakeConnectorJobData)>(cacheRecordsThreshold,
+            _buffer = new PartitionedBuffer<(string, AzureDataLakeConnectorJobData)>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush);
         }
 
@@ -52,9 +53,47 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var containerName = streamModel.ContainerName;
 
             var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName, providerDefinitionId);
+            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName);
 
-            await _buffer.Add((connectorEntityData, configurations), JsonConvert.SerializeObject(configurations));
+            // matching output format of previous version of the connector
+            var data = connectorEntityData.Properties.ToDictionary(x => x.Name, x => x.Value);
+            data.Add("Id", connectorEntityData.EntityId);
+
+            if (connectorEntityData.PersistInfo != null)
+            {
+                data.Add("PersistHash", connectorEntityData.PersistInfo.PersistHash);
+            }
+
+            if (connectorEntityData.OriginEntityCode != null)
+            {
+                data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode.ToString());
+            }
+
+            if (connectorEntityData.EntityType != null)
+            {
+                data.Add("EntityType", connectorEntityData.EntityType.ToString());
+            }
+            data.Add("Codes", connectorEntityData.EntityCodes.Select(c => c.ToString()));
+
+            data["ProviderDefinitionId"] = providerDefinitionId;
+            data["ContainerName"] = containerName;
+            // end match previous version of the connector
+
+            if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
+            {
+                data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
+            }
+
+            if (connectorEntityData.IncomingEdges.SafeEnumerate().Any())
+            {
+                data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
+            }
+
+            data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
+
+            var json = JsonConvert.SerializeObject(data);
+
+            await _buffer.Add((json, configurations), JsonConvert.SerializeObject(configurations));
 
             return SaveResult.Success;
         }
@@ -71,12 +110,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public override async Task<ConnectionVerificationResult> VerifyConnection(ExecutionContext executionContext, IReadOnlyDictionary<string, object> config)
         {
-            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(config.ToDictionary(x => x.Key, x => x.Value), null, Guid.Empty));
+            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(config.ToDictionary(x => x.Key, x => x.Value)));
 
             return new ConnectionVerificationResult(true);
         }
 
-        private void Flush((IReadOnlyConnectorEntityData, AzureDataLakeConnectorJobData)[] obj)
+        private void Flush((string entityData, AzureDataLakeConnectorJobData configuration)[] obj)
         {
             if (obj == null)
             {
@@ -88,55 +127,15 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 return;
             }
 
-            var configuration = obj[0].Item2;  // all connection data should be the same in the batch so use the first
+            var configuration = obj[0].configuration;  // all connection data should be the same in the batch so use the first
 
             var settings = new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.None,
                 Formatting = Formatting.Indented,
-                PreserveReferencesHandling = PreserveReferencesHandling.Objects,
             };
 
-            var content = JsonConvert.SerializeObject(obj.Select(x => x.Item1).Select(connectorEntityData =>
-            {
-                // matching output format of previous version of the connector
-                var data = connectorEntityData.Properties.ToDictionary(x => x.Name, x => x.Value);
-                data.Add("Id", connectorEntityData.EntityId);
-
-                if (connectorEntityData.PersistInfo != null)
-                {
-                    data.Add("PersistHash", connectorEntityData.PersistInfo.PersistHash);
-                }
-
-                if (connectorEntityData.OriginEntityCode != null)
-                {
-                    data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode.ToString());
-                }
-
-                if (connectorEntityData.EntityType != null)
-                {
-                    data.Add("EntityType", connectorEntityData.EntityType.ToString());
-                }
-                data.Add("Codes", connectorEntityData.EntityCodes.Select(c => c.ToString()));
-
-                data["ProviderDefinitionId"] = configuration.ProviderDefinitionId;
-                data["ContainerName"] = configuration.ContainerName;
-                // end match previous version of the connector
-
-                if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
-                {
-                    data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
-                }
-
-                if (connectorEntityData.IncomingEdges.SafeEnumerate().Any())
-                {
-                    data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
-                }
-
-                data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
-
-                return data;
-            }), settings);
+            var content = JsonConvert.SerializeObject(obj.Select(x => JObject.Parse(x.entityData)).ToArray(), settings);
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
