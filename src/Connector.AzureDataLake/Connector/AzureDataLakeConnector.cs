@@ -52,7 +52,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var containerName = streamModel.ContainerName;
 
             var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName);
+            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName, providerDefinitionId);
 
             await _buffer.Add((connectorEntityData, configurations), JsonConvert.SerializeObject(configurations));
 
@@ -71,7 +71,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public override async Task<ConnectionVerificationResult> VerifyConnection(ExecutionContext executionContext, IReadOnlyDictionary<string, object> config)
         {
-            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(config.ToDictionary(x => x.Key, x => x.Value)));
+            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(config.ToDictionary(x => x.Key, x => x.Value), null, Guid.Empty));
 
             return new ConnectionVerificationResult(true);
         }
@@ -117,6 +117,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     data.Add("EntityType", connectorEntityData.EntityType.ToString());
                 }
                 data.Add("Codes", connectorEntityData.EntityCodes.Select(c => c.ToString()));
+
+                data["ProviderDefinitionId"] = configuration.ProviderDefinitionId;
+                data["ContainerName"] = configuration.ContainerName;
                 // end match previous version of the connector
 
                 if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
