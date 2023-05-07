@@ -137,7 +137,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 return data;
             }), settings);
 
-            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
+            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
             _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
