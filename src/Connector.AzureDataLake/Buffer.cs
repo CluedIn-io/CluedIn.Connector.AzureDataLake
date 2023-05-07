@@ -42,6 +42,14 @@ namespace CluedIn.Connector.AzureDataLake
                 buffer.Value.Dispose();
             }
         }
+
+        public async Task Flush()
+        {
+            foreach (var buffer in _buffers)
+            {
+                await buffer.Value.Flush();
+            }
+        }
     }
 
     internal class Buffer<T> : IDisposable
@@ -103,8 +111,7 @@ namespace CluedIn.Connector.AzureDataLake
 
         public void Dispose()
         {
-            _idleCancellationTokenSource.Cancel();
-            _idleTask?.Wait();
+            Flush().Wait();
         }
 
         private async Task Idle()
@@ -183,6 +190,17 @@ namespace CluedIn.Connector.AzureDataLake
                 {
                     throw new AggregateException(e);
                 }
+            }
+        }
+
+        public async Task Flush()
+        {
+            var t = _idleTask;
+            if (t != null)
+            {
+                _idleCancellationTokenSource.Cancel();
+
+                await t;
             }
         }
 

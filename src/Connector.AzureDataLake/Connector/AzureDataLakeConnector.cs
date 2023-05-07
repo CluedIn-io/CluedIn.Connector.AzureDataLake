@@ -142,66 +142,15 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
         }
-
-        //private void Flush()
-        //{
-        //    lock (_cacheLock)
-        //    {
-        //        var itemsCount = _cachingService.Count().GetAwaiter().GetResult();
-        //        if (itemsCount == 0)
-        //        {
-        //            return;
-        //        }
-
-        //        var cachedItems = _cachingService.GetItems().GetAwaiter().GetResult();
-        //        var cachedItemsByConfigurations = cachedItems.GroupBy(pair => pair.Value).ToList();
-
-        //        var settings = new JsonSerializerSettings
-        //        {
-        //            TypeNameHandling = TypeNameHandling.None,
-        //            Formatting = Formatting.Indented,
-        //        };
-
-        //        foreach (var group in cachedItemsByConfigurations)
-        //        {
-        //            var configuration = group.Key;
-        //            var content = JsonConvert.SerializeObject(group.Select(g => g.Key), settings);
-
-        //            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss");
-        //            var fileName = $"{configuration.ContainerName}.{timestamp}.json";
-
-        //            ActionExtensions.ExecuteWithRetry(() =>
-        //            {
-        //                _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
-        //            });
-
-
-        //            _cachingService.Clear(configuration).GetAwaiter().GetResult();
-        //        }
-        //    }
-        //}
-
+        
         public override Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
             return Task.CompletedTask;
         }
 
-        public override Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
-            //lock (_cacheLock)
-            //{
-            //    try
-            //    {
-            //        Flush();
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        _logger.LogError(ex, $"{nameof(AzureDataLakeConnector)} fails to save entities before reprocessing");
-            //        _cachingService.Clear().GetAwaiter().GetResult();
-            //    }
-            //}
-
-            return Task.CompletedTask;
+            await _buffer.Flush();
         }
 
         public override Task<IEnumerable<IConnectorContainer>> GetContainers(ExecutionContext executionContext,
@@ -211,14 +160,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             throw new NotImplementedException(nameof(GetContainers));
         }
-
-        //public override Task<IEnumerable<IConnectionDataType>> GetDataTypes(ExecutionContext executionContext,
-        //    Guid providerDefinitionId, string containerId)
-        //{
-        //    _logger.LogInformation($"AzureDataLakeConnector.GetDataTypes: entry");
-
-        //    throw new NotImplementedException(nameof(GetDataTypes));
-        //}
 
         public override async Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
