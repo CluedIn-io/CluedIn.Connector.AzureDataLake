@@ -18,7 +18,7 @@ namespace CluedIn.Connector.AzureDataLake
             icon: "Resources.azuredatalake.svg",
             domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
             about: "Supports publishing of data to Azure Data Lake Storage Gen2.",
-            authMethods: AzureDataLaleAuthMethods,
+            authMethods: AzureDataLakeAuthMethods,
             guideDetails: "Supports publishing of data to Azure DataLake.",
             guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
         {
@@ -44,7 +44,7 @@ namespace CluedIn.Connector.AzureDataLake
         /// </summary>
         public int CacheRecordsThresholdDefaultValue => 50;
 
-        private static AuthMethods AzureDataLaleAuthMethods => new AuthMethods
+        private static AuthMethods AzureDataLakeAuthMethods => new AuthMethods
         {
             token = new[]
             {
