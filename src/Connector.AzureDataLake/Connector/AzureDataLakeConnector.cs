@@ -18,7 +18,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
     {
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
-        private readonly PartitionedBuffer<(string, AzureDataLakeConnectorJobData)> _buffer;
+        private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
 
         public AzureDataLakeConnector(
             ILogger<AzureDataLakeConnector> logger,
@@ -33,7 +33,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
 
-            _buffer = new PartitionedBuffer<(string, AzureDataLakeConnectorJobData)>(cacheRecordsThreshold,
+            _buffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush);
         }
 
@@ -93,7 +93,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             var json = JsonConvert.SerializeObject(data);
 
-            await _buffer.Add((json, configurations), JsonConvert.SerializeObject(configurations));
+            await _buffer.Add(configurations, json);
 
             return SaveResult.Success;
         }
@@ -115,19 +115,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return new ConnectionVerificationResult(true);
         }
 
-        private void Flush((string entityData, AzureDataLakeConnectorJobData configuration)[] obj)
+        private void Flush(AzureDataLakeConnectorJobData configuration, string[] entityData)
         {
-            if (obj == null)
+            if (entityData == null)
             {
                 return;
             }
 
-            if (obj.Length == 0)
+            if (entityData.Length == 0)
             {
                 return;
             }
-
-            var configuration = obj[0].configuration;  // all connection data should be the same in the batch so use the first
 
             var settings = new JsonSerializerSettings
             {
@@ -135,7 +133,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 Formatting = Formatting.Indented,
             };
 
-            var content = JsonConvert.SerializeObject(obj.Select(x => JObject.Parse(x.entityData)).ToArray(), settings);
+            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), settings);
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";

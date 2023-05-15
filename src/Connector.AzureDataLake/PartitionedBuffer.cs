@@ -4,29 +4,29 @@ using System.Threading.Tasks;
 
 namespace CluedIn.Connector.AzureDataLake
 {
-    internal class PartitionedBuffer<TItem> : IDisposable
+    internal class PartitionedBuffer<TPartition, TItem> : IDisposable
     {
         private readonly int _maxSize;
         private readonly int _timeout;
-        private readonly Action<TItem[]> _bulkAction;
-        private readonly Dictionary<object, Buffer<TItem>> _buffers;
+        private readonly Action<TPartition, TItem[]> _bulkAction;
+        private readonly Dictionary<TPartition, Buffer<TItem>> _buffers;
 
-        public PartitionedBuffer(int maxSize, int timeout, Action<TItem[]> bulkAction)
+        public PartitionedBuffer(int maxSize, int timeout, Action<TPartition, TItem[]> bulkAction)
         {
             _maxSize = maxSize;
             _timeout = timeout;
             _bulkAction = bulkAction;
-            _buffers = new Dictionary<object, Buffer<TItem>>();
+            _buffers = new Dictionary<TPartition, Buffer<TItem>>();
         }
 
-        public async Task Add(TItem item, object partition)
+        public async Task Add(TPartition partition, TItem item)
         {
             Buffer<TItem> buffer;
             lock (_buffers)
             {
                 if (!_buffers.TryGetValue(partition, out buffer))
                 {
-                    _buffers.Add(partition, buffer = new Buffer<TItem>(_maxSize, _timeout, _bulkAction));
+                    _buffers.Add(partition, buffer = new Buffer<TItem>(_maxSize, _timeout, x => _bulkAction(partition, x)));
                 }
             }
 
