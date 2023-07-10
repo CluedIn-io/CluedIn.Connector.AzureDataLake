@@ -6,7 +6,6 @@
         MUST SPECIFY IN CSPROJ AS <PackageReference Name="<depName>" />
     -->
     <PackageReference Update="Azure.Storage.Files.DataLake" Version="12.8.0" />
-    <PackageReference Update="CluedIn.Connector.Common" Version="3.6.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,5 +20,6 @@
     <PackageReference Update="xunit" Version="2.4.1" />
     <PackageReference Update="xunit.runner.visualstudio" Version="2.4.1" />
     <PackageReference Update="Moq" Version="4.13.1" />
+    <PackageReference Update="CluedIn.Core" Version="3.6.0" />
   </ItemGroup>
 </Project>

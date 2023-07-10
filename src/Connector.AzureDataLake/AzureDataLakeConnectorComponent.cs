@@ -1,6 +1,5 @@
 using CluedIn.Core;
 using ComponentHost;
-using Connector.Common;
 
 namespace CluedIn.Connector.AzureDataLake
 {

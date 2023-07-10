@@ -1,4 +1,3 @@
-using CluedIn.Connector.Common;
 using CluedIn.Core;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
