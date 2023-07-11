@@ -1,4 +1,3 @@
-using CluedIn.Connector.Common.Configurations;
 using CluedIn.Core.Providers;
 using System;
 // ReSharper disable ArgumentsStyleStringLiteral

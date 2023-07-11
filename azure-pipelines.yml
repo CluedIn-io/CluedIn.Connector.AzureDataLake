@@ -1,4 +1,9 @@
 name: $(Date:yyyyMMdd)$(Rev:.r)
+parameters:
+  - name: runIngegrationTests
+    displayName: Run Integration Tests
+    type: boolean
+    default: true
 
 trigger:
   branches:
@@ -57,3 +62,5 @@ steps:
     parameters:
       githubReleaseInMaster: true
       publicReleaseForMaster: true
+      executeIngegrationTests: ${{ parameters.runIngegrationTests }}
+      publishCodeCoverage: true

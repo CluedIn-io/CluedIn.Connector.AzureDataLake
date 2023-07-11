@@ -43,7 +43,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{CCFA12D5
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "integration", "integration", "{9A48CD57-CDE1-454C-AE55-8ABD15908E81}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake.Tests.Integration", "test\unit\Connector.AzureDataLake.Tests.Integration\Connector.AzureDataLake.Tests.Integration.csproj", "{22BA9D9A-8613-435D-A066-253B14E4EC44}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake.Tests.Integration", "test\integration\Connector.AzureDataLake.Tests.Integration\Connector.AzureDataLake.Tests.Integration.csproj", "{22BA9D9A-8613-435D-A066-253B14E4EC44}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "unit", "unit", "{F5373611-431E-459B-B775-5A31DDEC5B21}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AzureDataLake.Tests.Unit", "test\unit\Connector.AzureDataLake.Tests.Unit\Connector.AzureDataLake.Tests.Unit.csproj", "{B713D902-FAD8-4B5E-AD24-C3E5AC5C4059}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -59,6 +63,10 @@ Global
 		{22BA9D9A-8613-435D-A066-253B14E4EC44}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{22BA9D9A-8613-435D-A066-253B14E4EC44}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{22BA9D9A-8613-435D-A066-253B14E4EC44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B713D902-FAD8-4B5E-AD24-C3E5AC5C4059}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B713D902-FAD8-4B5E-AD24-C3E5AC5C4059}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B713D902-FAD8-4B5E-AD24-C3E5AC5C4059}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B713D902-FAD8-4B5E-AD24-C3E5AC5C4059}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -71,6 +79,8 @@ Global
 		{56F1F857-9E4F-4D49-B538-0F5CFBEB958D} = {9919A6B5-BBA9-4A88-9084-E6C099025F41}
 		{9A48CD57-CDE1-454C-AE55-8ABD15908E81} = {CCFA12D5-D843-46A6-B7AC-AC90C14EEE14}
 		{22BA9D9A-8613-435D-A066-253B14E4EC44} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
+		{F5373611-431E-459B-B775-5A31DDEC5B21} = {CCFA12D5-D843-46A6-B7AC-AC90C14EEE14}
+		{B713D902-FAD8-4B5E-AD24-C3E5AC5C4059} = {F5373611-431E-459B-B775-5A31DDEC5B21}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E6A866CB-824C-4271-8EA6-053B7FC4B134}

@@ -1,4 +1,3 @@
-using CluedIn.Connector.Common.Configurations;
 using System;
 using System.Collections.Generic;
 
