@@ -1,4 +1,9 @@
 name: $(Date:yyyyMMdd)$(Rev:.r)
+parameters:
+  - name: runIngegrationTests
+    displayName: Run Integration Tests
+    type: boolean
+    default: true
 
 trigger:
   branches:
@@ -52,8 +57,18 @@ steps:
   # Configure NuGet
   - task: NuGetAuthenticate@0
     displayName: 'Authenticate with nuget'
+    
+  - task: PowerShell@2
+    displayName: 'Set Environment variables'
+    inputs:
+      targetType: inline
+      script: |
+        Write-Host ("##vso[task.setvariable variable=ADL2_ACCOUNTNAME;]$(ADL2_ACCOUNTNAME)")
+        Write-Host ("##vso[task.setvariable variable=ADL2_ACCOUNTKEY;]$(ADL2_ACCOUNTKEY)")
 
   - template: crawler.build.yml@templates
     parameters:
       githubReleaseInMaster: true
       publicReleaseForMaster: true
+      executeIngegrationTests: ${{ parameters.runIngegrationTests }}
+      publishCodeCoverage: true
