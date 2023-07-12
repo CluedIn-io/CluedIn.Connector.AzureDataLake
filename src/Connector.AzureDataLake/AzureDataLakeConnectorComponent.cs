@@ -33,9 +33,11 @@ namespace CluedIn.Connector.AzureDataLake
             {
                 try
                 {
+                    var upgradeSettingKey = "ADl Mode Migration";
+
                     var dbContext = new CluedInEntities(Container.Resolve<DbContextOptions<CluedInEntities>>());
                     var modeMigrationSetting = dbContext.Settings.FirstOrDefault(s =>
-                        s.OrganizationId == Guid.Empty && s.Key == "ADL Mode Migration");
+                        s.OrganizationId == Guid.Empty && s.Key == upgradeSettingKey);
                     if (modeMigrationSetting != null)
                     {
                         return;
@@ -110,7 +112,7 @@ namespace CluedIn.Connector.AzureDataLake
                         Id = Guid.NewGuid(),
                         OrganizationId = Guid.Empty,
                         UserId = Guid.Empty,
-                        Key = "ADL Mode Migration",
+                        Key = upgradeSettingKey,
                         Data = "Complete",
                     });
                     await dbContext.SaveChangesAsync();
