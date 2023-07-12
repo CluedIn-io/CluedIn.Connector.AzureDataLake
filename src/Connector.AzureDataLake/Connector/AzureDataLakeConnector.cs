@@ -186,7 +186,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public override IReadOnlyCollection<StreamMode> GetSupportedModes()
         {
-            return new[] { StreamMode.Sync };
+            return new[] { StreamMode.EventStream };
         }
 
         public override async Task RemoveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
