@@ -1,6 +1,7 @@
 ﻿using CluedIn.Core;
 using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
+using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
 using Microsoft.Extensions.Logging;
@@ -89,11 +90,35 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
             }
 
-            data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
+            if (streamModel.Mode == StreamMode.Sync)
+            {
+                var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
 
-            var json = JsonConvert.SerializeObject(data);
+                if (connectorEntityData.ChangeType == VersionChangeType.Removed)
+                {
+                    await _client.DeleteFile(configurations, filePathAndName);
+                }
+                else
+                {
+                    var settings = new JsonSerializerSettings
+                    {
+                        TypeNameHandling = TypeNameHandling.None,
+                        Formatting = Formatting.Indented,
+                    };
 
-            await _buffer.Add(configurations, json);
+                    var json = JsonConvert.SerializeObject(data, settings);
+
+                    await _client.SaveData(configurations, json, filePathAndName);
+                }
+            }
+            else
+            {
+                data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
+
+                var json = JsonConvert.SerializeObject(data);
+
+                await _buffer.Add(configurations, json);
+            }
 
             return SaveResult.Success;
         }
@@ -186,7 +211,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public override IReadOnlyCollection<StreamMode> GetSupportedModes()
         {
-            return new[] { StreamMode.EventStream };
+            return new[] { StreamMode.Sync, StreamMode.EventStream };
         }
 
         public override async Task RemoveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)

@@ -32,7 +32,25 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             };
 
             using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
-            await dataLakeFileClient.UploadAsync(stream, options);
+            var response = await dataLakeFileClient.UploadAsync(stream, options);
+            
+            if (response?.Value == null)
+            {
+                throw new Exception($"{nameof(DataLakeFileClient)}.{nameof(DataLakeFileClient.UploadAsync)} did not return a valid path");
+            }
+        }
+
+        public async Task DeleteFile(AzureDataLakeConnectorJobData configuration, string fileName)
+        {
+            var directoryClient = await EnsureDataLakeDirectoryExist(configuration);
+            var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+
+            var response = await dataLakeFileClient.DeleteAsync();
+
+            if (response.Status != 200)
+            {
+                throw new Exception($"{nameof(DataLakeFileClient)}.{nameof(DataLakeFileClient.DeleteAsync)} returned {response.Status}");
+            }
         }
 
         private DataLakeServiceClient GetDataLakeServiceClient(AzureDataLakeConnectorJobData configuration)
