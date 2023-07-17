@@ -74,7 +74,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 data.Add("EntityType", connectorEntityData.EntityType.ToString());
             }
-            data.Add("Codes", connectorEntityData.EntityCodes.Select(c => c.ToString()));
+            data.Add("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(c => c.ToString()));
 
             data["ProviderDefinitionId"] = providerDefinitionId;
             data["ContainerName"] = containerName;
