@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace CluedIn.Connector.AzureDataLake
+namespace CluedIn.Connectors.Batching.InMemory
 {
-    internal class PartitionedBuffer<TPartition, TItem> : IDisposable
+    public class PartitionedBuffer<TPartition, TItem> : IDisposable
     {
         private readonly int _maxSize;
         private readonly int _timeout;

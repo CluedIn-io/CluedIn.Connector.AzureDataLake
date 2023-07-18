@@ -15,4 +15,7 @@
     <PackageReference Include="Azure.Storage.Files.DataLake" />
     <PackageReference Include="CluedIn.Core" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connectors.Batching\Connectors.Batching.csproj" />
+  </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
-﻿using CluedIn.Core;
+﻿using CluedIn.Connectors.Batching.InMemory;
+using CluedIn.Core;
 using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
@@ -184,14 +185,14 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             throw new NotImplementedException(nameof(GetContainers));
         }
 
-        public override async Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        public override Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             _logger.LogInformation($"AzureDataLakeConnector.EmptyContainer: entry");
 
             throw new NotImplementedException(nameof(EmptyContainer));
         }
 
-        public override async Task RenameContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, string oldContainerName)
+        public override Task RenameContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, string oldContainerName)
         {
             _logger.LogInformation($"AzureDataLakeConnector.RenameContainer: entry");
 
@@ -214,7 +215,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return new[] { StreamMode.Sync, StreamMode.EventStream };
         }
 
-        public override async Task RemoveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        public override Task RemoveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             _logger.LogInformation($"AzureDataLakeConnector.RemoveContainer: entry");
 
