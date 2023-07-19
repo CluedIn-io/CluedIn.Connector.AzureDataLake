@@ -7,5 +7,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
     {
         Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(AzureDataLakeConnectorJobData configuration);
         Task SaveData(AzureDataLakeConnectorJobData configuration, string content, string fileName);
+        Task DeleteFile(AzureDataLakeConnectorJobData configuration, string fileName);
     }
 }
