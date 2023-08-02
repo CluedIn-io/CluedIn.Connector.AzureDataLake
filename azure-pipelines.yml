@@ -4,6 +4,11 @@ parameters:
     displayName: Run Integration Tests
     type: boolean
     default: true
+    
+  - name: pipelineTemplateRef
+    displayName: Pipeline Template Ref
+    type: string
+    default: refs/heads/refactor
 
 trigger:
   branches:
@@ -25,7 +30,7 @@ resources:
       type: github
       name: CluedIn-io/AzurePipelines.Templates
       endpoint: 'CluedIn-io'
-      ref: refs/heads/refactor
+      ref: ${{ parameters.pipelineTemplateRef }}
 
 pool:
   vmImage: 'windows-latest'
