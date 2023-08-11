@@ -11,6 +11,7 @@
     -->
     <PackageReference Update="Azure.Storage.Files.DataLake" Version="12.8.0" />
     <PackageReference Update="CluedIn.Core" Version="$(_CluedIn)" />
+    <PackageReference Update="CluedIn.Connectors.Batching" Version="1.0.0-*" />
   </ItemGroup>
 
   <ItemGroup>

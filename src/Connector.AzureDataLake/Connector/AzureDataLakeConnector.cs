@@ -32,11 +32,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             _client = client;
 
 
-            var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
-            var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
+            var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue<int?>(constants.CacheRecordsThresholdKeyName, null);
+            var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue<int?>(constants.CacheSyncIntervalKeyName, null);
 
-            _buffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, string>(cacheRecordsThreshold,
-                backgroundFlushMaxIdleDefaultValue, Flush);
+            _buffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, string>(Flush, cacheRecordsThreshold,
+                backgroundFlushMaxIdleDefaultValue);
         }
 
         ~AzureDataLakeConnector()
