@@ -29,19 +29,9 @@ namespace CluedIn.Connector.AzureDataLake
         public string CacheSyncIntervalKeyName => "Streams.AzureDataLakeConnector.CacheSyncInterval";
 
         /// <summary>
-        /// Default value for Cache sync interval in milliseconds
-        /// </summary>
-        public int CacheSyncIntervalDefaultValue => 60_000;
-
-        /// <summary>
         /// Environment key name for cache records threshold
         /// </summary>
         public string CacheRecordsThresholdKeyName => "Streams.AzureDataLakeConnector.CacheRecordsThreshold";
-
-        /// <summary>
-        /// Default value for Cache records threshold
-        /// </summary>
-        public int CacheRecordsThresholdDefaultValue => 50;
 
         private static AuthMethods AzureDataLakeAuthMethods => new AuthMethods
         {

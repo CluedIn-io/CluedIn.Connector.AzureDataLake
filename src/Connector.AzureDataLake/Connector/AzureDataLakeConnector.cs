@@ -1,4 +1,5 @@
-﻿using CluedIn.Core;
+﻿using CluedIn.Connectors.Batching.InMemory;
+using CluedIn.Core;
 using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
@@ -31,11 +32,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             _client = client;
 
 
-            var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
-            var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
+            var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue<int?>(constants.CacheRecordsThresholdKeyName, null);
+            var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue<int?>(constants.CacheSyncIntervalKeyName, null);
 
-            _buffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, string>(cacheRecordsThreshold,
-                backgroundFlushMaxIdleDefaultValue, Flush);
+            _buffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, string>(Flush, cacheRecordsThreshold,
+                backgroundFlushMaxIdleDefaultValue);
         }
 
         ~AzureDataLakeConnector()
@@ -184,14 +185,14 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             throw new NotImplementedException(nameof(GetContainers));
         }
 
-        public override async Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        public override Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             _logger.LogInformation($"AzureDataLakeConnector.EmptyContainer: entry");
 
             throw new NotImplementedException(nameof(EmptyContainer));
         }
 
-        public override async Task RenameContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, string oldContainerName)
+        public override Task RenameContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, string oldContainerName)
         {
             _logger.LogInformation($"AzureDataLakeConnector.RenameContainer: entry");
 
@@ -214,7 +215,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return new[] { StreamMode.Sync, StreamMode.EventStream };
         }
 
-        public override async Task RemoveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        public override Task RemoveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             _logger.LogInformation($"AzureDataLakeConnector.RemoveContainer: entry");
 
