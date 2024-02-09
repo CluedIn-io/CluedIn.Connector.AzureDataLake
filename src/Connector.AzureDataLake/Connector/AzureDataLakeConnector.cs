@@ -90,16 +90,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
             }
 
-            if (!data.ContainsKey("Timestamp"))
-            {
-                data.Add("Timestamp", DateTime.UtcNow.ToString("O"));
-            }
-
-            if (!data.ContainsKey("Epoch"))
-            {
-                data.Add("Epoch", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-            }
-
             if (streamModel.Mode == StreamMode.Sync)
             {
                 var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
