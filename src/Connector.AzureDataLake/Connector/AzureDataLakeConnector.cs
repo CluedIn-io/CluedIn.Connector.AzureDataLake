@@ -99,14 +99,32 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             data["ContainerName"] = containerName;
             // end match previous version of the connector
 
+            var serializer = JsonUtility.CreateDefaultSerializer(settings =>
+            {
+                settings.Formatting = Formatting.Indented;
+                settings.TypeNameHandling = TypeNameHandling.None;
+            });
+
             if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
             {
-                data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
+                if (outputFormat == "JSON")
+                    data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
+                else
+                {
+                    //var edges = JsonUtility.Serialize(connectorEntityData.OutgoingEdges, serializer);
+                    //data.Add("OutgoingEdges", JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(edges));
+                }
             }
 
             if (connectorEntityData.IncomingEdges.SafeEnumerate().Any())
             {
-                data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
+                if (outputFormat == "JSON")
+                    data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
+                else
+                {
+                    //var edges = JsonUtility.Serialize(connectorEntityData.IncomingEdges, serializer);
+                    //data.Add("IncomingEdges", JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(edges));
+                }
             }
 
             if (streamModel.Mode == StreamMode.Sync)
@@ -124,7 +142,21 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                         stream = data.ToJsonStream();
                     else
                     {
-                        var parquetSchema = _parquetSchemas.TryAddOrUpdate(configurations, () => ParquetHelper.GenerateSchema(data, connectorEntityData.Properties));
+                        var lExecuted = false;
+                        var parquetSchema = _parquetSchemas.TryAddOrUpdate(configurations,
+                            () =>
+                            {
+                                lExecuted = true;
+                                return ParquetHelper.GenerateSchema(data, connectorEntityData.Properties);
+                            });
+
+                        if (!lExecuted)
+                        {
+                            parquetSchema.DataFields.ForEach(field =>
+                            {
+                                data[field.Name] = ParquetHelper.ValidateData(field.ClrType, data[field.Name]);
+                            });
+                        }
 
                         var parquetTable = new Parquet.Rows.Table(parquetSchema)
                         {
@@ -143,10 +175,26 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
                 string item;
                 if (outputFormat == "JSON")
-                    item = JsonConvert.SerializeObject(data);
+                {
+                    item = JsonUtility.Serialize(data, serializer);
+                }
                 else
                 {
-                    var parquetSchema = _parquetSchemas.TryAddOrUpdate(configurations, () => ParquetHelper.GenerateSchema(data, connectorEntityData.Properties));
+                    var lExecuted = false;
+                    var parquetSchema = _parquetSchemas.TryAddOrUpdate(configurations,
+                        () =>
+                        {
+                            lExecuted = true;
+                            return ParquetHelper.GenerateSchema(data, connectorEntityData.Properties);
+                        });
+
+                    if (!lExecuted)
+                    {
+                        parquetSchema.DataFields.ForEach(field =>
+                        {
+                            data[field.Name] = ParquetHelper.ValidateData(field.ClrType, data[field.Name]);
+                        });
+                    }
 
                     item = StreamHelper.ConvertToStreamString(data.Values.ToArray());
                 }

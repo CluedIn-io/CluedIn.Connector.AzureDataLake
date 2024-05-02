@@ -93,9 +93,9 @@ namespace CluedIn.Connector.AzureDataLake
             }
         };
 
-        internal static class ExtendedConfigurationProperties
+        public static class ExtendedConfigurationProperties
         {
-            internal const string OutputFormat = "outputFormat";
+            public const string OutputFormat = "outputFormat";
             //internal const string Delimiter = "delimiter";
         }
     }

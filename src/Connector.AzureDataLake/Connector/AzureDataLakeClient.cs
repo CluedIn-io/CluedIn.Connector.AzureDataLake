@@ -82,6 +82,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             Response<PathInfo> response;
             if (Path.GetExtension(fileName) == ".json")
             {
+                if (await dataLakeFileClient.ExistsAsync())
+                    await dataLakeFileClient.DeleteAsync();
+
                 var options = new DataLakeFileUploadOptions()
                 {
                     HttpHeaders = new PathHttpHeaders { ContentType = "application/json" }
@@ -90,7 +93,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 response = await dataLakeFileClient.UploadAsync(content, options);
             }
             else
-                response = await dataLakeFileClient.UploadAsync(content);
+                response = await dataLakeFileClient.UploadAsync(content, overwrite: true);
 
             if (response?.Value == null)
             {

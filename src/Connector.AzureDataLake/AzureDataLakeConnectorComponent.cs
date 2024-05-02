@@ -9,6 +9,7 @@ using ComponentHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -26,6 +27,7 @@ namespace CluedIn.Connector.AzureDataLake
         /// <summary>Starts this instance.</summary>
         public override void Start()
         {
+            Debugger.Launch();
             Container.Install(new InstallComponents());
 
             #region Set existing streams to EventMode
