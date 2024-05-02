@@ -1,16 +1,24 @@
-﻿using CluedIn.Core;
+﻿using CluedIn.Connector.AzureDataLake.Extensions;
+using CluedIn.Connector.AzureDataLake.Helpers;
+using CluedIn.Core;
 using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
+using CluedIn.Core.Data;
 using CluedIn.Core.Data.Parts;
+using CluedIn.Core.DataStore.Entities.MicroServices;
 using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using Parquet.Schema;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using static CluedIn.Connector.AzureDataLake.AzureDataLakeConstants;
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.AzureDataLake.Connector
@@ -20,11 +28,14 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
+        private readonly DbContextOptions<MicroServiceEntities> _dbContextOptions;
+        private readonly Dictionary<AzureDataLakeConnectorJobData, ParquetSchema> _parquetSchemas;
 
         public AzureDataLakeConnector(
             ILogger<AzureDataLakeConnector> logger,
             IAzureDataLakeClient client,
-            IAzureDataLakeConstants constants)
+            IAzureDataLakeConstants constants,
+            DbContextOptions<MicroServiceEntities> dbContextOptions)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
@@ -34,8 +45,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
 
-            _buffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, string>(cacheRecordsThreshold,
+            _buffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, string>(1000, //cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush);
+            _dbContextOptions = dbContextOptions;
+
+            _parquetSchemas = new();
         }
 
         ~AzureDataLakeConnector()
@@ -50,11 +64,16 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public override async Task<SaveResult> StoreData(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData)
         {
+            string outputFormat = null;
+            if (streamModel.ConnectorProperties.ContainsKey(ExtendedConfigurationProperties.OutputFormat))
+                outputFormat = streamModel.ConnectorProperties[ExtendedConfigurationProperties.OutputFormat].ToString();
+
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
 
             var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName);
+            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName,
+                streamModel.ConnectorProperties);
 
             // matching output format of previous version of the connector
             var data = connectorEntityData.Properties.ToDictionary(x => x.Name, x => x.Value);
@@ -74,7 +93,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 data.Add("EntityType", connectorEntityData.EntityType.ToString());
             }
-            data.Add("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(c => c.ToString()));
+            data.Add("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(c => c.ToString()).ToArray());
 
             data["ProviderDefinitionId"] = providerDefinitionId;
             data["ContainerName"] = containerName;
@@ -92,7 +111,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             if (streamModel.Mode == StreamMode.Sync)
             {
-                var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
+                var filePathAndName = $"{connectorEntityData.EntityId.ToString()[..2]}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.{outputFormat.GetFileExtension()}";
 
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
@@ -100,24 +119,39 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 }
                 else
                 {
-                    var settings = new JsonSerializerSettings
+                    Stream stream = null;
+                    if (outputFormat == "JSON")
+                        stream = data.ToJsonStream();
+                    else
                     {
-                        TypeNameHandling = TypeNameHandling.None,
-                        Formatting = Formatting.Indented,
-                    };
+                        var parquetSchema = _parquetSchemas.TryAddOrUpdate(configurations, () => ParquetHelper.GenerateSchema(data, connectorEntityData.Properties));
 
-                    var json = JsonConvert.SerializeObject(data, settings);
+                        var parquetTable = new Parquet.Rows.Table(parquetSchema)
+                        {
+                            new Parquet.Rows.Row(data.Values.ToArray())
+                        };
 
-                    await _client.SaveData(configurations, json, filePathAndName);
+                        stream = await ParquetHelper.ToStream(parquetTable);
+                    }
+
+                    await _client.SaveData(configurations, stream, filePathAndName);
                 }
             }
             else
             {
                 data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
 
-                var json = JsonConvert.SerializeObject(data);
+                string item;
+                if (outputFormat == "JSON")
+                    item = JsonConvert.SerializeObject(data);
+                else
+                {
+                    var parquetSchema = _parquetSchemas.TryAddOrUpdate(configurations, () => ParquetHelper.GenerateSchema(data, connectorEntityData.Properties));
 
-                await _buffer.Add(configurations, json);
+                    item = StreamHelper.ConvertToStreamString(data.Values.ToArray());
+                }
+
+                await _buffer.Add(configurations, item);
             }
 
             return SaveResult.Success;
@@ -152,20 +186,33 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 return;
             }
 
-            var settings = new JsonSerializerSettings
-            {
-                TypeNameHandling = TypeNameHandling.None,
-                Formatting = Formatting.Indented,
-            };
-
-            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), settings);
+            string outputFormat = null;
+            if (configuration.ConnectorProperties.ContainsKey(ExtendedConfigurationProperties.OutputFormat))
+                outputFormat = configuration.ConnectorProperties[ExtendedConfigurationProperties.OutputFormat].ToString();
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
-            var fileName = $"{configuration.ContainerName}.{timestamp}.json";
+            var fileName = $"{configuration.ContainerName}.{timestamp}.{outputFormat.GetFileExtension()}";
 
-            _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
+            Stream stream = null;
+            if (outputFormat == "JSON")
+            {
+                var datas = entityData.Select(s => JsonConvert.DeserializeObject<Dictionary<string, object>>(s)).ToArray();
+
+                stream = datas.ToJsonStream();
+            }
+            else
+            {
+                var parquetSchema = _parquetSchemas[configuration];
+                var parquetDatas = entityData.Select(s => new Parquet.Rows.Row(StreamHelper.ConvertToObject<object[]>(s)));
+                var parquetTable = new Parquet.Rows.Table(parquetSchema);
+                parquetTable.AddRange(parquetDatas);
+
+                stream = ParquetHelper.ToStream(parquetTable).GetAwaiter().GetResult();
+            }
+
+            _client.SaveData(configuration, stream, fileName).GetAwaiter().GetResult();
         }
-        
+
         public override Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
             return Task.CompletedTask;

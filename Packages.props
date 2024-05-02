@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup Label="Dependency Versions">
-    <_CluedIn>4.0.0</_CluedIn>
+    <_CluedIn>4.3.0-pr5652.49</_CluedIn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,5 +25,6 @@
     <PackageReference Update="xunit" Version="2.4.1" />
     <PackageReference Update="xunit.runner.visualstudio" Version="2.4.1" />
     <PackageReference Update="Moq" Version="4.13.1" />
+    <PackageReference Update="Parquet.Net" Version="4.23.5" />
   </ItemGroup>
 </Project>

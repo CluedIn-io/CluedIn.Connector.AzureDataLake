@@ -2,6 +2,7 @@
 using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 using CluedIn.Connector.AzureDataLake.Connector;
+using CluedIn.Core.Providers.ExtendedConfiguration;
 
 namespace CluedIn.Connector.AzureDataLake
 {
@@ -9,8 +10,17 @@ namespace CluedIn.Connector.AzureDataLake
     {
         public void Install(IWindsorContainer container, IConfigurationStore store)
         {
-            container.Register(Component.For<IAzureDataLakeClient>().ImplementedBy<AzureDataLakeClient>().OnlyNewServices());
-            container.Register(Component.For<IAzureDataLakeConstants>().ImplementedBy<AzureDataLakeConstants>().LifestyleSingleton());
+            container.Register(Component.For<IAzureDataLakeClient>()
+                .ImplementedBy<AzureDataLakeClient>()
+                .LifestyleSingleton());
+
+            container.Register(Component.For<IAzureDataLakeConstants>()
+                .ImplementedBy<AzureDataLakeConstants>()
+                .LifestyleSingleton());
+
+            container.Register(Component.For<IExtendedConfigurationProvider>()
+                .ImplementedBy<AzureDataLakeExtendedConfigurationProvider>()
+                .LifestyleSingleton());
         }
     }
 }

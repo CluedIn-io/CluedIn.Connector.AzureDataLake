@@ -5,9 +5,10 @@ namespace CluedIn.Connector.AzureDataLake
 {
     public class AzureDataLakeConnectorJobData : CrawlJobDataWrapper
     {
-        public AzureDataLakeConnectorJobData(IDictionary<string, object> configurations, string containerName = null) : base(configurations)
+        public AzureDataLakeConnectorJobData(IDictionary<string, object> configurations, string containerName = null, IDictionary<string, object> connectorProperties = null) : base(configurations)
         {
             ContainerName = containerName;
+            ConnectorProperties = connectorProperties;
         }
 
         public string AccountName => Configurations[AzureDataLakeConstants.AccountName] as string;
@@ -15,6 +16,7 @@ namespace CluedIn.Connector.AzureDataLake
         public string FileSystemName => Configurations[AzureDataLakeConstants.FileSystemName] as string;
         public string DirectoryName => Configurations[AzureDataLakeConstants.DirectoryName] as string;
         public string ContainerName { get; }
+        public IDictionary<string, object> ConnectorProperties { get; }
 
         public override int GetHashCode()
         {

@@ -1,5 +1,7 @@
 using CluedIn.Core.Providers;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 // ReSharper disable ArgumentsStyleStringLiteral
 
 namespace CluedIn.Connector.AzureDataLake
@@ -18,6 +20,7 @@ namespace CluedIn.Connector.AzureDataLake
             domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
             about: "Supports publishing of data to Azure Data Lake Storage Gen2.",
             authMethods: AzureDataLakeAuthMethods,
+            properties: AzureDataLakeControls,
             guideDetails: "Supports publishing of data to Azure DataLake.",
             guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
         {
@@ -77,5 +80,23 @@ namespace CluedIn.Connector.AzureDataLake
                 }
             }
         };
+
+        private static List<Control> AzureDataLakeControls => new()
+        {
+            new Control
+            {
+                Name = ExtendedConfigurationProperties.OutputFormat,
+                DisplayName = "Output Format",
+                Type = "option",
+                Source = "dynamic",
+                IsRequired = true
+            }
+        };
+
+        internal static class ExtendedConfigurationProperties
+        {
+            internal const string OutputFormat = "outputFormat";
+            //internal const string Delimiter = "delimiter";
+        }
     }
 }

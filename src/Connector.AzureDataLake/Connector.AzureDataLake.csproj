@@ -14,5 +14,6 @@
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Files.DataLake" />
     <PackageReference Include="CluedIn.Core" />
+    <PackageReference Include="Parquet.Net" />
   </ItemGroup>
 </Project>
