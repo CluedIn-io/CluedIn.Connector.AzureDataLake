@@ -56,6 +56,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
         public async void VerifyStoreData_EventStream()
         {
             InitializeMockObjects();
+            InitializeStreamModel(StreamMode.EventStream, "PARQUET");
 
             var data = new ConnectorEntityData(VersionChangeType.Added, StreamMode.EventStream,
                 Guid.Parse("f55c66dc-7881-55c9-889f-344992e71cb8"),
@@ -246,7 +247,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
         public async void VerifyStoreData_1000EventStream()
         {
             InitializeMockObjects();
-            InitializeStreamModel(StreamMode.EventStream);
+            InitializeStreamModel(StreamMode.EventStream, "PARQUET");
 
             var dummyDataCount = 1000;
 
@@ -272,14 +273,14 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             Assert.NotNull(parquetTable);
             Assert.Equal(dummyDataCount, parquetTable.Count);
 
-            //await DataLakeServiceClient.GetFileSystemClient(Adl2_fileSystemName).DeleteAsync();
+            await DataLakeServiceClient.GetFileSystemClient(Adl2_fileSystemName).DeleteAsync();
         }
 
         [Fact]
         public async void VerifyStoreData_1000Sync()
         {
             InitializeMockObjects();
-            InitializeStreamModel(StreamMode.Sync);
+            InitializeStreamModel(StreamMode.Sync, "PARQUET");
 
             var dummyDataCount = 1000;
 
@@ -305,7 +306,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var parquetTable = await ParquetReader.ReadTableFromStreamAsync(stream);
             Assert.NotNull(parquetTable);
 
-            ///await DataLakeServiceClient.GetFileSystemClient(Adl2_fileSystemName).DeleteAsync();
+            await DataLakeServiceClient.GetFileSystemClient(Adl2_fileSystemName).DeleteAsync();
         }
 
         [Fact]

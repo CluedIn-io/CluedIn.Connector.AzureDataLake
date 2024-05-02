@@ -95,13 +95,14 @@ public class ConnectorBaseTest
         AzureDataLakeConnector = connectorMock.Object;
     }
 
-    internal void InitializeStreamModel(StreamMode streamMode, string containerName = "test")
+    internal void InitializeStreamModel(StreamMode streamMode, string outputFormat, string containerName = "test")
     {
         var streamModel = new Mock<IReadOnlyStreamModel>();
         streamModel.Setup(x => x.OrganizationId).Returns(Context.Organization.Id);
         streamModel.Setup(x => x.ConnectorProviderDefinitionId).Returns(_providerDefinitionId);
         streamModel.Setup(x => x.ContainerName).Returns(containerName);
         streamModel.Setup(x => x.Mode).Returns(streamMode);
+        streamModel.Setup(x => x.ConnectorProperties).Returns(new Dictionary<string, object> { { AzureDataLakeConstants.ExtendedConfigurationProperties.OutputFormat, outputFormat } });
 
         StreamModel = streamModel.Object;
     }
