@@ -1,22 +1,29 @@
-﻿using CluedIn.Core;
-using CluedIn.Core.Jobs;
-using CluedIn.Core.Streams;
-using Microsoft.Extensions.Logging;
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using CluedIn.Core.Connectors;
-using System;
-using Microsoft.Data.SqlClient;
-using System.Data;
-using CsvHelper;
-using System.IO;
-using CsvHelper.Configuration;
-using System.Globalization;
+
+
 using CluedIn.Connector.AzureDataLake.Connector;
-using Azure.Storage.Files.DataLake.Models;
-using System.Collections.Generic;
-using Nest;
+using CluedIn.Core;
+using CluedIn.Core.Connectors;
+using CluedIn.Core.Jobs;
+using CluedIn.Core.Streams;
+
+using CsvHelper;
+using CsvHelper.Configuration;
+
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json;
+
+using Parquet;
+using Parquet.Schema;
+
 using SixLabors.ImageSharp.ColorSpaces;
 
 namespace CluedIn.Connector.AzureDataLake
@@ -114,7 +121,31 @@ namespace CluedIn.Connector.AzureDataLake
 
         private async Task WriteParquetAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
+            var fields = new List<Field>();
+            foreach (var fieldName in fieldNames)
+            {
+                if (fieldName == "Id")
+                {
+                    fields.Add(new DataField(fieldName, typeof(Guid)));
+                }
+                else
+                {
+                    fields.Add(new DataField(fieldName, typeof(string)));
+                }
+            }
 
+            var schema = new ParquetSchema(fields);
+            var parquetTable = new Parquet.Rows.Table(schema)
+            {
+            };
+            using var writer = await ParquetWriter.CreateAsync(parquetTable.Schema, outputStream);
+            while (await reader.ReadAsync())
+            {
+                var fieldValues = fieldNames.Select(reader.GetValue);
+                parquetTable.Add(new Parquet.Rows.Row(fieldValues));
+            }
+
+            await writer.WriteAsync(parquetTable);
         }
 
         private async Task WriteCsvAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)

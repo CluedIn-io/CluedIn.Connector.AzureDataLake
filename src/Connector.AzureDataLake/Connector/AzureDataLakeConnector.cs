@@ -1,4 +1,6 @@
-﻿using CluedIn.Core;
+﻿using Castle.MicroKernel.Registration;
+
+using CluedIn.Core;
 using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
@@ -106,6 +108,26 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
         }
 
+        private async Task EnsureTableExists(SqlConnection connection, string tableName, ICollection<string> propertyKeys)
+        {
+            var propertiesColumns = propertyKeys.Select(key => $"[{key}] NVARCHAR(MAX)");
+            var command = new SqlCommand(
+                $"""
+                        IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
+                        CREATE TABLE [{tableName}] (
+                            Id UNIQUEIDENTIFIER NOT NULL,
+                            {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
+                            [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START,
+                            [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END,
+                            PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
+                            CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED (Id)
+                        ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
+                        """, connection);
+            command.CommandType = CommandType.Text;
+            _ = await command.ExecuteNonQueryAsync();
+            //command.Parameters.Add(new SqlParameter("@EmployeeID", employeeID));
+            //command.CommandTimeout = 5;
+        }
         private async Task<SaveResult> WriteWithBuffer(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data)
         {
             if (streamModel.Mode == StreamMode.Sync)
@@ -118,34 +140,15 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     .Select(prop => prop.Name)
                     .OrderBy(key => key)
                     .ToList();
-                async Task EnsureTableExists(string tableName)
-                {
-                    var propertiesColumns = propertyKeys.Select(key => $"[{key}] NVARCHAR(MAX)");
-                    var command = new SqlCommand(
-                        $"""
-                        IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
-                        CREATE TABLE [{tableName}] (
-                            EntityId UNIQUEIDENTIFIER NOT NULL,
-                            {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
-                            [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START,
-                            [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END,
-                            PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
-                            CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED (EntityId)
-                        ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
-                        """, connection);
-                    command.CommandType = CommandType.Text;
-                    _ = await command.ExecuteNonQueryAsync();
-                    //command.Parameters.Add(new SqlParameter("@EmployeeID", employeeID));
-                    //command.CommandTimeout = 5;
-                }
 
-                await EnsureTableExists(tableName);
+                //var propertyKeys = data.Keys.OrderBy(key => key).ToList();
+                await EnsureTableExists(connection, tableName, propertyKeys);
 
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
-                    var command = new SqlCommand($"DELETE FROM [{tableName}] WHERE EntityId = @EntityId", connection);
+                    var command = new SqlCommand($"DELETE FROM [{tableName}] WHERE Id = @Id", connection);
                     command.CommandType = CommandType.Text;
-                    command.Parameters.Add(new SqlParameter("@EntityId", connectorEntityData.EntityId));
+                    command.Parameters.Add(new SqlParameter("@Id", connectorEntityData.EntityId));
                     var rowsAffected = await command.ExecuteNonQueryAsync();
                     if (rowsAffected != 1)
                     {
@@ -156,15 +159,24 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 {
                     var command = new SqlCommand(
                         $"""
-                        INSERT INTO [{tableName}] (EntityId{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
-                        VALUES(@EntityId{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
+                        IF EXISTS (SELECT 1 FROM [{tableName}] WHERE Id = @Id)  
+                        BEGIN  
+                        	UPDATE [{tableName}]   
+                        	SET
+                                {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}  
+                        	WHERE Id = @Id;  
+                        END  
+                        ELSE  
+                        BEGIN  
+                        	INSERT INTO [{tableName}] (Id{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                            VALUES(@Id{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
+                        END
                         """, connection);
                     command.CommandType = CommandType.Text;
-                    command.Parameters.Add(new SqlParameter("@EntityId", connectorEntityData.EntityId));
+                    command.Parameters.Add(new SqlParameter("@Id", connectorEntityData.EntityId));
 
                     for (var i = 0; i < propertyKeys.Count; i++)
                     {
-
                         // TODO: Dictionary
                         var property = connectorEntityData.Properties.Single(vocabKey => vocabKey.Name == propertyKeys[i]);
 
@@ -275,6 +287,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             await _buffer.Flush();
+            await DeleteBuffer(executionContext, streamModel);
         }
 
         public override Task<IEnumerable<IConnectorContainer>> GetContainers(ExecutionContext executionContext,
@@ -320,6 +333,27 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             _logger.LogInformation($"AzureDataLakeConnector.RemoveContainer: entry");
 
             throw new NotImplementedException(nameof(RemoveContainer));
+        }
+
+        private async Task DeleteBuffer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        {
+            var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+            var containerName = streamModel.ContainerName;
+
+            var authenticationDetails = await GetAuthenticationDetails(executionContext, providerDefinitionId);
+            var configurations = new AzureDataLakeConnectorJobData(authenticationDetails.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName);
+            var connection = new SqlConnection(configurations.BufferConnectionString);
+            await connection.OpenAsync();
+            var tableName = $"Stream_{streamModel.Id}";
+            var command = new SqlCommand(
+                $"""
+                ALTER TABLE dbo.[{tableName}]  SET ( SYSTEM_VERSIONING = Off )
+
+                DROP TABLE [{tableName}];
+                DROP TABLE [{tableName}_History];
+                """, connection);
+            command.CommandType = CommandType.Text;
+            _ = await command.ExecuteNonQueryAsync();
         }
 
         public virtual async Task<IConnectorConnectionV2> GetAuthenticationDetails(ExecutionContext executionContext, Guid providerDefinitionId)

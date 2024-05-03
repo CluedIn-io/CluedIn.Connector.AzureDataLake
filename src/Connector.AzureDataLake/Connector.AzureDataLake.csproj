@@ -17,5 +17,6 @@
     <PackageReference Include="CluedIn.Core" />
     <PackageReference Include="CsvHelper" />
     <PackageReference Include="NCrontab" />
+    <PackageReference Include="Parquet.Net" />
   </ItemGroup>
 </Project>

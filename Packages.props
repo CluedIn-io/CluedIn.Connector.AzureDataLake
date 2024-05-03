@@ -27,5 +27,6 @@
     <PackageReference Update="xunit.runner.visualstudio" Version="2.4.1" />
     <PackageReference Update="Moq" Version="4.13.1" />
     <PackageReference Update="NCrontab" Version="3.3.3" />
+    <PackageReference Update="Parquet.Net" Version="4.23.5" />
   </ItemGroup>
 </Project>
