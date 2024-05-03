@@ -23,6 +23,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public async Task SaveData(AzureDataLakeConnectorJobData configuration, string content, string fileName)
         {
+            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+            await SaveData(configuration, stream, fileName);
+        }
+
+        public async Task SaveData(AzureDataLakeConnectorJobData configuration, Stream stream, string fileName)
+        {
             var directoryClient = await EnsureDataLakeDirectoryExist(configuration);
 
             var dataLakeFileClient = directoryClient.GetFileClient(fileName);
@@ -31,9 +37,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 HttpHeaders = new PathHttpHeaders { ContentType = "application/json" }
             };
 
-            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
             var response = await dataLakeFileClient.UploadAsync(stream, options);
-            
+
             if (response?.Value == null)
             {
                 throw new Exception($"{nameof(DataLakeFileClient)}.{nameof(DataLakeFileClient.UploadAsync)} did not return a valid path");

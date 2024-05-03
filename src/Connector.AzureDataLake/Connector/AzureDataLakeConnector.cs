@@ -4,13 +4,19 @@ using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
+
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+
+using static CluedIn.Core.Constants.Configuration;
+
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.AzureDataLake.Connector
@@ -90,6 +96,100 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
             }
 
+            if (configurations.EnableBuffer)
+            {
+                return await WriteWithBuffer(streamModel, connectorEntityData, configurations, data);
+            }
+            else
+            {
+                return await WriteWithoutBuffer(streamModel, connectorEntityData, configurations, data);
+            }
+        }
+
+        private async Task<SaveResult> WriteWithBuffer(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data)
+        {
+            if (streamModel.Mode == StreamMode.Sync)
+            {
+                await using var connection = new SqlConnection(configurations.BufferConnectionString);
+                await connection.OpenAsync();
+                var tableName = $"Stream_{streamModel.Id}";
+
+                var propertyKeys = connectorEntityData.Properties
+                    .Select(prop => prop.Name)
+                    .OrderBy(key => key)
+                    .ToList();
+                async Task EnsureTableExists(string tableName)
+                {
+                    var propertiesColumns = propertyKeys.Select(key => $"[{key}] NVARCHAR(MAX)");
+                    var command = new SqlCommand(
+                        $"""
+                        IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
+                        CREATE TABLE [{tableName}] (
+                            EntityId UNIQUEIDENTIFIER NOT NULL,
+                            {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
+                            [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START,
+                            [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END,
+                            PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
+                            CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED (EntityId)
+                        ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
+                        """, connection);
+                    command.CommandType = CommandType.Text;
+                    _ = await command.ExecuteNonQueryAsync();
+                    //command.Parameters.Add(new SqlParameter("@EmployeeID", employeeID));
+                    //command.CommandTimeout = 5;
+                }
+
+                await EnsureTableExists(tableName);
+
+                if (connectorEntityData.ChangeType == VersionChangeType.Removed)
+                {
+                    var command = new SqlCommand($"DELETE FROM [{tableName}] WHERE EntityId = @EntityId", connection);
+                    command.CommandType = CommandType.Text;
+                    command.Parameters.Add(new SqlParameter("@EntityId", connectorEntityData.EntityId));
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    if (rowsAffected != 1)
+                    {
+                        throw new ApplicationException($"Rows affected for deletion is not 1, it is {rowsAffected}.");
+                    }
+                }
+                else
+                {
+                    var command = new SqlCommand(
+                        $"""
+                        INSERT INTO [{tableName}] (EntityId{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                        VALUES(@EntityId{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
+                        """, connection);
+                    command.CommandType = CommandType.Text;
+                    command.Parameters.Add(new SqlParameter("@EntityId", connectorEntityData.EntityId));
+
+                    for (var i = 0; i < propertyKeys.Count; i++)
+                    {
+
+                        // TODO: Dictionary
+                        var property = connectorEntityData.Properties.Single(vocabKey => vocabKey.Name == propertyKeys[i]);
+
+                        // TODO: Remove leading & trailing quotes from string
+                        command.Parameters.Add(new SqlParameter($"@p{i}", JsonUtility.Serialize(property.Value)));
+                    }
+
+
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    if (rowsAffected != 1)
+                    {
+                        throw new ApplicationException($"Rows affected for insertion is not 1, it is {rowsAffected}.");
+                    }
+                }
+            }
+            else
+            {
+                throw new NotSupportedException($"Buffer mode is not supported with '{StreamMode.EventStream}' mode.");
+            }
+
+            return SaveResult.Success;
+        }
+
+        private async Task<SaveResult> WriteWithoutBuffer(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data)
+        {
             if (streamModel.Mode == StreamMode.Sync)
             {
                 var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
@@ -109,6 +209,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     var json = JsonConvert.SerializeObject(data, settings);
 
                     await _client.SaveData(configurations, json, filePathAndName);
+
                 }
             }
             else

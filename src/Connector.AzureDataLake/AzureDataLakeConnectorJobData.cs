@@ -14,6 +14,10 @@ namespace CluedIn.Connector.AzureDataLake
         public string AccountKey => Configurations[AzureDataLakeConstants.AccountKey] as string;
         public string FileSystemName => Configurations[AzureDataLakeConstants.FileSystemName] as string;
         public string DirectoryName => Configurations[AzureDataLakeConstants.DirectoryName] as string;
+        public string OutputFormat => Configurations[AzureDataLakeConstants.OutputFormat] as string;
+        public bool EnableBuffer => Configurations[AzureDataLakeConstants.EnableBuffer] as bool? ?? false;
+        public string BufferConnectionString => Configurations[AzureDataLakeConstants.BufferConnectionString] as string;
+        public string Schedule => Configurations[AzureDataLakeConstants.Schedule] as string;
         public string ContainerName { get; }
 
         public override int GetHashCode()
@@ -33,7 +37,10 @@ namespace CluedIn.Connector.AzureDataLake
                 AccountKey == other.AccountKey &&
                 FileSystemName == other.FileSystemName &&
                 DirectoryName == other.DirectoryName &&
-                ContainerName == other.ContainerName;
+                ContainerName == other.ContainerName &&
+                OutputFormat == other.OutputFormat &&
+                BufferConnectionString == other.BufferConnectionString &&
+                Schedule == other.Schedule;
                 
         }
     }

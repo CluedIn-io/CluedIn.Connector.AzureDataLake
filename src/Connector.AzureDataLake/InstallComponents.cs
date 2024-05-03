@@ -9,6 +9,8 @@ namespace CluedIn.Connector.AzureDataLake
     {
         public void Install(IWindsorContainer container, IConfigurationStore store)
         {
+            container.Register(Component.For<ExportEntitiesJob>().ImplementedBy<ExportEntitiesJob>().OnlyNewServices());
+            container.Register(Component.For<ExportEntitiesScheduleCheckerJob>().ImplementedBy<ExportEntitiesScheduleCheckerJob>().OnlyNewServices());
             container.Register(Component.For<IAzureDataLakeClient>().ImplementedBy<AzureDataLakeClient>().OnlyNewServices());
             container.Register(Component.For<IAzureDataLakeConstants>().ImplementedBy<AzureDataLakeConstants>().LifestyleSingleton());
         }
