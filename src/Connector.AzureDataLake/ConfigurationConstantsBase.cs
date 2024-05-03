@@ -1,4 +1,5 @@
-﻿using CluedIn.Core.Data.Relational;
+﻿using CluedIn.Core;
+using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Net.Mail;
 using CluedIn.Core.Providers;
 using System;
@@ -72,6 +73,11 @@ namespace CluedIn.Connector.AzureDataLake
                 Type = Type.ToString(),
                 ComponentEmailDetails = ComponentEmailDetails
             };
+        }
+
+        public AuthMethods GetAuthMethods(ApplicationContext applicationContext)
+        {
+            throw new NotImplementedException();
         }
     }
 }

@@ -1,16 +1,26 @@
-﻿using CluedIn.Core;
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
+using System.Linq;
+using System.Numerics;
+using System.Threading.Tasks;
+
+using Castle.MicroKernel.Registration;
+
+using CluedIn.Core;
 using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
+
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.AzureDataLake.Connector
@@ -20,6 +30,26 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
+        private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, SyncItem> _cacheTableBuffer;
+        private const int MaxSqlParameters = 2100;
+
+        // TODO: Handle ushort, ulong, uint
+        private static readonly Dictionary<Type, string> DotNetToSqlTypeMap = new ()
+        {
+            [typeof(bool)] = "BIT",
+            [typeof(byte)] = "TINYINT",
+            [typeof(short)] = "SMALLINT",
+            [typeof(int)] = "INT",
+            [typeof(long)] = "BIGINT",
+            [typeof(float)] = "REAL",
+            [typeof(double)] = "FLOAT",
+            [typeof(decimal)] = "DECIMAL",
+            [typeof(DateTime)] = "DATETIME2",
+            [typeof(DateTimeOffset)] = "DATETIMEOFFSET",
+            [typeof(TimeSpan)] = "TIME",
+            [typeof(Guid)] = "UNIQUEIDENTIFIER",
+            [typeof(string)] = "NVARCHAR(MAX)"
+        };
 
         public AzureDataLakeConnector(
             ILogger<AzureDataLakeConnector> logger,
@@ -36,6 +66,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             _buffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush);
+            _cacheTableBuffer = new PartitionedBuffer<AzureDataLakeConnectorJobData, SyncItem>(cacheRecordsThreshold,
+                backgroundFlushMaxIdleDefaultValue, FlushToCacheTable);
         }
 
         ~AzureDataLakeConnector()
@@ -48,48 +80,212 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return Task.FromResult(0);
         }
 
-        public override async Task<SaveResult> StoreData(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData)
+        public override async Task<SaveResult> StoreData(
+            ExecutionContext executionContext,
+            IReadOnlyStreamModel streamModel,
+            IReadOnlyConnectorEntityData connectorEntityData)
         {
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
-
-            var connection = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-            var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName);
+            var jobData = await CreateJobData(executionContext, providerDefinitionId, containerName);
 
             // matching output format of previous version of the connector
-            var data = connectorEntityData.Properties.ToDictionary(x => x.Name, x => x.Value);
-            data.Add("Id", connectorEntityData.EntityId);
-
-            if (connectorEntityData.PersistInfo != null)
+            var data = connectorEntityData.Properties.ToDictionary(property => property.Name, property => property.Value);
+            var dataValueTypes = new Dictionary<string, Type>();
+            foreach(var property in connectorEntityData.Properties)
             {
-                data.Add("PersistHash", connectorEntityData.PersistInfo.PersistHash);
+                var type = property.GetDataType();
+                var nullableUnderlyingType = Nullable.GetUnderlyingType(type);
+                if (nullableUnderlyingType != null)
+                {
+                    type = nullableUnderlyingType;
+                }
+
+                dataValueTypes.Add(property.Name, type);
             }
 
-            if (connectorEntityData.OriginEntityCode != null)
+            void AddToData<T>(string key, T value)
             {
-                data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode.ToString());
+                data.Add(key, value);
+                dataValueTypes.Add(key, typeof(T));
             }
+            AddToData(AzureDataLakeConstants.IdKey, connectorEntityData.EntityId);
+            AddToData("PersistHash", connectorEntityData.PersistInfo?.PersistHash);
+            AddToData("PersistVersion", connectorEntityData.PersistInfo?.PersistVersion);
+            AddToData("OriginEntityCode", connectorEntityData.OriginEntityCode?.ToString());
+            AddToData("EntityType", connectorEntityData.EntityType?.ToString());
+            AddToData("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(code => code.ToString()));
+            AddToData("ProviderDefinitionId", providerDefinitionId);
+            AddToData("ContainerName", containerName);
 
-            if (connectorEntityData.EntityType != null)
-            {
-                data.Add("EntityType", connectorEntityData.EntityType.ToString());
-            }
-            data.Add("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(c => c.ToString()));
-
-            data["ProviderDefinitionId"] = providerDefinitionId;
-            data["ContainerName"] = containerName;
             // end match previous version of the connector
-
-            if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
+            if (streamModel.ExportOutgoingEdges)
             {
-                data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
+                AddToData("OutgoingEdges", connectorEntityData.OutgoingEdges.SafeEnumerate());
+            }
+            if (streamModel.ExportIncomingEdges)
+            {
+                AddToData("IncomingEdges", connectorEntityData.IncomingEdges.SafeEnumerate());
             }
 
-            if (connectorEntityData.IncomingEdges.SafeEnumerate().Any())
+            if (jobData.EnableBuffer && streamModel.Mode == StreamMode.Sync)
             {
-                data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
+                return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+            }
+            else
+            {
+                return await WriteWithoutBuffer(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+            }
+        }
+
+        public virtual async Task<AzureDataLakeConnectorJobData> CreateJobData(
+            ExecutionContext executionContext,
+            Guid providerDefinitionId,
+            string containerName)
+        {
+            return await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
+        }
+
+        private async Task EnsureTableExists(SqlConnection connection, string tableName, ICollection<string> propertyKeys, Dictionary<string, Type> dataValueTypes)
+        {
+            var propertiesColumns = propertyKeys.Select(key =>
+            {
+                var type = dataValueTypes[key];
+                var sqlType = DotNetToSqlTypeMap.TryGetValue(type, out var sqlDbType) ? sqlDbType : DotNetToSqlTypeMap[typeof(string)];
+                return $"[{key}] {sqlType}";
+            });
+            var command = new SqlCommand(
+                $"""
+                        IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
+                        CREATE TABLE [{tableName}] (
+                            {AzureDataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
+                            {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
+                            [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START,
+                            [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END,
+                            PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
+                            CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({AzureDataLakeConstants.IdKey})
+                        ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
+                        """, connection);
+            command.CommandType = CommandType.Text;
+            _ = await command.ExecuteNonQueryAsync();
+        }
+
+        private async Task<SaveResult> WriteToCacheTable(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data, Dictionary<string, Type> dataValueTypes)
+        {
+            if (streamModel.Mode == StreamMode.Sync)
+            {
+                var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
+                await using var connection = new SqlConnection(configurations.BufferConnectionString);
+                await connection.OpenAsync();
+                await WriteToCacheTable(connection, syncItem);
+                //await _cacheTableBuffer.Add(configurations, syncItem);
+            }
+            else
+            {
+                throw new NotSupportedException($"Buffer mode is not supported with '{StreamMode.EventStream}' mode.");
             }
 
+            return SaveResult.Success;
+        }
+
+        private async Task WriteToCacheTable(
+            SqlConnection connection,
+            SyncItem syncItem)
+        {
+            var tableName = GetCacheTableName(syncItem.StreamId);
+            var propertyKeys = syncItem.Data.Keys.Except(new[] { AzureDataLakeConstants.IdKey }).OrderBy(key => key).ToList();
+
+            try
+            {
+                await ExecuteWrite(connection, syncItem, tableName, propertyKeys);
+            }
+            catch (SqlException ex) when (GetIsTableNotFoundException(ex))
+            {
+                await EnsureTableExists(connection, tableName, propertyKeys, syncItem.DataValueTypes);
+                await ExecuteWrite(connection, syncItem, tableName, propertyKeys);
+            }
+            catch(Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
+                throw;
+            }
+
+            static async Task ExecuteWrite(SqlConnection connection, SyncItem syncItem, string tableName, List<string> propertyKeys)
+            {
+                if (syncItem.ChangeType == VersionChangeType.Removed)
+                {
+                    var command = new SqlCommand($"DELETE FROM [{tableName}] WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey}", connection);
+                    command.CommandType = CommandType.Text;
+                    command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}", syncItem.EntityId));
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    if (rowsAffected != 1)
+                    {
+                        throw new ApplicationException($"Rows affected for deletion is not 1, it is {rowsAffected}.");
+                    }
+                }
+                else
+                {
+                    var command = new SqlCommand(
+                        $"""
+                        IF EXISTS (SELECT 1 FROM [{tableName}] WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey})  
+                        BEGIN  
+                        	UPDATE [{tableName}]   
+                        	SET
+                                {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}  
+                        	WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey};  
+                        END  
+                        ELSE  
+                        BEGIN  
+                        	INSERT INTO [{tableName}] ({AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                            VALUES(@{AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
+                        END
+                        """, connection);
+                    command.CommandType = CommandType.Text;
+                    command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}", syncItem.EntityId));
+
+                    for (var i = 0; i < propertyKeys.Count; i++)
+                    {
+                        command.Parameters.Add(new SqlParameter($"@p{i}", GetDbValue(syncItem.Data[propertyKeys[i]])));
+                    }
+
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    if (rowsAffected != 1)
+                    {
+                        throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
+                    }
+                }
+            }
+        }
+
+        private static bool GetIsTableNotFoundException(SqlException ex)
+        {
+            return ex.Number == 208;
+        }
+
+        private static string GetCacheTableName(Guid streamId)
+        {
+            return $"Stream_{streamId}";
+        }
+
+        private static object GetDbValue(object value)
+        {
+            if (value == null)
+            {
+                return DBNull.Value;
+            }
+
+            var type = value.GetType();
+           
+            if (DotNetToSqlTypeMap.ContainsKey(type))
+            {
+                return value;
+            }
+
+            return JsonUtility.Serialize(value);
+        }
+
+        private async Task<SaveResult> WriteWithoutBuffer(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data, Dictionary<string, Type> dataValueTypes)
+        {
             if (streamModel.Mode == StreamMode.Sync)
             {
                 var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
@@ -109,6 +305,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     var json = JsonConvert.SerializeObject(data, settings);
 
                     await _client.SaveData(configurations, json, filePathAndName);
+
                 }
             }
             else
@@ -135,9 +332,169 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public override async Task<ConnectionVerificationResult> VerifyConnection(ExecutionContext executionContext, IReadOnlyDictionary<string, object> config)
         {
-            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(config.ToDictionary(x => x.Key, x => x.Value)));
+            try
+            {
+                var jobData = await AzureDataLakeConnectorJobData.Create(executionContext, config.ToDictionary(config => config.Key, config => config.Value));
+                await _client.EnsureDataLakeDirectoryExist(jobData);
 
-            return new ConnectionVerificationResult(true);
+                if (jobData.EnableBuffer)
+                {
+                    if (string.IsNullOrWhiteSpace(jobData.BufferConnectionString))
+                    {
+                        return new ConnectionVerificationResult(false, $"Buffer connection string must be valid when buffer is enabled.");
+                    }
+                    await using var connection = new SqlConnection(jobData.BufferConnectionString);
+                    await connection.OpenAsync();
+                    await using var connectionAndTransaction = await connection.BeginTransactionAsync();
+                    var connectionIsOpen = connectionAndTransaction.Connection.State == ConnectionState.Open;
+                    await connectionAndTransaction.DisposeAsync();
+
+                    if (!connectionIsOpen)
+                    {
+                        return new ConnectionVerificationResult(false, "Failed to connect to the buffer storage.");
+                    }
+                }
+                return new ConnectionVerificationResult(true);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error verifying connection");
+                return new ConnectionVerificationResult(false, e.Message);
+            }
+        }
+
+        private record SyncItem(
+            Guid StreamId,
+            Guid EntityId,
+            VersionChangeType ChangeType,
+            IDictionary<string, object> Data,
+            Dictionary<string, Type> DataValueTypes);
+
+        private async void FlushToCacheTable(AzureDataLakeConnectorJobData configuration, SyncItem[] items)
+        {
+            if (items == null)
+            {
+                return;
+            }
+
+            if (items.Length == 0)
+            {
+                return;
+            }
+
+            var hasDelete = items.Any(item => item.ChangeType == VersionChangeType.Removed);
+
+            await using var connection = new SqlConnection(configuration.BufferConnectionString);
+            await connection.OpenAsync();
+            if (hasDelete)
+            {
+                await FallbackWriteToCacheTable(connection, items);
+            }
+            else
+            {
+                async Task WriteToCache(SqlConnection connection, SyncItem[] batchItems, string tableName, List<string> propertyKeys)
+                {
+                    _logger.LogDebug("Begin bulk writing {TotalItems} items to cache table.", batchItems.Length);
+
+                    var parameterPlaceholders = batchItems.Select((_, itemIndex) => $"(@{AzureDataLakeConstants.IdKey}{itemIndex},{string.Join(",", propertyKeys.Select((_, index) => $"@p{itemIndex}_{index}"))})");
+                    var command = new SqlCommand(
+                        $"""
+                        MERGE dbo.[{tableName}] AS dst
+                        USING (VALUES
+                            {string.Join(",\n    ", parameterPlaceholders)})
+                            AS src ({AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                            ON dst.{AzureDataLakeConstants.IdKey} = src.{AzureDataLakeConstants.IdKey}
+                        WHEN MATCHED THEN
+                            UPDATE
+                            SET 
+                            {string.Join(",\n    ", propertyKeys.Select((key, index) => $"[{key}] = src.[{key}]"))} 
+                        WHEN NOT MATCHED THEN
+                            INSERT ({AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                            VALUES (src.{AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", src.[{key}]"))});
+                        """, connection);
+                    command.CommandType = CommandType.Text;
+
+                    
+                    for (var i = 0; i < batchItems.Length; ++i)
+                    {
+                        var data = batchItems[i].Data;
+                        command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}{i}", GetDbValue(batchItems[i].EntityId)));
+                        for (var j = 0; j < propertyKeys.Count; j++)
+                        {
+                            command.Parameters.Add(new SqlParameter($"@p{i}_{j}", GetDbValue(data[propertyKeys[j]])));
+                        }
+                    }
+
+                    _logger.LogDebug("Total parameters for bulk writing {TotalItems} items are '{TotalParameters}'.", batchItems.Length, command.Parameters.Count);
+
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    if (rowsAffected != batchItems.Length)
+                    {
+                        throw new ApplicationException($"Rows affected for insertion is not {batchItems.Length}, it is {rowsAffected}.");
+                    }
+                    _logger.LogDebug("End bulk writing {TotalItems} items to cache table.", batchItems.Length);
+                }
+
+                async Task WriteToCacheUsingMergeOrFallback()
+                {
+                    var firstItem = items.First();
+                    var propertyKeys = firstItem.Data.Keys
+                        .Except(new[] { AzureDataLakeConstants.IdKey })
+                        .OrderBy(key => key)
+                        .ToList();
+                    var totalKeys = firstItem.Data.Keys.Count;
+                    var batchSize = MaxSqlParameters / totalKeys;
+                    var chunks = Enumerable.Chunk(items, batchSize);
+
+                    _logger.LogDebug("Chunking {TotalItems} to {TotalChunks}.", items.Length, chunks.Count());
+                    var tableName = GetCacheTableName(items.First().StreamId);
+                    foreach (var currentChunk in chunks)
+                    {
+                        try
+                        {
+                            try
+                            {
+                                await WriteToCache(connection, currentChunk, tableName, propertyKeys);
+                            }
+                            catch (SqlException ex) when (GetIsTableNotFoundException(ex))
+                            {
+                                await EnsureTableExists(connection, tableName, propertyKeys, items.First().DataValueTypes);
+                                await WriteToCache(connection, currentChunk, tableName, propertyKeys);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex,
+                                "Error trying to write to cache table in bulk with size: '{BatchSize}'. Falling back to single row processing.",
+                                currentChunk.Length);
+                            await FallbackWriteToCacheTable(connection, currentChunk);
+                        }
+                    }
+                   
+                }
+                WriteToCacheUsingMergeOrFallback().GetAwaiter().GetResult();
+            }
+        }
+
+        private async Task FallbackWriteToCacheTable(SqlConnection connection, SyncItem[] items)
+        {
+            var errors = new List<(SyncItem Item, Exception Exception)>();
+            foreach (var syncItem in items)
+            {
+                try
+                {
+                    await WriteToCacheTable(connection, syncItem);
+                }
+                catch(Exception ex)
+                {
+                    errors.Add((syncItem, ex));
+                }
+            }
+
+            foreach (var error in errors)
+            {
+                _logger.LogError(error.Exception, "Unable to process item with id {EntityId}. Skipping.", error.Item.EntityId);
+            }
         }
 
         private void Flush(AzureDataLakeConnectorJobData configuration, string[] entityData)
@@ -166,14 +523,15 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
         }
         
-        public override Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
+        public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
-            return Task.CompletedTask;
+            await Task.CompletedTask;
         }
 
         public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             await _buffer.Flush();
+            await DeleteBuffer(executionContext, streamModel);
         }
 
         public override Task<IEnumerable<IConnectorContainer>> GetContainers(ExecutionContext executionContext,
@@ -221,9 +579,26 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             throw new NotImplementedException(nameof(RemoveContainer));
         }
 
-        public virtual async Task<IConnectorConnectionV2> GetAuthenticationDetails(ExecutionContext executionContext, Guid providerDefinitionId)
+        private async Task DeleteBuffer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
-            return await AuthenticationDetailsHelper.GetAuthenticationDetails(executionContext, providerDefinitionId);
+            var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+            var containerName = streamModel.ContainerName;
+
+            var jobData = await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
+            await using var connection = new SqlConnection(jobData.BufferConnectionString);
+            await connection.OpenAsync();
+            var tableName = $"Stream_{streamModel.Id}";
+            var command = new SqlCommand(
+                $"""
+                IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
+                ALTER TABLE dbo.[{tableName}]  SET ( SYSTEM_VERSIONING = Off )
+
+                DROP TABLE IF EXISTS [{tableName}];
+                DROP TABLE IF EXISTS [{tableName}_History];
+                """, connection);
+            command.CommandType = CommandType.Text;
+            _ = await command.ExecuteNonQueryAsync();
         }
+
     }
 }

@@ -1,14 +1,20 @@
+using CluedIn.Connector.AzureDataLake.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities;
+using CluedIn.Core.Jobs;
 using CluedIn.Core.Server;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+
 using ComponentHost;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
 using System;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -19,6 +25,7 @@ namespace CluedIn.Connector.AzureDataLake
         Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
     public sealed class AzureDataLakeConnectorComponent : ServiceApplicationComponent<IServer>
     {
+        private static readonly TimeSpan CheckerScheduleDelay = TimeSpan.FromSeconds(30);
         public AzureDataLakeConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
         {
         }
@@ -27,6 +34,42 @@ namespace CluedIn.Connector.AzureDataLake
         public override void Start()
         {
             Container.Install(new InstallComponents());
+
+            #region Schedule export schedule checker job
+            Task.Run(async () =>
+            {
+                bool isFirstTime = true;
+                while (true)
+                {
+                    try
+                    {
+                        var appContext = Container.Resolve<ApplicationContext>();
+                        var logger = Container.Resolve<ILogger<AzureDataLakeConnectorComponent>>();
+                        try
+                        {
+                            var jobServerClient = Container.Resolve<IJobServerClient>();
+
+                            Container
+                                .Resolve<ExportEntitiesScheduleCheckerJob>()
+                                .Schedule(jobServerClient, "0/5 * * * *");
+                        }
+                        catch (Exception ex)
+                        {
+                            if (!isFirstTime)
+                            {
+                                logger.LogError(ex, "Failed to schedule checker job.");
+                            }
+                            isFirstTime = false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[{nameof(AzureDataLakeConnectorComponent)}] Failed to schedule checker job.");
+                    }
+                    await Task.Delay(CheckerScheduleDelay);
+                }
+            });
+            #endregion
 
             #region Set existing streams to EventMode
             Task.Run(async () =>
@@ -73,7 +116,7 @@ namespace CluedIn.Connector.AzureDataLake
                         var org = new Organization(ApplicationContext, orgId);
 
                         foreach (var provider in org.Providers.AllProviderDefinitions.Where(x =>
-                                     x.ProviderId == new AzureDataLakeConstants().ProviderId))
+                                     x.ProviderId == new AzureDataLakeConstants(ApplicationContext).ProviderId))
                         {
                             foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))
                             {
@@ -139,4 +182,5 @@ namespace CluedIn.Connector.AzureDataLake
 
         public string ComponentName => "Azure Data Lake Storage Gen2";
     }
+
 }

@@ -1,19 +1,32 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+using CluedIn.Core;
+using CluedIn.Core.Connectors;
+
+using static CluedIn.Connector.AzureDataLake.AzureDataLakeConstants;
 
 namespace CluedIn.Connector.AzureDataLake
 {
     public class AzureDataLakeConnectorJobData : CrawlJobDataWrapper
     {
+        private const string StreamCacheConnectionStringKey = "StreamCache";
+
         public AzureDataLakeConnectorJobData(IDictionary<string, object> configurations, string containerName = null) : base(configurations)
         {
             ContainerName = containerName;
         }
 
-        public string AccountName => Configurations[AzureDataLakeConstants.AccountName] as string;
-        public string AccountKey => Configurations[AzureDataLakeConstants.AccountKey] as string;
-        public string FileSystemName => Configurations[AzureDataLakeConstants.FileSystemName] as string;
-        public string DirectoryName => Configurations[AzureDataLakeConstants.DirectoryName] as string;
+        public string AccountName => GetConfigurationValue(AzureDataLakeConstants.AccountName) as string;
+        public string AccountKey => GetConfigurationValue(AzureDataLakeConstants.AccountKey) as string;
+        public string FileSystemName => GetConfigurationValue(AzureDataLakeConstants.FileSystemName) as string;
+        public string DirectoryName => GetConfigurationValue(AzureDataLakeConstants.DirectoryName) as string;
+        public string OutputFormat => GetConfigurationValue(AzureDataLakeConstants.OutputFormat) as string ?? OutputFormats.Json;
+        public bool EnableBuffer => GetConfigurationValue(AzureDataLakeConstants.EnableBuffer) as bool? ?? false;
+        public string BufferConnectionString => GetConfigurationValue(AzureDataLakeConstants.BufferConnectionString) as string;
+        public string Schedule => GetConfigurationValue(AzureDataLakeConstants.Schedule) as string;
         public string ContainerName { get; }
 
         public override int GetHashCode()
@@ -33,8 +46,55 @@ namespace CluedIn.Connector.AzureDataLake
                 AccountKey == other.AccountKey &&
                 FileSystemName == other.FileSystemName &&
                 DirectoryName == other.DirectoryName &&
-                ContainerName == other.ContainerName;
+                ContainerName == other.ContainerName &&
+                OutputFormat == other.OutputFormat &&
+                BufferConnectionString == other.BufferConnectionString &&
+                Schedule == other.Schedule;
                 
+        }
+
+        private object GetConfigurationValue(string key)
+        {
+            if (Configurations.TryGetValue(key, out var value))
+            {
+                return value;
+            }
+            return null;
+        }
+
+        public static async Task<AzureDataLakeConnectorJobData> Create(
+            ExecutionContext executionContext,
+            Guid providerDefinitionId,
+            string containerName = null)
+        {
+            var authenticationDetails = await GetAuthenticationDetails(executionContext, providerDefinitionId);
+            return await Create(executionContext, authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value), containerName);
+        }
+
+        public static async Task<AzureDataLakeConnectorJobData> Create(
+            ExecutionContext executionContext,
+            IDictionary<string, object> authenticationDetails,
+            string containerName = null)
+        {
+            var connectionStrings = executionContext.ApplicationContext.System.ConnectionStrings;
+            if (connectionStrings.ConnectionStringExists(StreamCacheConnectionStringKey))
+            {
+                authenticationDetails[AzureDataLakeConstants.BufferConnectionString] = connectionStrings.GetConnectionString(StreamCacheConnectionStringKey);
+            }
+            else if (!authenticationDetails.ContainsKey(AzureDataLakeConstants.BufferConnectionString))
+            {
+                authenticationDetails[AzureDataLakeConstants.BufferConnectionString] = null;
+            } 
+
+            var configurations = new AzureDataLakeConnectorJobData(authenticationDetails, containerName);
+            return configurations;
+        }
+
+        private static async Task<IConnectorConnectionV2> GetAuthenticationDetails(
+            ExecutionContext executionContext,
+            Guid providerDefinitionId)
+        {
+            return await AuthenticationDetailsHelper.GetAuthenticationDetails(executionContext, providerDefinitionId);
         }
     }
 }

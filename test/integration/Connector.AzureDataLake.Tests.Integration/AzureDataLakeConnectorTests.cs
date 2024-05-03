@@ -48,6 +48,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
 
+            container.Register(Component.For<ISystemConnectionStrings>().Instance(new Mock<ISystemConnectionStrings>().Object));
             container.Register(Component.For<SystemContext>().Instance(new SystemContext(container)));
             container.Register(Component.For<IApplicationCache>().Instance(new Mock<IApplicationCache>().Object));
 
@@ -86,8 +87,10 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 new AzureDataLakeClient(),
                 azureDataLakeConstantsMock.Object
             );
-            connectorMock.Setup(x => x.GetAuthenticationDetails(context, providerDefinitionId))
-                .Returns(Task.FromResult(connectorConnectionMock.Object));
+            connectorMock.Setup(x => x.CreateJobData(context, providerDefinitionId, It.IsAny<string>()  ))
+                .Returns(AzureDataLakeConnectorJobData.Create(
+                    context,
+                    connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
             connectorMock.CallBase = true;
 
             var connector = connectorMock.Object;
@@ -124,6 +127,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             streamModel.Setup(x => x.ConnectorProviderDefinitionId).Returns(providerDefinitionId);
             streamModel.Setup(x => x.ContainerName).Returns("test");
             streamModel.Setup(x => x.Mode).Returns(StreamMode.EventStream);
+            streamModel.Setup(x => x.ExportIncomingEdges).Returns(true);
+            streamModel.Setup(x => x.ExportOutgoingEdges).Returns(true);
 
             await connector.StoreData(context, streamModel.Object, data);
             var client = new DataLakeServiceClient(new Uri($"https://{accountName}.dfs.core.windows.net"),
@@ -172,148 +177,152 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             _testOutputHelper.WriteLine(content);
 
-            Assert.Equal($@"[
-  {{
-    ""user.lastName"": ""Picard"",
-    ""Name"": ""Jean Luc Picard"",
-    ""Id"": ""f55c66dc-7881-55c9-889f-344992e71cb8"",
-    ""PersistHash"": ""etypzcezkiehwq8vw4oqog=="",
-    ""OriginEntityCode"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-    ""EntityType"": ""/Person"",
-    ""Codes"": [
-      ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0""
-    ],
-    ""ProviderDefinitionId"": ""c444cda8-d9b5-45cc-a82d-fef28e08d55c"",
-    ""ContainerName"": ""test"",
-    ""OutgoingEdges"": [
-      {{
-        ""FromReference"": {{
-          ""Code"": {{
-            ""Origin"": {{
-              ""Code"": ""Somewhere"",
-              ""Id"": null
-            }},
-            ""Value"": ""5678"",
-            ""Key"": ""/EntityB#Somewhere:5678"",
-            ""Type"": {{
-              ""IsEntityContainer"": false,
-              ""Root"": null,
-              ""Code"": ""/EntityB""
-            }}
-          }},
-          ""Type"": {{
-            ""IsEntityContainer"": false,
-            ""Root"": null,
-            ""Code"": ""/EntityB""
-          }},
-          ""Name"": null,
-          ""Properties"": null,
-          ""PropertyCount"": null,
-          ""EntityId"": null,
-          ""IsEmpty"": false
-        }},
-        ""ToReference"": {{
-          ""Code"": {{
-            ""Origin"": {{
-              ""Code"": ""Acceptance"",
-              ""Id"": null
-            }},
-            ""Value"": ""7c5591cf-861a-4642-861d-3b02485854a0"",
-            ""Key"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-            ""Type"": {{
-              ""IsEntityContainer"": false,
-              ""Root"": null,
-              ""Code"": ""/Person""
-            }}
-          }},
-          ""Type"": {{
-            ""IsEntityContainer"": false,
-            ""Root"": null,
-            ""Code"": ""/Person""
-          }},
-          ""Name"": null,
-          ""Properties"": null,
-          ""PropertyCount"": null,
-          ""EntityId"": null,
-          ""IsEmpty"": false
-        }},
-        ""EdgeType"": {{
-          ""Root"": null,
-          ""Code"": ""/EntityB""
-        }},
-        ""HasProperties"": false,
-        ""Properties"": {{}},
-        ""CreationOptions"": 0,
-        ""Weight"": null,
-        ""Version"": 0
-      }}
-    ],
-    ""IncomingEdges"": [
-      {{
-        ""FromReference"": {{
-          ""Code"": {{
-            ""Origin"": {{
-              ""Code"": ""Acceptance"",
-              ""Id"": null
-            }},
-            ""Value"": ""7c5591cf-861a-4642-861d-3b02485854a0"",
-            ""Key"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-            ""Type"": {{
-              ""IsEntityContainer"": false,
-              ""Root"": null,
-              ""Code"": ""/Person""
-            }}
-          }},
-          ""Type"": {{
-            ""IsEntityContainer"": false,
-            ""Root"": null,
-            ""Code"": ""/Person""
-          }},
-          ""Name"": null,
-          ""Properties"": null,
-          ""PropertyCount"": null,
-          ""EntityId"": null,
-          ""IsEmpty"": false
-        }},
-        ""ToReference"": {{
-          ""Code"": {{
-            ""Origin"": {{
-              ""Code"": ""Somewhere"",
-              ""Id"": null
-            }},
-            ""Value"": ""1234"",
-            ""Key"": ""/EntityA#Somewhere:1234"",
-            ""Type"": {{
-              ""IsEntityContainer"": false,
-              ""Root"": null,
-              ""Code"": ""/EntityA""
-            }}
-          }},
-          ""Type"": {{
-            ""IsEntityContainer"": false,
-            ""Root"": null,
-            ""Code"": ""/EntityA""
-          }},
-          ""Name"": null,
-          ""Properties"": null,
-          ""PropertyCount"": null,
-          ""EntityId"": null,
-          ""IsEmpty"": false
-        }},
-        ""EdgeType"": {{
-          ""Root"": null,
-          ""Code"": ""/EntityA""
-        }},
-        ""HasProperties"": false,
-        ""Properties"": {{}},
-        ""CreationOptions"": 0,
-        ""Weight"": null,
-        ""Version"": 0
-      }}
-    ],
-    ""ChangeType"": ""Added""
-  }}
-]", content);
+            Assert.Equal(
+                $$"""
+                [
+                  {
+                    "user.lastName": "Picard",
+                    "Name": "Jean Luc Picard",
+                    "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
+                    "PersistHash": "etypzcezkiehwq8vw4oqog==",
+                    "PersistVersion": 1,
+                    "OriginEntityCode": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                    "EntityType": "/Person",
+                    "Codes": [
+                      "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"
+                    ],
+                    "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
+                    "ContainerName": "test",
+                    "OutgoingEdges": [
+                      {
+                        "FromReference": {
+                          "Code": {
+                            "Origin": {
+                              "Code": "Somewhere",
+                              "Id": null
+                            },
+                            "Value": "5678",
+                            "Key": "/EntityB#Somewhere:5678",
+                            "Type": {
+                              "IsEntityContainer": false,
+                              "Root": null,
+                              "Code": "/EntityB"
+                            }
+                          },
+                          "Type": {
+                            "IsEntityContainer": false,
+                            "Root": null,
+                            "Code": "/EntityB"
+                          },
+                          "Name": null,
+                          "Properties": null,
+                          "PropertyCount": null,
+                          "EntityId": null,
+                          "IsEmpty": false
+                        },
+                        "ToReference": {
+                          "Code": {
+                            "Origin": {
+                              "Code": "Acceptance",
+                              "Id": null
+                            },
+                            "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
+                            "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                            "Type": {
+                              "IsEntityContainer": false,
+                              "Root": null,
+                              "Code": "/Person"
+                            }
+                          },
+                          "Type": {
+                            "IsEntityContainer": false,
+                            "Root": null,
+                            "Code": "/Person"
+                          },
+                          "Name": null,
+                          "Properties": null,
+                          "PropertyCount": null,
+                          "EntityId": null,
+                          "IsEmpty": false
+                        },
+                        "EdgeType": {
+                          "Root": null,
+                          "Code": "/EntityB"
+                        },
+                        "HasProperties": false,
+                        "Properties": {},
+                        "CreationOptions": 0,
+                        "Weight": null,
+                        "Version": 0
+                      }
+                    ],
+                    "IncomingEdges": [
+                      {
+                        "FromReference": {
+                          "Code": {
+                            "Origin": {
+                              "Code": "Acceptance",
+                              "Id": null
+                            },
+                            "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
+                            "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                            "Type": {
+                              "IsEntityContainer": false,
+                              "Root": null,
+                              "Code": "/Person"
+                            }
+                          },
+                          "Type": {
+                            "IsEntityContainer": false,
+                            "Root": null,
+                            "Code": "/Person"
+                          },
+                          "Name": null,
+                          "Properties": null,
+                          "PropertyCount": null,
+                          "EntityId": null,
+                          "IsEmpty": false
+                        },
+                        "ToReference": {
+                          "Code": {
+                            "Origin": {
+                              "Code": "Somewhere",
+                              "Id": null
+                            },
+                            "Value": "1234",
+                            "Key": "/EntityA#Somewhere:1234",
+                            "Type": {
+                              "IsEntityContainer": false,
+                              "Root": null,
+                              "Code": "/EntityA"
+                            }
+                          },
+                          "Type": {
+                            "IsEntityContainer": false,
+                            "Root": null,
+                            "Code": "/EntityA"
+                          },
+                          "Name": null,
+                          "Properties": null,
+                          "PropertyCount": null,
+                          "EntityId": null,
+                          "IsEmpty": false
+                        },
+                        "EdgeType": {
+                          "Root": null,
+                          "Code": "/EntityA"
+                        },
+                        "HasProperties": false,
+                        "Properties": {},
+                        "CreationOptions": 0,
+                        "Weight": null,
+                        "Version": 0
+                      }
+                    ],
+                    "ChangeType": "Added"
+                  }
+                ]
+                """, content);
 
             await fsClient.GetDirectoryClient(directoryName).DeleteAsync();
         }
@@ -329,6 +338,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
 
+            container.Register(Component.For<ISystemConnectionStrings>().Instance(new Mock<ISystemConnectionStrings>().Object));
             container.Register(Component.For<SystemContext>().Instance(new SystemContext(container)));
             container.Register(Component.For<IApplicationCache>().Instance(new Mock<IApplicationCache>().Object));
 
@@ -367,8 +377,10 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 new AzureDataLakeClient(),
                 azureDataLakeConstantsMock.Object
             );
-            connectorMock.Setup(x => x.GetAuthenticationDetails(context, providerDefinitionId))
-                .Returns(Task.FromResult(connectorConnectionMock.Object));
+            connectorMock.Setup(x => x.CreateJobData(context, providerDefinitionId, It.IsAny<string>()))
+                .Returns(AzureDataLakeConnectorJobData.Create(
+                    context,
+                    connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
             connectorMock.CallBase = true;
 
             var connector = connectorMock.Object;
@@ -405,6 +417,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             streamModel.Setup(x => x.ConnectorProviderDefinitionId).Returns(providerDefinitionId);
             streamModel.Setup(x => x.ContainerName).Returns("test");
             streamModel.Setup(x => x.Mode).Returns(StreamMode.Sync);
+            streamModel.Setup(x => x.ExportIncomingEdges).Returns(true);
+            streamModel.Setup(x => x.ExportOutgoingEdges).Returns(true);
 
             await connector.StoreData(context, streamModel.Object, data);
             var client = new DataLakeServiceClient(new Uri($"https://{accountName}.dfs.core.windows.net"),
@@ -453,145 +467,149 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             _testOutputHelper.WriteLine(content);
 
-            Assert.Equal($@"{{
-  ""user.lastName"": ""Picard"",
-  ""Name"": ""Jean Luc Picard"",
-  ""Id"": ""f55c66dc-7881-55c9-889f-344992e71cb8"",
-  ""PersistHash"": ""etypzcezkiehwq8vw4oqog=="",
-  ""OriginEntityCode"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-  ""EntityType"": ""/Person"",
-  ""Codes"": [
-    ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0""
-  ],
-  ""ProviderDefinitionId"": ""c444cda8-d9b5-45cc-a82d-fef28e08d55c"",
-  ""ContainerName"": ""test"",
-  ""OutgoingEdges"": [
-    {{
-      ""FromReference"": {{
-        ""Code"": {{
-          ""Origin"": {{
-            ""Code"": ""Somewhere"",
-            ""Id"": null
-          }},
-          ""Value"": ""5678"",
-          ""Key"": ""/EntityB#Somewhere:5678"",
-          ""Type"": {{
-            ""IsEntityContainer"": false,
-            ""Root"": null,
-            ""Code"": ""/EntityB""
-          }}
-        }},
-        ""Type"": {{
-          ""IsEntityContainer"": false,
-          ""Root"": null,
-          ""Code"": ""/EntityB""
-        }},
-        ""Name"": null,
-        ""Properties"": null,
-        ""PropertyCount"": null,
-        ""EntityId"": null,
-        ""IsEmpty"": false
-      }},
-      ""ToReference"": {{
-        ""Code"": {{
-          ""Origin"": {{
-            ""Code"": ""Acceptance"",
-            ""Id"": null
-          }},
-          ""Value"": ""7c5591cf-861a-4642-861d-3b02485854a0"",
-          ""Key"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-          ""Type"": {{
-            ""IsEntityContainer"": false,
-            ""Root"": null,
-            ""Code"": ""/Person""
-          }}
-        }},
-        ""Type"": {{
-          ""IsEntityContainer"": false,
-          ""Root"": null,
-          ""Code"": ""/Person""
-        }},
-        ""Name"": null,
-        ""Properties"": null,
-        ""PropertyCount"": null,
-        ""EntityId"": null,
-        ""IsEmpty"": false
-      }},
-      ""EdgeType"": {{
-        ""Root"": null,
-        ""Code"": ""/EntityB""
-      }},
-      ""HasProperties"": false,
-      ""Properties"": {{}},
-      ""CreationOptions"": 0,
-      ""Weight"": null,
-      ""Version"": 0
-    }}
-  ],
-  ""IncomingEdges"": [
-    {{
-      ""FromReference"": {{
-        ""Code"": {{
-          ""Origin"": {{
-            ""Code"": ""Acceptance"",
-            ""Id"": null
-          }},
-          ""Value"": ""7c5591cf-861a-4642-861d-3b02485854a0"",
-          ""Key"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-          ""Type"": {{
-            ""IsEntityContainer"": false,
-            ""Root"": null,
-            ""Code"": ""/Person""
-          }}
-        }},
-        ""Type"": {{
-          ""IsEntityContainer"": false,
-          ""Root"": null,
-          ""Code"": ""/Person""
-        }},
-        ""Name"": null,
-        ""Properties"": null,
-        ""PropertyCount"": null,
-        ""EntityId"": null,
-        ""IsEmpty"": false
-      }},
-      ""ToReference"": {{
-        ""Code"": {{
-          ""Origin"": {{
-            ""Code"": ""Somewhere"",
-            ""Id"": null
-          }},
-          ""Value"": ""1234"",
-          ""Key"": ""/EntityA#Somewhere:1234"",
-          ""Type"": {{
-            ""IsEntityContainer"": false,
-            ""Root"": null,
-            ""Code"": ""/EntityA""
-          }}
-        }},
-        ""Type"": {{
-          ""IsEntityContainer"": false,
-          ""Root"": null,
-          ""Code"": ""/EntityA""
-        }},
-        ""Name"": null,
-        ""Properties"": null,
-        ""PropertyCount"": null,
-        ""EntityId"": null,
-        ""IsEmpty"": false
-      }},
-      ""EdgeType"": {{
-        ""Root"": null,
-        ""Code"": ""/EntityA""
-      }},
-      ""HasProperties"": false,
-      ""Properties"": {{}},
-      ""CreationOptions"": 0,
-      ""Weight"": null,
-      ""Version"": 0
-    }}
-  ]
-}}", content);
+            Assert.Equal(
+                $$"""
+                {
+                  "user.lastName": "Picard",
+                  "Name": "Jean Luc Picard",
+                  "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
+                  "PersistHash": "etypzcezkiehwq8vw4oqog==",
+                  "PersistVersion": 1,
+                  "OriginEntityCode": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                  "EntityType": "/Person",
+                  "Codes": [
+                    "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"
+                  ],
+                  "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
+                  "ContainerName": "test",
+                  "OutgoingEdges": [
+                    {
+                      "FromReference": {
+                        "Code": {
+                          "Origin": {
+                            "Code": "Somewhere",
+                            "Id": null
+                          },
+                          "Value": "5678",
+                          "Key": "/EntityB#Somewhere:5678",
+                          "Type": {
+                            "IsEntityContainer": false,
+                            "Root": null,
+                            "Code": "/EntityB"
+                          }
+                        },
+                        "Type": {
+                          "IsEntityContainer": false,
+                          "Root": null,
+                          "Code": "/EntityB"
+                        },
+                        "Name": null,
+                        "Properties": null,
+                        "PropertyCount": null,
+                        "EntityId": null,
+                        "IsEmpty": false
+                      },
+                      "ToReference": {
+                        "Code": {
+                          "Origin": {
+                            "Code": "Acceptance",
+                            "Id": null
+                          },
+                          "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
+                          "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                          "Type": {
+                            "IsEntityContainer": false,
+                            "Root": null,
+                            "Code": "/Person"
+                          }
+                        },
+                        "Type": {
+                          "IsEntityContainer": false,
+                          "Root": null,
+                          "Code": "/Person"
+                        },
+                        "Name": null,
+                        "Properties": null,
+                        "PropertyCount": null,
+                        "EntityId": null,
+                        "IsEmpty": false
+                      },
+                      "EdgeType": {
+                        "Root": null,
+                        "Code": "/EntityB"
+                      },
+                      "HasProperties": false,
+                      "Properties": {},
+                      "CreationOptions": 0,
+                      "Weight": null,
+                      "Version": 0
+                    }
+                  ],
+                  "IncomingEdges": [
+                    {
+                      "FromReference": {
+                        "Code": {
+                          "Origin": {
+                            "Code": "Acceptance",
+                            "Id": null
+                          },
+                          "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
+                          "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                          "Type": {
+                            "IsEntityContainer": false,
+                            "Root": null,
+                            "Code": "/Person"
+                          }
+                        },
+                        "Type": {
+                          "IsEntityContainer": false,
+                          "Root": null,
+                          "Code": "/Person"
+                        },
+                        "Name": null,
+                        "Properties": null,
+                        "PropertyCount": null,
+                        "EntityId": null,
+                        "IsEmpty": false
+                      },
+                      "ToReference": {
+                        "Code": {
+                          "Origin": {
+                            "Code": "Somewhere",
+                            "Id": null
+                          },
+                          "Value": "1234",
+                          "Key": "/EntityA#Somewhere:1234",
+                          "Type": {
+                            "IsEntityContainer": false,
+                            "Root": null,
+                            "Code": "/EntityA"
+                          }
+                        },
+                        "Type": {
+                          "IsEntityContainer": false,
+                          "Root": null,
+                          "Code": "/EntityA"
+                        },
+                        "Name": null,
+                        "Properties": null,
+                        "PropertyCount": null,
+                        "EntityId": null,
+                        "IsEmpty": false
+                      },
+                      "EdgeType": {
+                        "Root": null,
+                        "Code": "/EntityA"
+                      },
+                      "HasProperties": false,
+                      "Properties": {},
+                      "CreationOptions": 0,
+                      "Weight": null,
+                      "Version": 0
+                    }
+                  ]
+                }
+                """, content);
 
             data.ChangeType = VersionChangeType.Removed;
             await connector.StoreData(context, streamModel.Object, data);

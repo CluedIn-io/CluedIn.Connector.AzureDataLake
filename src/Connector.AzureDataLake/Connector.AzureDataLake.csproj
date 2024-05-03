@@ -3,6 +3,7 @@
     <Description>CluedIn.Connector.AzureDataLake provides the ability to post data to Azure DataLake</Description>
     <AssemblyName>CluedIn.Connector.AzureDataLake</AssemblyName>
     <RootNamespace>CluedIn.Connector.AzureDataLake</RootNamespace>
+    <LangVersion>11.0</LangVersion>
     <IsCluedInServerComponent>true</IsCluedInServerComponent>
   </PropertyGroup>
   <ItemGroup>
@@ -14,5 +15,8 @@
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Files.DataLake" />
     <PackageReference Include="CluedIn.Core" />
+    <PackageReference Include="CsvHelper" />
+    <PackageReference Include="NCrontab" />
+    <PackageReference Include="Parquet.Net" />
   </ItemGroup>
 </Project>
