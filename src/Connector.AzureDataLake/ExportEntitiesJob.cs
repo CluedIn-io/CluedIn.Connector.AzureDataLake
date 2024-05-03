@@ -75,10 +75,7 @@ namespace CluedIn.Connector.AzureDataLake
             var outputFileName = $"{streamId}_{asOfTime:o}.{outputFormat}";
             var directoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
             var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
-            var options = new DataLakeFileOpenWriteOptions
-            {
-            };
-            using var outputStream = await dataLakeFileClient.OpenWriteAsync(true, options);
+            using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
 
             if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
             {
@@ -90,9 +87,10 @@ namespace CluedIn.Connector.AzureDataLake
             }
             else if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
             {
-                //await WriteCsvAsync(outputStream, fieldNames, reader);
+                await WriteParquetAsync(outputStream, fieldNames, reader);
             }
         }
+
         private async Task WriteJsonAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             using var stringWriter = new StreamWriter(outputStream);
@@ -102,18 +100,23 @@ namespace CluedIn.Connector.AzureDataLake
             while (await reader.ReadAsync())
             {
                 await writer.WriteStartObjectAsync();
+
                 for (int i =0; i< fieldNames.Count; i++)
                 {
-                    var fieldName = reader.GetName(i);
-                    var fieldValue = reader.GetValue(i);
-
-                    await writer.WritePropertyNameAsync(fieldName);
-                    await writer.WriteValueAsync(fieldValue);
+                    await writer.WritePropertyNameAsync(reader.GetName(i));
+                    await writer.WriteValueAsync(reader.GetValue(i));
                 }
+
                 await writer.WriteEndObjectAsync();
             }
             await writer.WriteEndArrayAsync();
         }
+
+        private async Task WriteParquetAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+        {
+
+        }
+
         private async Task WriteCsvAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             using var writer = new StreamWriter(outputStream);
