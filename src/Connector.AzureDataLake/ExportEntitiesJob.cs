@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -76,7 +77,9 @@ namespace CluedIn.Connector.AzureDataLake
             command.CommandType = CommandType.Text;
             using var reader = await command.ExecuteReaderAsync();
 
-            var fieldNames = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
+            // TODO: Better handling of validfrom & validto
+            var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount).Select(reader.GetName)
+                .Except(new[] {"ValidFrom", "ValidTo"}).ToList();
 
             var outputFormat = configuration.OutputFormat.ToLowerInvariant();
             var outputFileName = $"{streamId}_{asOfTime:o}.{outputFormat}";
@@ -103,6 +106,7 @@ namespace CluedIn.Connector.AzureDataLake
             using var stringWriter = new StreamWriter(outputStream);
             using var writer = new JsonTextWriter(stringWriter);
             writer.Formatting = Formatting.Indented;
+
             await writer.WriteStartArrayAsync();
             while (await reader.ReadAsync())
             {
