@@ -1,4 +1,8 @@
-﻿using Castle.MicroKernel.Registration;
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
 
 using CluedIn.Core;
 using CluedIn.Core.Configuration;
@@ -9,15 +13,9 @@ using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Linq;
-using System.Threading.Tasks;
-
-using static CluedIn.Core.Constants.Configuration;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -100,7 +98,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             if (configurations.EnableBuffer)
             {
-                return await WriteWithBuffer(streamModel, connectorEntityData, configurations, data);
+                return await PutToBuffer(streamModel, connectorEntityData, configurations, data);
             }
             else
             {
@@ -125,10 +123,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                         """, connection);
             command.CommandType = CommandType.Text;
             _ = await command.ExecuteNonQueryAsync();
-            //command.Parameters.Add(new SqlParameter("@EmployeeID", employeeID));
-            //command.CommandTimeout = 5;
         }
-        private async Task<SaveResult> WriteWithBuffer(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data)
+        private async Task<SaveResult> PutToBuffer(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data)
         {
             if (streamModel.Mode == StreamMode.Sync)
             {
@@ -141,7 +137,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     .OrderBy(key => key)
                     .ToList();
 
-                //var propertyKeys = data.Keys.OrderBy(key => key).ToList();
                 await EnsureTableExists(connection, tableName, propertyKeys);
 
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)

@@ -1,20 +1,22 @@
-﻿using CluedIn.Core;
-using CluedIn.Core.Accounts;
-using CluedIn.Core.Jobs;
-using CluedIn.Core.Streams;
-using Microsoft.Extensions.Logging;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using CluedIn.Core.Connectors;
-using System.Collections.Generic;
-using CluedIn.Core.Streams.Models;
-using System;
 
-namespace CluedIn.Connector.AzureDataLake
+using CluedIn.Core;
+using CluedIn.Core.Accounts;
+using CluedIn.Core.Connectors;
+using CluedIn.Core.Jobs;
+using CluedIn.Core.Streams;
+using CluedIn.Core.Streams.Models;
+
+using Microsoft.Extensions.Logging;
+
+namespace CluedIn.Connector.AzureDataLake.Connector
 {
     internal class ExportEntitiesScheduleCheckerJob : AzureDataLakeJobBase
     {
-        
+
         public static readonly Dictionary<string, string> CronSchedules = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             [AzureDataLakeConstants.JobScheduleNames.Hourly] = "0 0/1 * * *",
