@@ -86,11 +86,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
             else if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Json, StringComparison.OrdinalIgnoreCase))
             {
-                sqlDataWriter = new CsvSqlDataWriter();
+                sqlDataWriter = new JsonSqlDataWriter();
             }
             else if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
             {
-                sqlDataWriter = new CsvSqlDataWriter();
+                sqlDataWriter = new ParquetSqlDataWriter();
             }
 
             return sqlDataWriter;

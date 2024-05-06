@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -26,6 +27,13 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
+        private static readonly Type[] DateAndTimeTypes = new[]
+        {
+            typeof(DateTime),
+            typeof(DateTimeOffset),
+            typeof(DateOnly),
+            typeof(TimeOnly)
+        };
 
         public AzureDataLakeConnector(
             ILogger<AzureDataLakeConnector> logger,
@@ -124,6 +132,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             command.CommandType = CommandType.Text;
             _ = await command.ExecuteNonQueryAsync();
         }
+
         private async Task<SaveResult> PutToBuffer(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data)
         {
             if (streamModel.Mode == StreamMode.Sync)
@@ -132,10 +141,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 await connection.OpenAsync();
                 var tableName = $"Stream_{streamModel.Id}";
 
-                var propertyKeys = connectorEntityData.Properties
-                    .Select(prop => prop.Name)
-                    .OrderBy(key => key)
-                    .ToList();
+                //var propertyKeys = connectorEntityData.Properties
+                //    .Select(prop => prop.Name)
+                //    .OrderBy(key => key)
+                //    .ToList();
+
+                var propertyKeys = data.Keys.Except(new[] { "Id" }).OrderBy(key => key).ToList();
 
                 await EnsureTableExists(connection, tableName, propertyKeys);
 
@@ -172,13 +183,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
                     for (var i = 0; i < propertyKeys.Count; i++)
                     {
-                        // TODO: Dictionary
-                        var property = connectorEntityData.Properties.Single(vocabKey => vocabKey.Name == propertyKeys[i]);
-
-                        // TODO: Remove leading & trailing quotes from string
-                        command.Parameters.Add(new SqlParameter($"@p{i}", JsonUtility.Serialize(property.Value)));
+                        command.Parameters.Add(new SqlParameter($"@p{i}", GetValue(data[propertyKeys[i]])));
                     }
-
 
                     var rowsAffected = await command.ExecuteNonQueryAsync();
                     if (rowsAffected != 1)
@@ -193,6 +199,39 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
 
             return SaveResult.Success;
+        }
+
+        private static object GetValue(object value)
+        {
+            if (value == null)
+            {
+                return DBNull.Value;
+            }
+
+            var type = value.GetType();
+           
+            if (type == typeof(string))
+            {
+                return value.ToString();
+            }
+
+            if (DateAndTimeTypes.Contains(type)
+                && value is IFormattable formattable)
+            {
+                return formattable.ToString("o", CultureInfo.InvariantCulture);
+            }
+
+            if (value is TimeSpan timeSpan)
+            {
+                return timeSpan.ToString("c", CultureInfo.InvariantCulture);
+            }
+
+            if (value is Guid guid)
+            {
+                return guid.ToString("D", CultureInfo.InvariantCulture);
+            }
+
+            return JsonUtility.Serialize(value);
         }
 
         private async Task<SaveResult> WriteWithoutBuffer(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data)
