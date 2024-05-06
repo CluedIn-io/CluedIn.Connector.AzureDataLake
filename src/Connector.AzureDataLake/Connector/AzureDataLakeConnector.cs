@@ -73,7 +73,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             // matching output format of previous version of the connector
             var data = connectorEntityData.Properties.ToDictionary(property => property.Name, property => property.Value);
-            data.Add("EntityId", connectorEntityData.EntityId);
+            data.Add(nameof(IReadOnlyConnectorEntityData.EntityId), connectorEntityData.EntityId);
             data.Add("PersistHash", connectorEntityData.PersistInfo?.PersistHash);
             data.Add("PersistVersion", connectorEntityData.PersistInfo?.PersistVersion);
             data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode?.ToString());
@@ -129,7 +129,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 await connection.OpenAsync();
                 var tableName = GetBufferTableName(streamModel.Id);
 
-                var propertyKeys = data.Keys.Except(new[] { "EntityId" }).OrderBy(key => key).ToList();
+                var propertyKeys = data.Keys.Except(new[] { nameof(IReadOnlyConnectorEntityData.EntityId) }).OrderBy(key => key).ToList();
 
                 await EnsureTableExists(connection, tableName, propertyKeys);
 

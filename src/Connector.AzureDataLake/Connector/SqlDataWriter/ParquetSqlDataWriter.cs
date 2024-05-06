@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
+using CluedIn.Core.Connectors;
 
 using Microsoft.Data.SqlClient;
 
@@ -17,6 +18,10 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
     internal class ParquetSqlDataWriter : SqlDataWriterBase
     {
         public override async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+        {
+            using var writer = await WriteEntireTable(outputStream, fieldNames, reader);
+        }
+        private static async Task<ParquetWriter> WriteEntireTable(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             var fields = new List<Field>();
             foreach (var fieldName in fieldNames)
@@ -43,6 +48,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
             }
 
             await writer.WriteAsync(parquetTable);
+            return writer;
         }
     }
 }
