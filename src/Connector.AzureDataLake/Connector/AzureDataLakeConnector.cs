@@ -27,6 +27,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
+        
         private static readonly Type[] DateAndTimeTypes = new[]
         {
             typeof(DateTime),
@@ -71,37 +72,24 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var configurations = new AzureDataLakeConnectorJobData(connection.Authentication.ToDictionary(x => x.Key, x => x.Value), containerName);
 
             // matching output format of previous version of the connector
-            var data = connectorEntityData.Properties.ToDictionary(x => x.Name, x => x.Value);
-            data.Add("Id", connectorEntityData.EntityId);
-
-            if (connectorEntityData.PersistInfo != null)
-            {
-                data.Add("PersistHash", connectorEntityData.PersistInfo.PersistHash);
-            }
-
-            if (connectorEntityData.OriginEntityCode != null)
-            {
-                data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode.ToString());
-            }
-
-            if (connectorEntityData.EntityType != null)
-            {
-                data.Add("EntityType", connectorEntityData.EntityType.ToString());
-            }
-            data.Add("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(c => c.ToString()));
-
+            var data = connectorEntityData.Properties.ToDictionary(property => property.Name, property => property.Value);
+            data.Add("EntityId", connectorEntityData.EntityId);
+            data.Add("PersistHash", connectorEntityData.PersistInfo?.PersistHash);
+            data.Add("PersistVersion", connectorEntityData.PersistInfo?.PersistVersion);
+            data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode?.ToString());
+            data.Add("EntityType", connectorEntityData.EntityType?.ToString());
+            data.Add("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(code => code.ToString()));
             data["ProviderDefinitionId"] = providerDefinitionId;
             data["ContainerName"] = containerName;
+
             // end match previous version of the connector
-
-            if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
+            if (streamModel.ExportIncomingEdges)
             {
-                data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
+                data.Add("IncomingEdges", connectorEntityData.IncomingEdges.SafeEnumerate());
             }
-
-            if (connectorEntityData.IncomingEdges.SafeEnumerate().Any())
+            if (streamModel.ExportOutgoingEdges)
             {
-                data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
+                data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges.SafeEnumerate());
             }
 
             if (configurations.EnableBuffer)
@@ -121,12 +109,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 $"""
                         IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
                         CREATE TABLE [{tableName}] (
-                            Id UNIQUEIDENTIFIER NOT NULL,
+                            EntityId UNIQUEIDENTIFIER NOT NULL,
                             {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
                             [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START,
                             [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END,
                             PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
-                            CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED (Id)
+                            CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED (EntityId)
                         ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
                         """, connection);
             command.CommandType = CommandType.Text;
@@ -139,22 +127,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 await using var connection = new SqlConnection(configurations.BufferConnectionString);
                 await connection.OpenAsync();
-                var tableName = $"Stream_{streamModel.Id}";
+                var tableName = GetBufferTableName(streamModel.Id);
 
-                //var propertyKeys = connectorEntityData.Properties
-                //    .Select(prop => prop.Name)
-                //    .OrderBy(key => key)
-                //    .ToList();
-
-                var propertyKeys = data.Keys.Except(new[] { "Id" }).OrderBy(key => key).ToList();
+                var propertyKeys = data.Keys.Except(new[] { "EntityId" }).OrderBy(key => key).ToList();
 
                 await EnsureTableExists(connection, tableName, propertyKeys);
 
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
-                    var command = new SqlCommand($"DELETE FROM [{tableName}] WHERE Id = @Id", connection);
+                    var command = new SqlCommand($"DELETE FROM [{tableName}] WHERE EntityId = @EntityId", connection);
                     command.CommandType = CommandType.Text;
-                    command.Parameters.Add(new SqlParameter("@Id", connectorEntityData.EntityId));
+                    command.Parameters.Add(new SqlParameter("@EntityId", connectorEntityData.EntityId));
                     var rowsAffected = await command.ExecuteNonQueryAsync();
                     if (rowsAffected != 1)
                     {
@@ -165,21 +148,21 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 {
                     var command = new SqlCommand(
                         $"""
-                        IF EXISTS (SELECT 1 FROM [{tableName}] WHERE Id = @Id)  
+                        IF EXISTS (SELECT 1 FROM [{tableName}] WHERE EntityId = @EntityId)  
                         BEGIN  
                         	UPDATE [{tableName}]   
                         	SET
                                 {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}  
-                        	WHERE Id = @Id;  
+                        	WHERE EntityId = @EntityId;  
                         END  
                         ELSE  
                         BEGIN  
-                        	INSERT INTO [{tableName}] (Id{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
-                            VALUES(@Id{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
+                        	INSERT INTO [{tableName}] (EntityId{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                            VALUES(@EntityId{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
                         END
                         """, connection);
                     command.CommandType = CommandType.Text;
-                    command.Parameters.Add(new SqlParameter("@Id", connectorEntityData.EntityId));
+                    command.Parameters.Add(new SqlParameter("@EntityId", connectorEntityData.EntityId));
 
                     for (var i = 0; i < propertyKeys.Count; i++)
                     {
@@ -199,6 +182,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
 
             return SaveResult.Success;
+        }
+
+        private static string GetBufferTableName(Guid streamId)
+        {
+            return $"Stream_{streamId}";
         }
 
         private static object GetValue(object value)
@@ -282,9 +270,35 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public override async Task<ConnectionVerificationResult> VerifyConnection(ExecutionContext executionContext, IReadOnlyDictionary<string, object> config)
         {
-            await _client.EnsureDataLakeDirectoryExist(new AzureDataLakeConnectorJobData(config.ToDictionary(x => x.Key, x => x.Value)));
+            try
+            {
+                var jobData = new AzureDataLakeConnectorJobData(config.ToDictionary(x => x.Key, x => x.Value));
+                await _client.EnsureDataLakeDirectoryExist(jobData);
 
-            return new ConnectionVerificationResult(true);
+                if (jobData.EnableBuffer)
+                {
+                    if (string.IsNullOrWhiteSpace(jobData.BufferConnectionString))
+                    {
+                        return new ConnectionVerificationResult(false, $"Buffer connection string must be provided when buffer is enabled.");
+                    }
+                    await using var connection = new SqlConnection(jobData.BufferConnectionString);
+                    await connection.OpenAsync();
+                    await using var connectionAndTransaction = await connection.BeginTransactionAsync();
+                    var connectionIsOpen = connectionAndTransaction.Connection.State == ConnectionState.Open;
+                    await connectionAndTransaction.DisposeAsync();
+
+                    if (!connectionIsOpen)
+                    {
+                        return new ConnectionVerificationResult(false, "Failed to connect to the buffer storage.");
+                    }
+                }
+                return new ConnectionVerificationResult(true);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error verifying connection");
+                return new ConnectionVerificationResult(false, e.Message);
+            }
         }
 
         private void Flush(AzureDataLakeConnectorJobData configuration, string[] entityData)
@@ -313,9 +327,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
         }
         
-        public override Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
+        public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
-            return Task.CompletedTask;
+            await Task.CompletedTask;
         }
 
         public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
@@ -381,10 +395,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var tableName = $"Stream_{streamModel.Id}";
             var command = new SqlCommand(
                 $"""
+                IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
                 ALTER TABLE dbo.[{tableName}]  SET ( SYSTEM_VERSIONING = Off )
 
-                DROP TABLE [{tableName}];
-                DROP TABLE [{tableName}_History];
+                DROP TABLE IF EXISTS [{tableName}];
+                DROP TABLE IF EXISTS [{tableName}_History];
                 """, connection);
             command.CommandType = CommandType.Text;
             _ = await command.ExecuteNonQueryAsync();

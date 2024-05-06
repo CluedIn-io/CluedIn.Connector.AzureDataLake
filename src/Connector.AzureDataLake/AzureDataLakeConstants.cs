@@ -104,14 +104,14 @@ namespace CluedIn.Connector.AzureDataLake
                     name = EnableBuffer,
                     displayName = "Enable Buffer",
                     type = "checkbox",
-                    isRequired = true,
+                    isRequired = false,
                 },
                 new Control
                 {
                     name = BufferConnectionString,
                     displayName = "Buffer Connection String (SQL Server)",
                     type = "password",
-                    isRequired = true,
+                    isRequired = false,
                 },
                 new Control
                 {
