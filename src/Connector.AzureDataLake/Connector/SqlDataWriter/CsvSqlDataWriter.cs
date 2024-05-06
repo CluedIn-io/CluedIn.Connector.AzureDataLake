@@ -14,9 +14,9 @@ using Microsoft.Data.SqlClient;
 
 namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
 {
-    internal class CsvSqlDataWriter : ISqlDataWriter
+    internal class CsvSqlDataWriter : SqlDataWriterBase
     {
-        public async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+        public override async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             using var writer = new StreamWriter(outputStream);
 
@@ -29,7 +29,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
             await csv.NextRecordAsync();
             while (await reader.ReadAsync())
             {
-                var fieldValues = fieldNames.Select(name => reader.GetValue(name));
+                var fieldValues = fieldNames.Select(name => GetValue(name, reader));
                 foreach (var field in fieldValues)
                 {
                     csv.WriteField(field);

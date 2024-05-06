@@ -14,9 +14,9 @@ using Parquet.Schema;
 
 namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
 {
-    internal class ParquetSqlDataWriter : ISqlDataWriter
+    internal class ParquetSqlDataWriter : SqlDataWriterBase
     {
-        public async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+        public override async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             var fields = new List<Field>();
             foreach (var fieldName in fieldNames)
@@ -38,7 +38,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
             using var writer = await ParquetWriter.CreateAsync(parquetTable.Schema, outputStream);
             while (await reader.ReadAsync())
             {
-                var fieldValues = fieldNames.Select(reader.GetValue);
+                var fieldValues = fieldNames.Select(key => GetValue(key, reader));
                 parquetTable.Add(new Parquet.Rows.Row(fieldValues));
             }
 

@@ -8,9 +8,9 @@ using Newtonsoft.Json;
 
 namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
 {
-    internal class JsonSqlDataWriter : ISqlDataWriter
+    internal class JsonSqlDataWriter : SqlDataWriterBase
     {
-        public async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+        public override async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             using var stringWriter = new StreamWriter(outputStream);
             using var writer = new JsonTextWriter(stringWriter);
