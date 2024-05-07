@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
+using CluedIn.Core;
+
 using Microsoft.Data.SqlClient;
 
 namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
@@ -23,6 +25,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
             return value;
         }
 
-        public abstract Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader);
+        public abstract Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader);
     }
 }

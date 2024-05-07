@@ -16,7 +16,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
 {
     internal class CsvSqlDataWriter : SqlDataWriterBase
     {
-        public override async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+        public override async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             using var writer = new StreamWriter(outputStream);
 

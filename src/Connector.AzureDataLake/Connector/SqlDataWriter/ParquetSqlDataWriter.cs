@@ -13,20 +13,26 @@ using Microsoft.Data.SqlClient;
 using Parquet;
 using Parquet.Schema;
 
+using ParquetTable = Parquet.Rows.Table;
+using ParquetRow = Parquet.Rows.Row;
+using Microsoft.Extensions.Logging;
+
 namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
 {
     internal class ParquetSqlDataWriter : SqlDataWriterBase
     {
-        public override async Task WriteAsync(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+        public override async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
-            using var writer = await WriteEntireTable(outputStream, fieldNames, reader);
+            await WriteEntireTable(context, outputStream, fieldNames, reader);
         }
-        private static async Task<ParquetWriter> WriteEntireTable(Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+
+        private static async Task WriteEntireTable(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
+            context.Log.LogDebug("Begin writing parquet file.");
             var fields = new List<Field>();
             foreach (var fieldName in fieldNames)
             {
-                if (fieldName == "Id")
+                if (fieldName == nameof(IReadOnlyConnectorEntityData.EntityId))
                 {
                     fields.Add(new DataField(fieldName, typeof(Guid)));
                 }
@@ -37,18 +43,32 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
             }
 
             var schema = new ParquetSchema(fields);
-            var parquetTable = new Parquet.Rows.Table(schema)
-            {
-            };
-            using var writer = await ParquetWriter.CreateAsync(parquetTable.Schema, outputStream);
+            ParquetTable parquetTable = new ParquetTable(schema);
+            using var parquetWriter = await ParquetWriter.CreateAsync(schema, outputStream);
+
+            int i = 0;
+            int Threshold = 15;
             while (await reader.ReadAsync())
             {
                 var fieldValues = fieldNames.Select(key => GetValue(key, reader));
-                parquetTable.Add(new Parquet.Rows.Row(fieldValues));
+                parquetTable.Add(new ParquetRow(fieldValues));
+
+                i++;
+                if (i % Threshold == 0)
+                {
+                    context.Log.LogDebug("Row group threshold {Threshold} reached. Current row {CurrentRow}. Writing data.", Threshold, i);
+                    await parquetWriter.WriteAsync(parquetTable);
+                    
+                    parquetTable = new ParquetTable(schema);
+                }
             }
 
-            await writer.WriteAsync(parquetTable);
-            return writer;
+            if (i % Threshold != 0)
+            {
+                context.Log.LogDebug("Flushing remaining data. Current row {CurrentRow}", i);
+                await parquetWriter.WriteAsync(parquetTable);
+            }
+            context.Log.LogDebug("End writing parquet file.");
         }
     }
 }
