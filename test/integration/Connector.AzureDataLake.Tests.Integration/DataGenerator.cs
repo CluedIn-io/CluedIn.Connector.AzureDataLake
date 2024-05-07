@@ -16,7 +16,8 @@ internal static class DataGenerator
 {
     internal static ConnectorEntityData GenerateConnectorEntityData(
         VersionChangeType versionChangeType = VersionChangeType.Added,
-        StreamMode streamMode = StreamMode.EventStream)
+        StreamMode streamMode = StreamMode.EventStream,
+        IReadOnlyCollection<ConnectorPropertyData> properties = null)
     {
         var fixture = new Fixture();
         var originId = Guid.NewGuid();
@@ -31,7 +32,7 @@ internal static class DataGenerator
             previousPersistInfo: null,
             originEntityCode: EntityCode.FromKey($"/Person#Acceptance:{originId}"),
             entityType: "/Person",
-            properties: new[]
+            properties: properties ?? new[]
             {
                 new ConnectorPropertyData("user.lastName", lastName,
                     new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
@@ -44,22 +45,19 @@ internal static class DataGenerator
             {
                 EntityCode.FromKey($"/Person#Acceptance:{originId}")
             },
-            incomingEdges: Array.Empty<EntityEdge>(),
-            //new[]
-            //{
-            //    new EntityEdge(
-            //        new EntityReference(EntityCode.FromKey($"/Person#Acceptance:{originId}")),
-            //        new EntityReference(EntityCode.FromKey("/EntityA#Somewhere:1234")),
-            //        "/EntityA")
-            //},
-            outgoingEdges: Array.Empty<EntityEdge>()
-            //new[]
-            //{
-            //    new EntityEdge(new EntityReference(EntityCode.FromKey("/EntityB#Somewhere:5678")),
-            //        new EntityReference(EntityCode.FromKey($"/Person#Acceptance:{originId}")),
-            //        "/EntityB")
-            //}
-            );
+            incomingEdges: new[]
+            {
+                new EntityEdge(
+                    new EntityReference(EntityCode.FromKey($"/Person#Acceptance:{originId}")),
+                    new EntityReference(EntityCode.FromKey("/EntityA#Somewhere:1234")),
+                    "/EntityA")
+            },
+            outgoingEdges: new[]
+            {
+                new EntityEdge(new EntityReference(EntityCode.FromKey("/EntityB#Somewhere:5678")),
+                    new EntityReference(EntityCode.FromKey($"/Person#Acceptance:{originId}")),
+                    "/EntityB")
+            });
     }
 
     internal static ConnectorEntityPersistInfo GetConnectorEntityPersistInfo()

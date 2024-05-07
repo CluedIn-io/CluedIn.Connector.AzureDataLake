@@ -16,9 +16,9 @@ using System.Threading.Tasks;
 using CluedIn.Core.Streams.Models;
 using Azure.Storage.Files.DataLake.Models;
 using System.Linq;
-using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities.MicroServices;
 using Microsoft.EntityFrameworkCore;
+using System.IO;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
 
@@ -38,9 +38,9 @@ public class ConnectorBaseTest
 
     public ConnectorBaseTest()
     {
-        Adl2_accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME") ?? "adlsg2testingapac";
+        Adl2_accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
         Assert.NotNull(Adl2_accountName);
-        Adl2_accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY") ?? "Z2doSCJflj6NP+6J0r4uwP/ydLs9VhZdqevtesYyvVpjzR1+shCcMbYaCvsJ++Lb4Mr6bpySvb3DlmUSdf1G3g==";
+        Adl2_accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
         Assert.NotNull(Adl2_accountKey);
 
         Adl2_fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}";
@@ -103,6 +103,8 @@ public class ConnectorBaseTest
         streamModel.Setup(x => x.ContainerName).Returns(containerName);
         streamModel.Setup(x => x.Mode).Returns(streamMode);
         streamModel.Setup(x => x.ConnectorProperties).Returns(new Dictionary<string, object> { { AzureDataLakeConstants.ExtendedConfigurationProperties.OutputFormat, outputFormat } });
+        streamModel.Setup(x => x.ExportIncomingEdges).Returns(true);
+        streamModel.Setup(x => x.ExportOutgoingEdges).Returns(true);
 
         StreamModel = streamModel.Object;
     }
@@ -136,6 +138,34 @@ public class ConnectorBaseTest
             }
 
             return paths;
+        }
+    }
+
+    internal bool IsFileDeleted(PathItem pathItem)
+    {
+        var d = DateTime.Now;
+        while (true)
+        {
+            if (DateTime.Now > d.AddSeconds(30))
+            {
+                throw new TimeoutException();
+            }
+
+            if (DataLakeServiceClient.GetFileSystems().All(fs => fs.Name != Adl2_fileSystemName))
+            {
+                continue;
+            }
+
+            var fsClient = DataLakeServiceClient.GetFileSystemClient(Adl2_fileSystemName);
+
+            var fileClient = fsClient.GetFileClient(pathItem.Name);
+            if (fileClient.Exists())
+            {
+                System.Threading.Thread.Sleep(1000);
+                continue;
+            }
+
+            return true;
         }
     }
 }
