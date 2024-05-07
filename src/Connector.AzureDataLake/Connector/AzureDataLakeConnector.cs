@@ -15,6 +15,7 @@ using Parquet.Schema;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -78,54 +79,19 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             // matching output format of previous version of the connector
             var data = connectorEntityData.Properties.ToDictionary(x => x.Name, x => x.Value);
             data.Add("Id", connectorEntityData.EntityId);
-
-            if (connectorEntityData.PersistInfo != null)
-            {
-                data.Add("PersistHash", connectorEntityData.PersistInfo.PersistHash);
-            }
-
-            if (connectorEntityData.OriginEntityCode != null)
-            {
-                data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode.ToString());
-            }
-
-            if (connectorEntityData.EntityType != null)
-            {
-                data.Add("EntityType", connectorEntityData.EntityType.ToString());
-            }
+            data.Add("PersistHash", connectorEntityData.PersistInfo.PersistHash);
+            data.Add("OriginEntityCode", connectorEntityData.OriginEntityCode.ToString());
+            data.Add("EntityType", connectorEntityData.EntityType.ToString());
             data.Add("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(c => c.ToString()).ToArray());
 
             data["ProviderDefinitionId"] = providerDefinitionId;
             data["ContainerName"] = containerName;
-            // end match previous version of the connector
 
-            var serializer = JsonUtility.CreateDefaultSerializer(settings =>
-            {
-                settings.Formatting = Formatting.Indented;
-                settings.TypeNameHandling = TypeNameHandling.None;
-            });
+            if (streamModel.ExportOutgoingEdges)
+                data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges.ToArray());
 
-            if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
-            {
-                if (outputFormat == "JSON")
-                    data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
-                else
-                {
-                    //var edges = JsonUtility.Serialize(connectorEntityData.OutgoingEdges, serializer);
-                    //data.Add("OutgoingEdges", JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(edges));
-                }
-            }
-
-            if (connectorEntityData.IncomingEdges.SafeEnumerate().Any())
-            {
-                if (outputFormat == "JSON")
-                    data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
-                else
-                {
-                    //var edges = JsonUtility.Serialize(connectorEntityData.IncomingEdges, serializer);
-                    //data.Add("IncomingEdges", JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(edges));
-                }
-            }
+            if (streamModel.ExportIncomingEdges)
+                data.Add("IncomingEdges", connectorEntityData.IncomingEdges.ToArray());
 
             if (streamModel.Mode == StreamMode.Sync)
             {
@@ -151,12 +117,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                             });
 
                         if (!lExecuted)
-                        {
-                            parquetSchema.DataFields.ForEach(field =>
-                            {
-                                data[field.Name] = ParquetHelper.ValidateData(field.ClrType, data[field.Name]);
-                            });
-                        }
+                            ParquetHelper.ExtractTypeAndData(data, connectorEntityData.Properties, out _);
 
                         var parquetTable = new Parquet.Rows.Table(parquetSchema)
                         {
@@ -176,7 +137,13 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 string item;
                 if (outputFormat == "JSON")
                 {
-                    item = JsonUtility.Serialize(data, serializer);
+                    var settings = new JsonSerializerSettings
+                    {
+                        TypeNameHandling = TypeNameHandling.None,
+                        Formatting = Formatting.Indented,
+                    };
+
+                    item = JsonConvert.SerializeObject(data, settings);
                 }
                 else
                 {
@@ -189,12 +156,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                         });
 
                     if (!lExecuted)
-                    {
-                        parquetSchema.DataFields.ForEach(field =>
-                        {
-                            data[field.Name] = ParquetHelper.ValidateData(field.ClrType, data[field.Name]);
-                        });
-                    }
+                        ParquetHelper.ExtractTypeAndData(data, connectorEntityData.Properties, out _);
 
                     item = StreamHelper.ConvertToStreamString(data.Values.ToArray());
                 }

@@ -20,7 +20,7 @@ internal static class VocabularyKeyDataTypeExtension
             VocabularyKeyDataType.Duration => typeof(TimeSpan),
             VocabularyKeyDataType.Integer => typeof(int),
             VocabularyKeyDataType.Number => typeof(float),
-            VocabularyKeyDataType.Uri => typeof(string),
+            VocabularyKeyDataType.Uri => typeof(Uri),
             VocabularyKeyDataType.Guid => typeof(Guid),
             VocabularyKeyDataType.Email => typeof(string),
             VocabularyKeyDataType.PhoneNumber => typeof(string),

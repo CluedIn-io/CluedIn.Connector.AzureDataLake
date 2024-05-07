@@ -1,6 +1,8 @@
 ﻿using Castle.Components.DictionaryAdapter;
 using CluedIn.Connector.AzureDataLake.Helpers;
+using CluedIn.Core;
 using CluedIn.Core.Connectors;
+using CluedIn.Core.Data.Relational;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Parquet.Schema;
@@ -38,7 +40,7 @@ internal static class DictionaryExtension
         }
     }
 
-    public static Stream ToJsonStream<TKey, TValue>(this Dictionary<TKey, TValue> dictionary)
+    public static Stream ToJsonStream<T>(this T data)
     {
         var settings = new JsonSerializerSettings
         {
@@ -46,24 +48,9 @@ internal static class DictionaryExtension
             Formatting = Formatting.Indented,
         };
 
-        var json = JsonConvert.SerializeObject(dictionary, settings);
+        var json = JsonConvert.SerializeObject(data, settings);
 
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
-
-        return stream;
-    }
-
-    public static Stream ToJsonStream<TKey, TValue>(this Dictionary<TKey, TValue>[] dictionaries)
-    {
-        var settings = new JsonSerializerSettings
-        {
-            TypeNameHandling = TypeNameHandling.None,
-            Formatting = Formatting.Indented,
-        };
-
-        var json = JsonConvert.SerializeObject(dictionaries, settings);
-
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+        var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
 
         return stream;
     }
