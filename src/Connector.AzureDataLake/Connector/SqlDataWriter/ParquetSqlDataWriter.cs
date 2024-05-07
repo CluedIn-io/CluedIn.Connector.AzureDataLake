@@ -21,6 +21,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
 {
     internal class ParquetSqlDataWriter : SqlDataWriterBase
     {
+        public const int Threshold = 10000;
         public override async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             await WriteEntireTable(context, outputStream, fieldNames, reader);
@@ -47,7 +48,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
             using var parquetWriter = await ParquetWriter.CreateAsync(schema, outputStream);
 
             int i = 0;
-            int Threshold = 15;
             while (await reader.ReadAsync())
             {
                 var fieldValues = fieldNames.Select(key => GetValue(key, reader));
