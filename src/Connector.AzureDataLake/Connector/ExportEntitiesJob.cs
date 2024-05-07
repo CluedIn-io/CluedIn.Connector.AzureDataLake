@@ -73,7 +73,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
 
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
-            await sqlDataWriter?.WriteAsync(outputStream, fieldNames, reader);
+            await sqlDataWriter?.WriteAsync(context, outputStream, fieldNames, reader);
         }
 
         private static ISqlDataWriter GetSqlDataWriter(string outputFormat)

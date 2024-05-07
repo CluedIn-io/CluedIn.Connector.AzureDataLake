@@ -166,7 +166,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
                     for (var i = 0; i < propertyKeys.Count; i++)
                     {
-                        command.Parameters.Add(new SqlParameter($"@p{i}", GetValue(data[propertyKeys[i]])));
+                        command.Parameters.Add(new SqlParameter($"@p{i}", GetDbValue(data[propertyKeys[i]])));
                     }
 
                     var rowsAffected = await command.ExecuteNonQueryAsync();
@@ -189,7 +189,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return $"Stream_{streamId}";
         }
 
-        private static object GetValue(object value)
+        private static object GetDbValue(object value)
         {
             if (value == null)
             {
