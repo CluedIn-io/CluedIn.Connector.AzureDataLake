@@ -46,6 +46,10 @@ variables:
     value: Release
 
 steps:
+  - task: UseDotNet@2
+    displayName: Install .NET SDK 6.0
+    inputs:
+      version: 6.0.x
   # Configure NuGet
   - task: NuGetAuthenticate@0
     displayName: 'Authenticate with nuget'
