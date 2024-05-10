@@ -24,8 +24,8 @@ namespace CluedIn.Connector.AzureDataLake
         public string FileSystemName => GetConfigurationValue(AzureDataLakeConstants.FileSystemName) as string;
         public string DirectoryName => GetConfigurationValue(AzureDataLakeConstants.DirectoryName) as string;
         public string OutputFormat => GetConfigurationValue(AzureDataLakeConstants.OutputFormat) as string ?? OutputFormats.Json;
-        public bool EnableBuffer => GetConfigurationValue(AzureDataLakeConstants.EnableBuffer) as bool? ?? false;
-        public string BufferConnectionString => GetConfigurationValue(AzureDataLakeConstants.BufferConnectionString) as string;
+        public bool IsStreamCacheEnabled => GetConfigurationValue(AzureDataLakeConstants.IsStreamCacheEnabled) as bool? ?? false;
+        public string StreamCacheConnectionString => GetConfigurationValue(AzureDataLakeConstants.StreamCacheConnectionString) as string;
         public string Schedule => GetConfigurationValue(AzureDataLakeConstants.Schedule) as string;
         public string ContainerName { get; }
 
@@ -48,7 +48,8 @@ namespace CluedIn.Connector.AzureDataLake
                 DirectoryName == other.DirectoryName &&
                 ContainerName == other.ContainerName &&
                 OutputFormat == other.OutputFormat &&
-                BufferConnectionString == other.BufferConnectionString &&
+                IsStreamCacheEnabled == other.IsStreamCacheEnabled &&
+                StreamCacheConnectionString == other.StreamCacheConnectionString &&
                 Schedule == other.Schedule;
                 
         }
@@ -79,11 +80,11 @@ namespace CluedIn.Connector.AzureDataLake
             var connectionStrings = executionContext.ApplicationContext.System.ConnectionStrings;
             if (connectionStrings.ConnectionStringExists(StreamCacheConnectionStringKey))
             {
-                authenticationDetails[AzureDataLakeConstants.BufferConnectionString] = connectionStrings.GetConnectionString(StreamCacheConnectionStringKey);
+                authenticationDetails[AzureDataLakeConstants.StreamCacheConnectionString] = connectionStrings.GetConnectionString(StreamCacheConnectionStringKey);
             }
-            else if (!authenticationDetails.ContainsKey(AzureDataLakeConstants.BufferConnectionString))
+            else if (!authenticationDetails.ContainsKey(AzureDataLakeConstants.StreamCacheConnectionString))
             {
-                authenticationDetails[AzureDataLakeConstants.BufferConnectionString] = null;
+                authenticationDetails[AzureDataLakeConstants.StreamCacheConnectionString] = null;
             } 
 
             var configurations = new AzureDataLakeConnectorJobData(authenticationDetails, containerName);

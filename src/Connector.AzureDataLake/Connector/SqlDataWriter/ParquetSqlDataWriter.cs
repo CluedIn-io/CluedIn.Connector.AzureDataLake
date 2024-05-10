@@ -22,7 +22,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
 {
     internal class ParquetSqlDataWriter : SqlDataWriterBase
     {
-        public const int Threshold = 10000;
+        // From documentation, it's ambiguous whether we need at least 5k or 50k rows to be optimal
+        // TODO: Find recommendations or method to calculate row group threshold        
+        public const int RowGroupThreshold = 10000;
         public override async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
         {
             await WriteEntireTable(context, outputStream, fieldNames, reader);
@@ -50,9 +52,14 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
                 parquetTable.Add(new ParquetRow(fieldValues));
 
                 i++;
-                if (i % Threshold == 0)
+
+                if (i % LoggingThreshold == 0)
                 {
-                    context.Log.LogDebug("Row group threshold {Threshold} reached. Current row {CurrentRow}. Writing data.", Threshold, i);
+                    context.Log.LogDebug("Written {Total} items.", i);
+                }
+                if (i % RowGroupThreshold == 0)
+                {
+                    context.Log.LogDebug("Row group threshold {Threshold} reached. Current row {CurrentRow}. Writing data.", RowGroupThreshold, i);
                     await parquetWriter.WriteAsync(parquetTable);
                     
                     parquetTable = new ParquetTable(schema);
@@ -63,7 +70,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
             {
                 context.Log.LogDebug("Written {Total} items.", i);
             }
-            if (i % Threshold != 0)
+            if (i % RowGroupThreshold != 0)
             {
                 context.Log.LogDebug("Flushing remaining data. Current row {CurrentRow}", i);
                 await parquetWriter.WriteAsync(parquetTable);
@@ -78,6 +85,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
                 return type;
             }
 
+            // TODO: Consider using DateTime and possibly additional column?
+            // Parquet.Net does not support DateTimeOffset
+            // Serialize it to string to prevent information loss
             var nullableUnderlyingType = Nullable.GetUnderlyingType(type);
             if (type == typeof(DateTimeOffset)
                 || nullableUnderlyingType == typeof(DateTimeOffset))
@@ -101,6 +111,10 @@ namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
             {
                 return null;
             }
+
+            // TODO: Consider using DateTime and possibly additional column?
+            // Parquet.Net does not support DateTimeOffset
+            // Serialize it to string to prevent information loss
 
             if (value is DateTimeOffset offset)
             {

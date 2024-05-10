@@ -1,9 +1,6 @@
 ﻿using System;
 
-using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Vocabularies;
-
-using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 
 namespace CluedIn.Connector.AzureDataLake;
 
@@ -43,27 +40,5 @@ internal static class VocabularyKeyDataTypeExtension
             VocabularyKeyDataType.Lookup => typeof(string),
             _ => typeof(string),
         };
-    }
-}
-internal static class ConnectorPropertyDataExtension
-{
-    internal static Type GetDataType(this ConnectorPropertyData connectorPropertyData)
-    {
-        Type type = null;
-        var dataType = connectorPropertyData.DataType;
-        if (dataType is VocabularyKeyConnectorPropertyDataType vocabularyKeyType)
-        {
-            return vocabularyKeyType.VocabularyKey.DataType.ConvertToType();
-        }
-        else if (dataType is EntityPropertyConnectorPropertyDataType entityPropertyType)
-        {
-            return entityPropertyType.Type;
-        }
-        else if (dataType is VocabularyKeyDataTypeConnectorPropertyDataType vocabularyKeyDataTypeType)
-        {
-            return vocabularyKeyDataTypeType.VocabularyKeyDataType.ConvertToType();
-        }
-
-        throw new NotSupportedException($"{nameof(ConnectorPropertyDataType)} of type {dataType} is not supported.");
     }
 }

@@ -13,8 +13,8 @@ namespace CluedIn.Connector.AzureDataLake
         public const string FileSystemName = nameof(FileSystemName);
         public const string DirectoryName = nameof(DirectoryName);
         public const string OutputFormat = nameof(OutputFormat);
-        public const string EnableBuffer = nameof(EnableBuffer);
-        public const string BufferConnectionString = nameof(BufferConnectionString);
+        public const string IsStreamCacheEnabled = nameof(IsStreamCacheEnabled);
+        public const string StreamCacheConnectionString = nameof(StreamCacheConnectionString);
         public const string Schedule = nameof(Schedule);
 
         public const string IdKey = "Id";
@@ -112,8 +112,8 @@ namespace CluedIn.Connector.AzureDataLake
                 },
                 new Control
                 {
-                    name = EnableBuffer,
-                    displayName = "Enable Buffer",
+                    name = IsStreamCacheEnabled,
+                    displayName = "Enable Stream Cache",
                     type = "checkbox",
                     isRequired = false,
                 },
@@ -124,8 +124,8 @@ namespace CluedIn.Connector.AzureDataLake
                 controls.Add(
                     new Control
                     {
-                        name = BufferConnectionString,
-                        displayName = "Buffer Connection String (SQL Server)",
+                        name = StreamCacheConnectionString,
+                        displayName = "Stream Cache Connection String (SQL Server)",
                         type = "password",
                         isRequired = false,
                     });

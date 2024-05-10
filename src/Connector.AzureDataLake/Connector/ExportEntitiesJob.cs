@@ -35,9 +35,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             var configuration = await AzureDataLakeConnectorJobData.Create(context, providerDefinitionId, containerName);
 
-            if (!configuration.EnableBuffer)
+            if (!configuration.IsStreamCacheEnabled)
             {
-                context.Log.LogDebug("Buffer not enabled for stream {StreamId}. Skipping export.", streamModel.Id);
+                context.Log.LogDebug("Stream cache is not enabled for stream {StreamId}. Skipping export.", streamModel.Id);
                 return;
             }
 
@@ -48,7 +48,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
 
             var tableName = $"Stream_{streamId}";
-            await using var connection = new SqlConnection(configuration.BufferConnectionString);
+            await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
             await connection.OpenAsync();
 
             var cronSchedule = NCrontab.CrontabSchedule.Parse(args.Schedule);

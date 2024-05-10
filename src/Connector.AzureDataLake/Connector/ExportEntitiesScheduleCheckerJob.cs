@@ -66,7 +66,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         private static string GetCronSchedule(ExecutionContext context, StreamModel stream, AzureDataLakeConnectorJobData configurations)
         {
-            if (configurations.EnableBuffer
+            if (configurations.IsStreamCacheEnabled
                 && stream.Status == StreamStatus.Started
                 && CronSchedules.TryGetValue(configurations.Schedule, out var retrievedSchedule))
             {
