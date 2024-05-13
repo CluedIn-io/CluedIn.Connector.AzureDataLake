@@ -72,7 +72,7 @@ namespace CluedIn.Connector.AzureDataLake
             return await Create(executionContext, authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value), containerName);
         }
 
-        public static async Task<AzureDataLakeConnectorJobData> Create(
+        public static Task<AzureDataLakeConnectorJobData> Create(
             ExecutionContext executionContext,
             IDictionary<string, object> authenticationDetails,
             string containerName = null)
@@ -88,7 +88,7 @@ namespace CluedIn.Connector.AzureDataLake
             } 
 
             var configurations = new AzureDataLakeConnectorJobData(authenticationDetails, containerName);
-            return configurations;
+            return Task.FromResult(configurations);
         }
 
         private static async Task<IConnectorConnectionV2> GetAuthenticationDetails(

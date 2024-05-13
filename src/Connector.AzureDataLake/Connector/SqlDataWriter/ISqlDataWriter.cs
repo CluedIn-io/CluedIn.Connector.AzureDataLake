@@ -6,10 +6,9 @@ using CluedIn.Core;
 
 using Microsoft.Data.SqlClient;
 
-namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
+namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter;
+
+internal interface ISqlDataWriter
 {
-    internal interface ISqlDataWriter
-    {
-        Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader);
-    }
+    Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader);
 }

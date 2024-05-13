@@ -64,7 +64,7 @@ namespace CluedIn.Connector.AzureDataLake
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[{nameof(AzureDataLakeConnectorComponent)}] Failed to schedule checker job.");
+                        Console.WriteLine($"[{nameof(AzureDataLakeConnectorComponent)}] Failed to schedule checker job. {ex.Message}\n{ex.StackTrace}.");
                     }
                     await Task.Delay(CheckerScheduleDelay);
                 }

@@ -8,7 +8,6 @@ internal static class ConnectorPropertyDataExtension
 {
     internal static Type GetDataType(this ConnectorPropertyData connectorPropertyData)
     {
-        Type type = null;
         var dataType = connectorPropertyData.DataType;
         if (dataType is VocabularyKeyConnectorPropertyDataType vocabularyKeyType)
         {

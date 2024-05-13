@@ -13,40 +13,39 @@ using CsvHelper.Configuration;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
-namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter
-{
-    internal class CsvSqlDataWriter : SqlDataWriterBase
-    {
-        public override async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
-        {
-            context.Log.LogInformation("Begin writing output.");
-            using var writer = new StreamWriter(outputStream);
+namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter;
 
-            var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture);
-            using var csv = new CsvWriter(writer, csvConfig);
-            foreach (var fieldName in fieldNames)
+internal class CsvSqlDataWriter : SqlDataWriterBase
+{
+    public override async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+    {
+        context.Log.LogInformation("Begin writing output.");
+        using var writer = new StreamWriter(outputStream);
+
+        var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture);
+        using var csv = new CsvWriter(writer, csvConfig);
+        foreach (var fieldName in fieldNames)
+        {
+            csv.WriteField(fieldName);
+        }
+        await csv.NextRecordAsync();
+
+        int totalProcessed = 0;
+        while (await reader.ReadAsync())
+        {
+            var fieldValues = fieldNames.Select(name => GetValue(name, reader));
+            foreach (var field in fieldValues)
             {
-                csv.WriteField(fieldName);
+                csv.WriteField(field);
             }
             await csv.NextRecordAsync();
-
-            int totalProcessed = 0;
-            while (await reader.ReadAsync())
+            totalProcessed++;
+            if (totalProcessed % LoggingThreshold == 0)
             {
-                var fieldValues = fieldNames.Select(name => GetValue(name, reader));
-                foreach (var field in fieldValues)
-                {
-                    csv.WriteField(field);
-                }
-                await csv.NextRecordAsync();
-                totalProcessed++;
-                if (totalProcessed % LoggingThreshold == 0)
-                {
-                    context.Log.LogDebug("Written {Total} items.", totalProcessed);
-                }
+                context.Log.LogDebug("Written {Total} items.", totalProcessed);
             }
-
-            context.Log.LogInformation("End writing output. Total processed: {TotalProcessed}.", totalProcessed);
         }
+
+        context.Log.LogInformation("End writing output. Total processed: {TotalProcessed}.", totalProcessed);
     }
 }
