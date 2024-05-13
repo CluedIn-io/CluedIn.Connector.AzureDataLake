@@ -143,7 +143,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
         }
 
-        private async Task EnsureTableExists(SqlConnection connection, string tableName, ICollection<string> propertyKeys, Dictionary<string, Type> dataValueTypes)
+        private async Task EnsureCacheTableExists(SqlConnection connection, string tableName, ICollection<string> propertyKeys, Dictionary<string, Type> dataValueTypes)
         {
             var propertiesColumns = propertyKeys.Select(key =>
             {
@@ -197,7 +197,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
             catch (SqlException ex) when (GetIsTableNotFoundException(ex))
             {
-                await EnsureTableExists(connection, tableName, propertyKeys, syncItem.DataValueTypes);
+                await EnsureCacheTableExists(connection, tableName, propertyKeys, syncItem.DataValueTypes);
                 await ExecuteWrite(connection, syncItem, tableName, propertyKeys);
             }
             catch(Exception ex)
@@ -258,8 +258,13 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return ex.Number == 208;
         }
 
-        private static string GetCacheTableName(Guid streamId)
+        private static string GetCacheTableName(Guid streamId, bool isTestTable = false)
         {
+            if (isTestTable)
+            {
+                return $"testConnection_{streamId}";
+            }
+
             return CacheTableHelper.GetCacheTableName(streamId);
         }
 
@@ -335,18 +340,21 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 {
                     if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
                     {
-                        return new ConnectionVerificationResult(false, $"Buffer connection string must be valid when buffer is enabled.");
+                        return new ConnectionVerificationResult(false, $"Stream cache connection string must be valid when buffer is enabled.");
                     }
                     await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
                     await connection.OpenAsync();
                     await using var connectionAndTransaction = await connection.BeginTransactionAsync();
                     var connectionIsOpen = connectionAndTransaction.Connection.State == ConnectionState.Open;
-                    await connectionAndTransaction.DisposeAsync();
 
                     if (!connectionIsOpen)
                     {
-                        return new ConnectionVerificationResult(false, "Failed to connect to the buffer storage.");
+                        return new ConnectionVerificationResult(false, "Failed to connect to the stream cache.");
                     }
+
+                    await VerifyTableOperations(connection);
+
+                    await connectionAndTransaction.DisposeAsync();
                 }
                 return new ConnectionVerificationResult(true);
             }
@@ -354,6 +362,84 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 _logger.LogError(e, "Error verifying connection");
                 return new ConnectionVerificationResult(false, e.Message);
+            }
+        }
+
+        private async Task VerifyTableOperations(SqlConnection connection)
+        {
+            var testStreamId = Guid.NewGuid();
+            var testTableName = GetCacheTableName(testStreamId, true);
+
+            var entityId = Guid.NewGuid();
+            var data = new Dictionary<string, object>
+            {
+                [AzureDataLakeConstants.IdKey] = entityId,
+                ["testColumn"] = 1234,
+            };
+
+            var dataValueTypes = new Dictionary<string, Type>
+            {
+                [AzureDataLakeConstants.IdKey] = typeof(Guid),
+                ["testColumn"] = typeof(string),
+            };
+
+            await EnsureCacheTableExists(
+                    connection,
+                    testTableName,
+                    data.Keys,
+                    dataValueTypes);
+            try
+            {
+                await VerifyInsert(connection, testStreamId, entityId, data, dataValueTypes);
+                await VerifyUpdate(connection, testStreamId, entityId, data, dataValueTypes);
+                await VerifyDelete(connection, testStreamId, entityId, data, dataValueTypes);
+
+            }
+            finally
+            {
+                await DeleteCacheTableIfExists(connection, testTableName);
+            }
+        }
+
+        private async Task VerifyDelete(SqlConnection connection, Guid testStreamId, Guid entityId, Dictionary<string, object> data, Dictionary<string, Type> dataValueTypes)
+        {
+            try
+            {
+                var deleteSyncItem = new SyncItem(testStreamId, entityId, VersionChangeType.Removed, data, dataValueTypes);
+                await WriteToCacheTable(connection, deleteSyncItem);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete item to the test table.");
+                throw;
+            }
+}
+
+        private async Task VerifyUpdate(SqlConnection connection, Guid testStreamId, Guid entityId, Dictionary<string, object> data, Dictionary<string, Type> dataValueTypes)
+        {
+            try
+            { 
+                var updateSyncItem = new SyncItem(testStreamId, entityId, VersionChangeType.Changed, data, dataValueTypes);
+                await WriteToCacheTable(connection, updateSyncItem);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update item to the test table.");
+                throw;
+            }
+        }
+
+        private async Task VerifyInsert(SqlConnection connection, Guid testStreamId, Guid entityId, Dictionary<string, object> data, Dictionary<string, Type> dataValueTypes)
+        {
+            try
+            {
+                var addSyncItem = new SyncItem(testStreamId, entityId, VersionChangeType.Added, data, dataValueTypes);
+                await WriteToCacheTable(connection, addSyncItem);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to insert item to the test table.");
+                throw;
             }
         }
 
@@ -448,8 +534,13 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
             await connection.OpenAsync();
             var tableName = GetCacheTableName(streamModel.Id);
+            await DeleteCacheTableIfExists(connection, tableName);
+        }
+
+        private static async Task DeleteCacheTableIfExists(SqlConnection connection, string tableName)
+        {
             var command = new SqlCommand(
-                $"""
+                            $"""
                 IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
                 ALTER TABLE dbo.[{tableName}]  SET ( SYSTEM_VERSIONING = Off )
 
