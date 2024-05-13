@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <LangVersion>11.0</LangVersion>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 

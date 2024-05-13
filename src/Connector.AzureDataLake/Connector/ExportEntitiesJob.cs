@@ -54,7 +54,7 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
 
         var command = new SqlCommand($"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'", connection);
         command.CommandType = CommandType.Text;
-        using var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync();
 
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
             .Select(reader.GetName)
@@ -65,7 +65,7 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
         var outputFileName = $"{streamId}_{asOfTime:o}.{fileExtension}";
         var directoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
-        using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
+        await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
 
         using var loggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {

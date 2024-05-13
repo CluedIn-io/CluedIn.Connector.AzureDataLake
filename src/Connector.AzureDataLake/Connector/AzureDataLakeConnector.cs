@@ -27,6 +27,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 {
     public class AzureDataLakeConnector : ConnectorBaseV2
     {
+        private const string JsonMimeType = "application/json";
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
@@ -297,7 +298,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
                     var json = JsonConvert.SerializeObject(data, settings);
 
-                    await _client.SaveData(configurations, json, filePathAndName);
+                    await _client.SaveData(configurations, json, filePathAndName, JsonMimeType);
 
                 }
             }
@@ -379,7 +380,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-            _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
+            _client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
         }
         
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)

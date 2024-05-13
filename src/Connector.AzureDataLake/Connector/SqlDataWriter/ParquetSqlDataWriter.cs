@@ -31,7 +31,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         {
             var type = reader.GetFieldType(fieldName);
 
-            fields.Add(new DataField(fieldName, GetParquetType(fieldName, type)));
+            fields.Add(new DataField(fieldName, GetParquetDataType(type)));
         }
 
         var schema = new ParquetSchema(fields);
@@ -69,7 +69,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         return totalProcessed;
     }
 
-    private Type GetParquetType(string fieldName, Type type)
+    private Type GetParquetDataType(Type type)
     {
         if (type == typeof(string))
         {

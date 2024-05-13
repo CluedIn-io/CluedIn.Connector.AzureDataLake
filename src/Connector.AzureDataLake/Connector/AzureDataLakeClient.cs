@@ -21,20 +21,15 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return directoryClient;
         }
 
-        public async Task SaveData(AzureDataLakeConnectorJobData configuration, string content, string fileName)
+        public async Task SaveData(AzureDataLakeConnectorJobData configuration, string content, string fileName, string contentType)
         {
             using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
-            await SaveData(configuration, stream, fileName);
-        }
-
-        public async Task SaveData(AzureDataLakeConnectorJobData configuration, Stream stream, string fileName)
-        {
             var directoryClient = await EnsureDataLakeDirectoryExist(configuration);
 
             var dataLakeFileClient = directoryClient.GetFileClient(fileName);
             var options = new DataLakeFileUploadOptions
             {
-                HttpHeaders = new PathHttpHeaders { ContentType = "application/json" }
+                HttpHeaders = new PathHttpHeaders { ContentType = contentType }
             };
 
             var response = await dataLakeFileClient.UploadAsync(stream, options);
