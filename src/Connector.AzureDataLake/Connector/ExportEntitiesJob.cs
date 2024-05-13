@@ -62,7 +62,7 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
 
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
         var fileExtension = GetFileExtension(outputFormat);
-        var outputFileName = $"{streamId}_{asOfTime:o}.{fileExtension}";
+        var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
         var directoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
         await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);

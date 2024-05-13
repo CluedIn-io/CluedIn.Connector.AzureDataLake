@@ -107,17 +107,17 @@ namespace CluedIn.Connector.AzureDataLake
                 },
                 new Control
                 {
-                    name = OutputFormat,
-                    displayName = "JSON/Parquet/CSV",
-                    type = "input",
-                    isRequired = true,
-                },
-                new Control
-                {
                     name = IsStreamCacheEnabled,
                     displayName = "Enable Stream Cache",
                     type = "checkbox",
                     isRequired = false,
+                },
+                new Control
+                {
+                    name = OutputFormat,
+                    displayName = "JSON (Stream Cache disabled), JSON/Parquet/CSV (Stream cache enabled)",
+                    type = "input",
+                    isRequired = true,
                 },
             };
 
