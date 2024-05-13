@@ -31,7 +31,17 @@ namespace CluedIn.Connector.AzureDataLake
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(AccountName, AccountKey, FileSystemName, DirectoryName, ContainerName);
+            HashCode hash = new();
+            hash.Add(AccountName);
+            hash.Add(AccountKey);
+            hash.Add(FileSystemName);
+            hash.Add(DirectoryName);
+            hash.Add(OutputFormat);
+            hash.Add(IsStreamCacheEnabled);
+            hash.Add(StreamCacheConnectionString);
+            hash.Add(Schedule);
+            hash.Add(ContainerName);
+            return hash.ToHashCode();
         }
 
         public override bool Equals(object obj)
