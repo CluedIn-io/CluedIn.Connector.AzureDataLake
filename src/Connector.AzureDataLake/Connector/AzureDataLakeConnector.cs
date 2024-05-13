@@ -156,8 +156,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                         CREATE TABLE [{tableName}] (
                             {AzureDataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
                             {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
-                            [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START,
-                            [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END,
+                            [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
+                            [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
                             PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
                             CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({AzureDataLakeConstants.IdKey})
                         ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
@@ -259,7 +259,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         private static string GetCacheTableName(Guid streamId)
         {
-            return $"Stream_{streamId}";
+            return CacheTableHelper.GetCacheTableName(streamId);
         }
 
         private static object GetDatabaseValue(object value)
@@ -446,7 +446,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var jobData = await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
             await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
             await connection.OpenAsync();
-            var tableName = $"Stream_{streamModel.Id}";
+            var tableName = GetCacheTableName(streamModel.Id);
             var command = new SqlCommand(
                 $"""
                 IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')

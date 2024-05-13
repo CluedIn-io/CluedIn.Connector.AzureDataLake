@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CluedIn.Core;
 
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter;
 
@@ -25,5 +26,12 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
         return value;
     }
 
-    public abstract Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader);
+    public async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+    {
+        context.Log.LogInformation("Begin writing output.");
+
+        var totalProcessed = await WriteOutputAsync(context, outputStream, fieldNames, reader);
+        context.Log.LogInformation("End writing output. Total processed: {TotalProcessed}.", totalProcessed);
+    }
+    public abstract Task<long> WriteOutputAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader);
 }

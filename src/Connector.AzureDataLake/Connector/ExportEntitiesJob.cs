@@ -32,7 +32,7 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
         var containerName = streamModel.ContainerName;
         var executionContext = context.ApplicationContext.CreateExecutionContext(streamModel.OrganizationId);
 
-        var configuration = await AzureDataLakeConnectorJobData.Create(context, providerDefinitionId, containerName);
+        var configuration = await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
 
         if (!configuration.IsStreamCacheEnabled)
         {
@@ -46,26 +46,23 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
             return;
         }
 
-        var tableName = $"Stream_{streamId}";
+        var tableName = CacheTableHelper.GetCacheTableName(streamId);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
 
-        var cronSchedule = NCrontab.CrontabSchedule.Parse(args.Schedule);
-        var next = cronSchedule.GetNextOccurrence(DateTime.UtcNow.AddMinutes(1));
-        var nextNext = cronSchedule.GetNextOccurrence(next.AddMinutes(1));
-        var diff = nextNext - next;
-        var asOfTime = next - diff;
+        var asOfTime = GetLastOccurence(args);
 
         var command = new SqlCommand($"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'", connection);
         command.CommandType = CommandType.Text;
         using var reader = await command.ExecuteReaderAsync();
 
-        // TODO: Better handling of validfrom & validto
-        var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount).Select(reader.GetName)
-            .Except(new[] { "ValidFrom", "ValidTo" }).ToList();
+        var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
+            .Select(reader.GetName)
+            .ToList();
 
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
-        var outputFileName = $"{streamId}_{asOfTime:o}.{outputFormat}";
+        var fileExtension = GetFileExtension(outputFormat);
+        var outputFileName = $"{streamId}_{asOfTime:o}.{fileExtension}";
         var directoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
         using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
@@ -78,6 +75,21 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
         });
         var sqlDataWriter = GetSqlDataWriter(outputFormat);
         await sqlDataWriter?.WriteAsync(context, outputStream, fieldNames, reader);
+    }
+
+    private static string GetFileExtension(string outputFormat)
+    {
+        return outputFormat;
+    }
+
+    private static DateTime GetLastOccurence(JobArgs args)
+    {
+        var cronSchedule = NCrontab.CrontabSchedule.Parse(args.Schedule);
+        var next = cronSchedule.GetNextOccurrence(DateTime.UtcNow.AddMinutes(1));
+        var nextNext = cronSchedule.GetNextOccurrence(next.AddMinutes(1));
+        var diff = nextNext - next;
+        var asOfTime = next - diff;
+        return asOfTime;
     }
 
     private static ISqlDataWriter GetSqlDataWriter(string outputFormat)

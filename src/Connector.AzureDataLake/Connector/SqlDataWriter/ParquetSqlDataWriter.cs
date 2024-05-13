@@ -24,14 +24,8 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
     // From documentation, it's ambiguous whether we need at least 5k or 50k rows to be optimal
     // TODO: Find recommendations or method to calculate row group threshold        
     public const int RowGroupThreshold = 10000;
-    public override async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+    public override async Task<long> WriteOutputAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
     {
-        await WriteEntireTable(context, outputStream, fieldNames, reader);
-    }
-
-    private async Task WriteEntireTable(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
-    {
-        context.Log.LogInformation("Begin writing output.");
         var fields = new List<Field>();
         foreach (var fieldName in fieldNames)
         {
@@ -44,37 +38,35 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         var parquetTable = new ParquetTable(schema);
         using var parquetWriter = await ParquetWriter.CreateAsync(schema, outputStream);
 
-        int i = 0;
+        var totalProcessed = 0L;
         while (await reader.ReadAsync())
         {
             var fieldValues = fieldNames.Select(key => GetValue(key, reader));
             parquetTable.Add(new ParquetRow(fieldValues));
 
-            i++;
+            totalProcessed++;
 
-            if (i % LoggingThreshold == 0)
+            if (totalProcessed % LoggingThreshold == 0)
             {
-                context.Log.LogDebug("Written {Total} items.", i);
+                context.Log.LogDebug("Written {Total} items.", totalProcessed);
             }
-            if (i % RowGroupThreshold == 0)
+
+            if (totalProcessed % RowGroupThreshold == 0)
             {
-                context.Log.LogDebug("Row group threshold {Threshold} reached. Current row {CurrentRow}. Writing data.", RowGroupThreshold, i);
+                context.Log.LogDebug("Row group threshold {Threshold} reached. Current row {CurrentRow}. Writing data.", RowGroupThreshold, totalProcessed);
                 await parquetWriter.WriteAsync(parquetTable);
                 
                 parquetTable = new ParquetTable(schema);
             }
         }
 
-        if (i % LoggingThreshold == 0)
+        if (totalProcessed % RowGroupThreshold != 0)
         {
-            context.Log.LogDebug("Written {Total} items.", i);
-        }
-        if (i % RowGroupThreshold != 0)
-        {
-            context.Log.LogDebug("Flushing remaining data. Current row {CurrentRow}", i);
+            context.Log.LogDebug("Flushing remaining data. Current row {CurrentRow}", totalProcessed);
             await parquetWriter.WriteAsync(parquetTable);
         }
-        context.Log.LogInformation("End writing output. Total processed: {TotalProcessed}.", i);
+
+        return totalProcessed;
     }
 
     private Type GetParquetType(string fieldName, Type type)

@@ -26,6 +26,7 @@ namespace CluedIn.Connector.AzureDataLake
             public const string Json = "json";
             public const string Parquet = "parquet";
         }
+
         public static class JobScheduleNames
         {
             public const string Hourly = "Hourly";
@@ -33,6 +34,7 @@ namespace CluedIn.Connector.AzureDataLake
             public const string Weekly = "Weekly";
             public const string Never = "Never";
         }
+
         public AzureDataLakeConstants(ApplicationContext applicationContext) : base(Guid.Parse("F6178E19-7168-449C-B4B6-F9810E86C1C2"),
             providerName: "Azure DataLake Connector",
             componentName: "AzureDataLakeConnector",

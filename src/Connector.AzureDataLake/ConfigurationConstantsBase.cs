@@ -74,10 +74,5 @@ namespace CluedIn.Connector.AzureDataLake
                 ComponentEmailDetails = ComponentEmailDetails
             };
         }
-
-        public AuthMethods GetAuthMethods(ApplicationContext applicationContext)
-        {
-            throw new NotImplementedException();
-        }
     }
 }
