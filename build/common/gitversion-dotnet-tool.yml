@@ -2,13 +2,12 @@ steps:
   - pwsh: |
       $version = "5.9.0"
       Write-Host "Installing GitVersion.Tool dotnet tool $version"
+      Write-Host "##[command]dotnet tool install GitVersion.Tool --tool-path $(Agent.TempDirectory) --version $version"
       dotnet tool install GitVersion.Tool --tool-path $(Agent.TempDirectory) --version $version
-      Write-Host "Running tool with $(Agent.TempDirectory)/dotnet-gitversion $(Build.SourcesDirectory) /output buildserver /nofetch"
+      Write-Host "##[command]$(Agent.TempDirectory)/dotnet-gitversion $(Build.SourcesDirectory) /output buildserver /nofetch"
       $(Agent.TempDirectory)/dotnet-gitversion $(Build.SourcesDirectory) /output buildserver /nofetch
     displayName: UseGitVersion
   - pwsh: |
-      dotnet tool install --global GitVersion.Tool --version 5.9.0
-      dotnet-gitversion $(Build.SourcesDirectory) /output buildserver /nofetch
       Write-Output "##vso[build.updatebuildnumber]$(GitVersion.Semver)"
       Write-Output "##vso[task.setvariable variable=Version;]$(GitVersion.Semver)"
     displayName: Persist Version info
