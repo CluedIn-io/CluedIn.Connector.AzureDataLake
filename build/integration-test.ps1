@@ -26,11 +26,15 @@ function Set-Variable($key, $value) {
 }
 
 function Run-Setup() {
-	docker run -d -e "ACCEPT_EULA=Y" --name "datalaketest" mcr.microsoft.com/mssql/server:2022-latest
+	docker run -d -e "ACCEPT_EULA=Y" --name "datalaketest" -p ":1433" mcr.microsoft.com/mssql/server:2022-latest
+	$port = (docker inspect "datalaketest" | ConvertFrom-Json).NetworkSettings.Ports."1433/tcp".HostPort
+	Set-Variable "ADL2_STREAMCACHE" "Data Source=localhost,$($port);Initial Catalog=DataStore.Db.StreamCache;User Id=sa;Password=yourStrong(!)Password;connection timeout=0;Max Pool Size=200;Pooling=True"
+	Start-Sleep 60
+	docker exec datalaketest /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'yourStrong(!)Password' -Q 'CREATE DATABASE [DataStore.Db.Streamcache]'
 }
 
 function Run-TearDown() {
-	docker rm -f "atalaketest"
+	docker rm -f "datalaketest"
 }
 
 function Run() {
