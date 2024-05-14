@@ -1,6 +1,6 @@
 name: $(Date:yyyyMMdd)$(Rev:.r)
 parameters:
-  - name: runIngegrationTests
+  - name: runIntegrationTests
     displayName: Run Integration Tests
     type: boolean
     default: true
@@ -58,5 +58,9 @@ steps:
     parameters:
       githubReleaseInMaster: true
       publicReleaseForMaster: true
-      executeIntegrationTests: ${{ parameters.runIngegrationTests }}
+      executeIntegrationTests: ${{ parameters.runIntegrationTests }}
+      createIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
+      createIntegrationEnvironmentScriptArguments: '-Action SetUp'
+      deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
+      deleteIntegrationEnvironmentScriptArguments: '-Action TearDown'
       publishCodeCoverage: true

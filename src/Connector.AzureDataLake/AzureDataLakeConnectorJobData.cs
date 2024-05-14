@@ -28,6 +28,7 @@ namespace CluedIn.Connector.AzureDataLake
         public string StreamCacheConnectionString => GetConfigurationValue(AzureDataLakeConstants.StreamCacheConnectionString) as string;
         public string Schedule => GetConfigurationValue(AzureDataLakeConstants.Schedule) as string;
         public string ContainerName { get; }
+        public bool UseCurrentTimeForExport => GetConfigurationValue(AzureDataLakeConstants.UseCurrentTimeForExport) as bool? ?? false;
 
         public override int GetHashCode()
         {
@@ -41,6 +42,7 @@ namespace CluedIn.Connector.AzureDataLake
             hash.Add(StreamCacheConnectionString);
             hash.Add(Schedule);
             hash.Add(ContainerName);
+            hash.Add(UseCurrentTimeForExport);
             return hash.ToHashCode();
         }
 
@@ -60,7 +62,8 @@ namespace CluedIn.Connector.AzureDataLake
                 OutputFormat == other.OutputFormat &&
                 IsStreamCacheEnabled == other.IsStreamCacheEnabled &&
                 StreamCacheConnectionString == other.StreamCacheConnectionString &&
-                Schedule == other.Schedule;
+                Schedule == other.Schedule &&
+                UseCurrentTimeForExport == other.UseCurrentTimeForExport;
                 
         }
 

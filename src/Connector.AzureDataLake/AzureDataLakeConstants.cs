@@ -16,6 +16,7 @@ namespace CluedIn.Connector.AzureDataLake
         public const string IsStreamCacheEnabled = nameof(IsStreamCacheEnabled);
         public const string StreamCacheConnectionString = nameof(StreamCacheConnectionString);
         public const string Schedule = nameof(Schedule);
+        public const string UseCurrentTimeForExport = nameof(UseCurrentTimeForExport);
 
         public const string IdKey = "Id";
 

@@ -50,7 +50,7 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
 
-        var asOfTime = GetLastOccurence(args);
+        var asOfTime = GetLastOccurence(args, configuration);
 
         var command = new SqlCommand($"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'", connection);
         command.CommandType = CommandType.Text;
@@ -82,8 +82,13 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
         return outputFormat;
     }
 
-    private static DateTime GetLastOccurence(JobArgs args)
+    private static DateTime GetLastOccurence(JobArgs args, AzureDataLakeConnectorJobData configuration)
     {
+        if (configuration.UseCurrentTimeForExport)
+        {
+            return DateTime.UtcNow;
+        }
+
         var cronSchedule = NCrontab.CrontabSchedule.Parse(args.Schedule);
         var next = cronSchedule.GetNextOccurrence(DateTime.UtcNow.AddMinutes(1));
         var nextNext = cronSchedule.GetNextOccurrence(next.AddMinutes(1));
