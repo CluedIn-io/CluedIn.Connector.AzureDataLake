@@ -1,0 +1,187 @@
+parameters:
+  githubServiceConnection: github
+  githubReleaseInMaster: true
+  publicReleaseForMaster: true
+  executeIntegrationTests: false
+  publishCodeCoverage: false
+  createIntegrationEnvironmentScriptFilePath: ''
+  createIntegrationEnvironmentScriptArguments: ''
+  deleteIntegrationEnvironmentScriptFilePath: ''
+  deleteIntegrationEnvironmentScriptArguments: ''
+  useGitVersionDotNetTool: false
+  
+steps:
+- checkout: self
+  persistCredentials: true
+  fetchDepth: 0
+
+- task: UseDotNet@2
+  inputs:
+    packageType: 'sdk'
+    useGlobalJson: true
+
+- ${{ if eq(parameters.useGitVersionDotNetTool, true) }}:
+  - template: common/gitversion-dotnet-tool.yml
+- ${{ if not(eq(parameters.useGitVersionDotNetTool, true)) }}:
+  - template: common/gitversion.yml
+
+# Build
+- task: DotNetCoreCLI@2
+  displayName: 'Build solution'
+  inputs:
+    command: 'build'
+    projects: '**/*.sln'
+    arguments: '--configuration $(buildConfiguration)'
+
+# Unit Test
+- task: DotNetCoreCLI@2
+  displayName: 'Run Unit tests'
+  inputs:
+    command: 'test'
+    projects: 'test/unit/**/*.csproj'
+    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory) /p:CollectCoverage=true /p:Exclude="[xunit.*]*%2c[*.Test]*" --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+
+# Integration Test
+- task: PowerShell@2
+  displayName: 'Setup Integration Test Environment'
+  inputs:
+    filePath: ${{ parameters.createIntegrationEnvironmentScriptFilePath }}
+    arguments: ${{ parameters.createIntegrationEnvironmentScriptArguments }}
+  condition: and ( succeeded(), ${{ parameters.executeIntegrationTests }}, ${{ ne(parameters.createIntegrationEnvironmentScriptFilePath, '') }})
+ 
+- task: DotNetCoreCLI@2
+  displayName: 'Run Integration tests'
+  condition: and ( succeeded(), ${{ parameters.executeIntegrationTests }})
+  inputs:
+    command: 'test'
+    testRunTitle: 'Integration Tests'
+    nobuild: true
+    projects: 'test/integration/**/*.csproj'
+    arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+
+- task: PowerShell@2
+  displayName: 'Tear Down Integration Test Environment'
+  inputs:
+    filePath: ${{ parameters.deleteIntegrationEnvironmentScriptFilePath }}
+    arguments: ${{ parameters.deleteIntegrationEnvironmentScriptArguments }}
+  condition: and ( always(), ${{ parameters.executeIntegrationTests }}, ${{ ne(parameters.deleteIntegrationEnvironmentScriptFilePath, '') }})
+
+# Publish Code Coverage
+- task: PublishCodeCoverageResults@1
+  displayName: 'Publish code coverage report'
+  condition: and ( succeeded(), ${{ parameters.publishCodeCoverage }})
+  inputs:
+    codeCoverageTool: 'Cobertura'
+    summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+
+# set repository details as environment variables as setting them via buildProperties in DotNetCoreCLI@2 doesn't work with all sdk versions
+- task: PowerShell@2
+  displayName: 'Set extra environment vars for pack'
+  inputs:
+    targetType: inline
+    script: |
+      Write-Host ("##vso[task.setvariable variable=RepositoryUrl;]$(Build.Repository.Uri)")
+      Write-Host ("##vso[task.setvariable variable=RepositoryCommit;]$(Build.SourceVersion)")
+      Write-Host ("##vso[task.setvariable variable=RepositoryType;]git")
+
+- task: DotNetCoreCLI@2
+  displayName: 'Create NuGet packages'
+  inputs:
+    command: 'pack'
+    packagesToPack: 'src/**/*.csproj'
+    packDirectory: '$(Build.ArtifactStagingDirectory)/nuget'
+    versioningScheme: 'byEnvVar'
+    versionEnvVar: GITVERSION_SEMVER
+    includeSymbols: true
+    nugetConfigPath: nuget.config
+
+# Publish Artifacts
+- task: PublishPipelineArtifact@0
+  displayName: 'Create Pipeline Artifact'
+  inputs:
+    artifactName: 'Nuget'
+    targetPath: $(Build.ArtifactStagingDirectory)/nuget
+
+# Add Git tag for GitHubRelease to work
+- script: |
+     git tag $(Build.BuildNumber)
+     git push origin $(Build.BuildNumber)
+  workingDirectory: $(Build.SourcesDirectory)
+  displayName: Add Git tag
+  condition: and ( succeeded(), or(startsWith(variables['Build.SourceBranch'], 'refs/heads/master'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release')), ${{ parameters.githubReleaseInMaster }})
+
+# Create draft GitHub for release branches. This helps validate issues such as missing release notes
+- task: GitHubRelease@1
+  condition: and ( succeeded(), or(startsWith(variables['Build.SourceBranch'], 'refs/heads/master'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release')), ${{ parameters.githubReleaseInMaster }})
+  displayName: Create GitHub release
+  inputs:
+    ${{ if not(startsWith(variables['Build.SourceBranch'], 'refs/heads/master')) }}: 
+      isDraft: true
+    gitHubConnection: '${{ parameters.githubServiceConnection }}'
+    repositoryName: '$(Build.Repository.Name)'
+    action: 'create'
+    target: '$(Build.SourceVersion)'
+    tagSource: 'userSpecifiedTag'
+    tag: '$(Build.BuildNumber)'
+    title: 'v$(Build.BuildNumber)'
+    releaseNotesFilePath: 'docs/$(GitVersion.MajorMinorPatch)-release-notes.md'
+    changeLogCompareToRelease: 'lastFullRelease'
+    changeLogType: 'commitBased'
+    assets: '$(Build.ArtifactStagingDirectory)/nuget/**/*.nupkg'
+    
+# retain release and master builds
+- task: PowerShell@2
+  condition: and(succeeded(), not(canceled()), or (startsWith(variables['Build.SourceBranch'], 'refs/heads/master'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release')))
+  name: RetainReleaseBuild
+  displayName: Retain Release Build
+  inputs:
+    failOnStderr: true
+    targetType: 'inline'
+    script: |
+      $contentType = "application/json";
+      $headers = @{ Authorization = 'Bearer $(System.AccessToken)' };
+      $rawRequest = @{ daysValid = 36500; definitionId = $(System.DefinitionId); ownerId = 'User:$(Build.RequestedForId)'; protectPipeline = $false; runId = $(Build.BuildId) };
+      $request = ConvertTo-Json @($rawRequest);
+      $uri = "$(System.CollectionUri)$(System.TeamProject)/_apis/build/retention/leases?api-version=6.0-preview.1";
+      Invoke-RestMethod -uri $uri -method POST -Headers $headers -ContentType $contentType -Body $request;
+
+# Push NuGet packages to Develop
+- task: NuGetCommand@2
+  displayName: 'Push to develop feed'
+  condition: and ( succeeded(), or(startsWith(variables['Build.SourceBranch'], 'refs/heads/release'), startsWith(variables['Build.SourceBranch'], 'refs/heads/ama'), in(variables['Build.SourceBranch'], 'refs/heads/develop')))
+  inputs:
+    command: 'push'
+    packagesToPush: '$(Build.ArtifactStagingDirectory)/nuget/**/*.nupkg'
+    allowPackageConflicts: true
+    publishVstsFeed: 'develop'
+    includeSymbols: true
+
+# Push NuEt to release feed
+- task: NuGetCommand@2
+  displayName: 'Push to release feed'
+  condition: and ( succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/master'))
+  inputs:
+    command: 'push'
+    packagesToPush: '$(Build.ArtifactStagingDirectory)/nuget/**/*.nupkg'
+    allowPackageConflicts: true
+    publishVstsFeed: 'release'
+    includeSymbols: false
+
+# Publish to public feed if required
+- task: NuGetCommand@2
+  displayName: 'Push to release feed'
+  condition: and ( succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/master'), ${{ parameters.publicReleaseForMaster }})
+  inputs:
+    command: 'push'
+    packagesToPush: '$(Build.ArtifactStagingDirectory)/nuget/**/*.nupkg'
+    allowPackageConflicts: true
+    publishVstsFeed: 'Public/Public'
+    includeSymbols: false
+
+## Delete beta Git tag
+#- script: |
+#     git push origin :refs/tags/$(Build.BuildNumber)
+#  workingDirectory: $(Build.SourcesDirectory)
+#  displayName: Delete beta Git tag
+#  condition: and (startsWith(variables['Build.SourceBranch'], 'refs/heads/release'), ${{ parameters.githubReleaseInMaster }})
+#

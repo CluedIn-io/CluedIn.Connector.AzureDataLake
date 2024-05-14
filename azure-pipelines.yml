@@ -33,7 +33,7 @@ resources:
       ref: ${{ parameters.pipelineTemplateRef }}
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'ubuntu-latest'
 
 variables:
   - name: testFolderPath
@@ -50,11 +50,12 @@ steps:
     displayName: Install .NET SDK 6.0
     inputs:
       version: 6.0.x
-  # Configure NuGet
+      installationPath: ../share/dotnet
+
   - task: NuGetAuthenticate@0
     displayName: 'Authenticate with nuget'
 
-  - template: crawler.build.yml@templates
+  - template: build/crawler.build.yml
     parameters:
       githubReleaseInMaster: true
       publicReleaseForMaster: true
@@ -64,3 +65,4 @@ steps:
       deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
       deleteIntegrationEnvironmentScriptArguments: '-Action TearDown'
       publishCodeCoverage: true
+      useGitVersionDotNetTool: true
