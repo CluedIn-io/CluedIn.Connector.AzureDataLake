@@ -31,7 +31,8 @@ function Run-Setup() {
 	docker run -d -e "ACCEPT_EULA=Y" --name "datalaketest" -p ":1433" -e "MSSQL_SA_PASSWORD=$($password)" mcr.microsoft.com/mssql/server:2022-latest
 	$port = (docker inspect "datalaketest" | ConvertFrom-Json).NetworkSettings.Ports."1433/tcp".HostPort
 	$connectionString = "Data Source=localhost,$($port);Initial Catalog=$($databaseName);User Id=sa;$($password);connection timeout=0;Max Pool Size=200;Pooling=True"
-	Set-Variable "ADL2_STREAMCACHE" $connectionString
+	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
+	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
 	Start-Sleep 60
 	docker exec datalaketest /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'yourStrong(!)Password' -Q 'CREATE DATABASE [DataStore.Db.Streamcache]'
 }

@@ -633,7 +633,9 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             Assert.NotNull(accountName);
             var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
             Assert.NotNull(accountKey);
-            var streamCacheConnectionString = Environment.GetEnvironmentVariable("ADL2_STREAMCACHE");
+            var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ADL2_STREAMCACHE");
+            var streamCacheConnectionString = Convert.FromBase64String(streamCacheConnectionStringEncoded);
+            Console.WriteLine(streamCacheConnectionString);
             Assert.NotNull(accountKey);
 
             var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}";
