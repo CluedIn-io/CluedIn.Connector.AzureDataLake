@@ -14,7 +14,7 @@ function Check-Errors($operationName) {
 }
 
 function Set-Variable($key, $value) {
-	Write-Host "Setting variable '$key'."
+	Write-Host "Setting variable '$key'. to '$value'."
 	# We set this so that we can run things locally if we want to.
 	[Environment]::SetEnvironmentVariable($key, $value)
 	
@@ -30,7 +30,8 @@ function Run-Setup() {
 	$databaseName = "DataStore.Db.StreamCache"
 	docker run -d -e "ACCEPT_EULA=Y" --name "datalaketest" -p ":1433" -e "MSSQL_SA_PASSWORD=$($password)" mcr.microsoft.com/mssql/server:2022-latest
 	$port = (docker inspect "datalaketest" | ConvertFrom-Json).NetworkSettings.Ports."1433/tcp".HostPort
-	Set-Variable "ADL2_STREAMCACHE" "Data Source=localhost,$($port);Initial Catalog=$($databaseName);User Id=sa;$($password);connection timeout=0;Max Pool Size=200;Pooling=True"
+	$connectionString = "Data Source=localhost,$($port);Initial Catalog=$($databaseName);User Id=sa;$($password);connection timeout=0;Max Pool Size=200;Pooling=True"
+	Set-Variable "ADL2_STREAMCACHE" $connectionString
 	Start-Sleep 60
 	docker exec datalaketest /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'yourStrong(!)Password' -Q 'CREATE DATABASE [DataStore.Db.Streamcache]'
 }
