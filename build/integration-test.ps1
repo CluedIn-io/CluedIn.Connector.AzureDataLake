@@ -4,6 +4,19 @@ param(
 	[ValidateSet('SetUp','TearDown')]
 	[string]$Action
 )
+function WaitFor {
+	param(
+		[scriptblock]$Command,
+		[string]$Message
+	)
+	$job = Start-Job $Command
+	do {
+		$found = Receive-Job $job
+		$found | Write-Host
+	} until ($found  | Select-String $Message)
+	Stop-Job $job
+	Remove-Job $job
+}
 
 function Check-Errors($operationName) {
 	if ($?)	{
@@ -28,12 +41,14 @@ function Set-Variable($key, $value) {
 function Run-Setup() {
 	$password = "yourStrong(!)Password"
 	$databaseName = "DataStore.Db.StreamCache"
-	docker run -d -e "ACCEPT_EULA=Y" --name "datalaketest" -p ":1433" -e "MSSQL_SA_PASSWORD=$($password)" mcr.microsoft.com/mssql/server:2022-latest
-	$port = ((docker inspect datalaketest | convertfrom-json).NetworkSettings.Ports."1433/tcp" | Where-Object { $_.HostIp -eq '0.0.0.0'}).HostPort
+	$containerName = "datalaketest"
+	$sqlServerImage = "mcr.microsoft.com/mssql/server:2022-latest"
+	docker run -d -e "ACCEPT_EULA=Y" --name $containerName -p ":1433" -e "MSSQL_SA_PASSWORD=$($password)" $sqlServerImage
+	$port = ((docker inspect $containerName | convertfrom-json).NetworkSettings.Ports."1433/tcp" | Where-Object { $_.HostIp -eq '0.0.0.0'}).HostPort
 	$connectionString = "Data Source=localhost,$($port);Initial Catalog=$($databaseName);User Id=sa;Password=$($password);connection timeout=0;Max Pool Size=200;Pooling=True"
 	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
 	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
-	Start-Sleep 60
+	WaitFor { docker logs $containerName -f } "MS SQL Ready for requests"
 	docker exec datalaketest /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'yourStrong(!)Password' -Q 'CREATE DATABASE [DataStore.Db.Streamcache]'
 }
 
