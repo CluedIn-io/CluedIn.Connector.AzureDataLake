@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 using Azure.Storage;
@@ -634,7 +635,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
             Assert.NotNull(accountKey);
             var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ADL2_STREAMCACHE");
-            var streamCacheConnectionString = Convert.FromBase64String(streamCacheConnectionStringEncoded);
+            var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
             Console.WriteLine(streamCacheConnectionString);
             Assert.NotNull(accountKey);
 
