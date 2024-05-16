@@ -34,7 +34,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         private static readonly JsonSerializerSettings _serializerSettings = GetJsonSerializerSettings();
 
         // TODO: Handle ushort, ulong, uint
-        private static readonly Dictionary<Type, string> DotNetToSqlTypeMap = new ()
+        private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new ()
         {
             [typeof(bool)] = "BIT",
             [typeof(byte)] = "TINYINT",
@@ -132,7 +132,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
             else
             {
-                return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+                return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
             }
         }
 
@@ -144,27 +144,33 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
         }
 
-        private async Task EnsureCacheTableExists(SqlConnection connection, string tableName, ICollection<string> propertyKeys, Dictionary<string, Type> dataValueTypes)
+        private static async Task EnsureCacheTableExists(
+            SqlConnection connection,
+            string tableName,
+            ICollection<string> propertyKeys,
+            Dictionary<string, Type> dataValueTypes)
         {
             var propertiesColumns = propertyKeys.Select(key =>
             {
                 var type = dataValueTypes[key];
-                var sqlType = DotNetToSqlTypeMap.TryGetValue(type, out var sqlDbType) ? sqlDbType : DotNetToSqlTypeMap[typeof(string)];
+                var sqlType = _dotNetToSqlTypeMap.TryGetValue(type, out var sqlDbType) ? sqlDbType : _dotNetToSqlTypeMap[typeof(string)];
                 return $"[{key}] {sqlType}";
             });
-            var command = new SqlCommand(
-                $"""
-                        IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
-                        CREATE TABLE [{tableName}] (
-                            {AzureDataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
-                            {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
-                            [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
-                            [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
-                            PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
-                            CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({AzureDataLakeConstants.IdKey})
-                        ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
-                        """, connection);
-            command.CommandType = CommandType.Text;
+            var createTableSql = $"""
+                IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
+                CREATE TABLE [{tableName}] (
+                    {AzureDataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
+                    {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
+                    [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
+                    [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
+                    PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
+                    CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({AzureDataLakeConstants.IdKey})
+                ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
+                """;
+            var command = new SqlCommand(createTableSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
             _ = await command.ExecuteNonQueryAsync();
         }
 
@@ -212,8 +218,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 if (syncItem.ChangeType == VersionChangeType.Removed)
                 {
-                    var command = new SqlCommand($"DELETE FROM [{tableName}] WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey}", connection);
-                    command.CommandType = CommandType.Text;
+                    var deleteCommandText = $"DELETE FROM [{tableName}] WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey}";
+                    var command = new SqlCommand(deleteCommandText, connection)
+                    {
+                        CommandType = CommandType.Text
+                    };
                     command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}", syncItem.EntityId));
                     var rowsAffected = await command.ExecuteNonQueryAsync();
                     if (rowsAffected != 1)
@@ -223,8 +232,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 }
                 else
                 {
-                    var command = new SqlCommand(
-                        $"""
+                    var insertOrUpdateSql = $"""
                         IF EXISTS (SELECT 1 FROM [{tableName}] WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey})  
                         BEGIN  
                         	UPDATE [{tableName}]   
@@ -237,8 +245,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                         	INSERT INTO [{tableName}] ({AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
                             VALUES(@{AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
                         END
-                        """, connection);
-                    command.CommandType = CommandType.Text;
+                        """;
+                    var command = new SqlCommand(insertOrUpdateSql, connection)
+                    {
+                        CommandType = CommandType.Text
+                    };
                     command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}", syncItem.EntityId));
 
                     for (var i = 0; i < propertyKeys.Count; i++)
@@ -277,14 +288,18 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 return DBNull.Value;
             }
 
-            if (DotNetToSqlTypeMap.ContainsKey(value.GetType()))
+            if (_dotNetToSqlTypeMap.ContainsKey(value.GetType()))
             {
                 return value;
             }
             return JsonConvert.SerializeObject(value, _serializerSettings);
         }
 
-        private async Task<SaveResult> WriteToOutputImmediately(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data, Dictionary<string, Type> dataValueTypes)
+        private async Task<SaveResult> WriteToOutputImmediately(
+            IReadOnlyStreamModel streamModel,
+            IReadOnlyConnectorEntityData connectorEntityData,
+            AzureDataLakeConnectorJobData configurations,
+            Dictionary<string, object> data)
         {
             if (streamModel.Mode == StreamMode.Sync)
             {
@@ -412,7 +427,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Failed to perform operation '{syncItem.ChangeType}' to the test table.");
+                _logger.LogError(ex, "Failed to perform operation '{ChangeType}' to the test table.", syncItem.ChangeType);
                 throw;
             }
         }
@@ -499,7 +514,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             throw new NotImplementedException(nameof(RemoveContainer));
         }
 
-        private async Task DeleteCacheTableIfExists(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        private static async Task DeleteCacheTableIfExists(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
@@ -513,15 +528,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         private static async Task DeleteCacheTableIfExists(SqlConnection connection, string tableName)
         {
-            var command = new SqlCommand(
-                            $"""
+            var deleteTableSql = $"""
                 IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
                 ALTER TABLE dbo.[{tableName}]  SET ( SYSTEM_VERSIONING = Off )
 
                 DROP TABLE IF EXISTS [{tableName}];
                 DROP TABLE IF EXISTS [{tableName}_History];
-                """, connection);
-            command.CommandType = CommandType.Text;
+                """;
+            var command = new SqlCommand(deleteTableSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
             _ = await command.ExecuteNonQueryAsync();
         }
 

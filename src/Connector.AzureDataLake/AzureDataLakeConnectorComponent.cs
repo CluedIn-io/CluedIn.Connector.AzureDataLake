@@ -38,7 +38,7 @@ namespace CluedIn.Connector.AzureDataLake
             #region Schedule export schedule checker job
             Task.Run(async () =>
             {
-                bool isFirstTime = true;
+                var isFirstTime = true;
                 while (true)
                 {
                     try
@@ -142,7 +142,7 @@ namespace CluedIn.Connector.AzureDataLake
                                         OldContainerName = stream.ContainerName,
                                     };
 
-                                    Log.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{stream.Name}' ({stream.Id})");
+                                    Log.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{{StreamName}}' ({{StreamId}})", stream.Name, stream.Id);
 
                                     await streamRepository.SetupConnector(stream.Id, model, executionContext);
                                 }

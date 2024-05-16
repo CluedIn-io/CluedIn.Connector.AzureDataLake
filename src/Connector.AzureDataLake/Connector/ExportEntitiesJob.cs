@@ -52,8 +52,11 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
 
         var asOfTime = GetLastOccurence(args, configuration);
 
-        var command = new SqlCommand($"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'", connection);
-        command.CommandType = CommandType.Text;
+        var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
+        var command = new SqlCommand(getDataSql, connection)
+        {
+            CommandType = CommandType.Text
+        };
         await using var reader = await command.ExecuteReaderAsync();
 
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)

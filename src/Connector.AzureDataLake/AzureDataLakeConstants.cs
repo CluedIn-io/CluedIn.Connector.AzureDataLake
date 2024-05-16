@@ -19,6 +19,7 @@ namespace CluedIn.Connector.AzureDataLake
         public const string UseCurrentTimeForExport = nameof(UseCurrentTimeForExport);
 
         public const string IdKey = "Id";
+        private const string StreamCacheConnectionKey = "StreamCache";
 
 
         public static class OutputFormats
@@ -70,7 +71,6 @@ namespace CluedIn.Connector.AzureDataLake
 
         private static AuthMethods GetAzureDataLakeAuthMethods(ApplicationContext applicationContext)
         {
-            const string StreamCacheConnectionKey = "StreamCache";
             string connectionString = null;
             if (applicationContext.System.ConnectionStrings.ConnectionStringExists(StreamCacheConnectionKey))
             {
@@ -78,42 +78,42 @@ namespace CluedIn.Connector.AzureDataLake
             }
             var controls = new List<Control>
             {
-                new Control
+                new ()
                 {
                     name = AccountName,
                     displayName = AccountName,
                     type = "input",
                     isRequired = true
                 },
-                new Control
+                new ()
                 {
                     name = AccountKey,
                     displayName = AccountKey,
                     type = "password",
                     isRequired = true
                 },
-                new Control
+                new ()
                 {
                     name = FileSystemName,
                     displayName = FileSystemName,
                     type = "input",
                     isRequired = true
                 },
-                new Control
+                new ()
                 {
                     name = DirectoryName,
                     displayName = DirectoryName,
                     type = "input",
                     isRequired = true
                 },
-                new Control
+                new ()
                 {
                     name = IsStreamCacheEnabled,
                     displayName = "Enable Stream Cache (Sync mode only)",
                     type = "checkbox",
                     isRequired = false,
                 },
-                new Control
+                new ()
                 {
                     name = OutputFormat,
                     displayName = "JSON (Stream Cache disabled), JSON/Parquet/CSV (Stream cache enabled)",
@@ -125,7 +125,7 @@ namespace CluedIn.Connector.AzureDataLake
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 controls.Add(
-                    new Control
+                    new ()
                     {
                         name = StreamCacheConnectionString,
                         displayName = "Stream Cache Connection String (SQL Server)",

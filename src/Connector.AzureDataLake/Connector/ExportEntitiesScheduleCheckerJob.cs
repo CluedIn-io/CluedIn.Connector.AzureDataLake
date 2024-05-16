@@ -15,7 +15,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector;
 
 internal class ExportEntitiesScheduleCheckerJob : AzureDataLakeJobBase
 {
-    public static readonly Dictionary<string, string> CronSchedules = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    public static readonly Dictionary<string, string> CronSchedules = new(StringComparer.OrdinalIgnoreCase)
     {
         [AzureDataLakeConstants.JobScheduleNames.Hourly] = "0 0/1 * * *",
         [AzureDataLakeConstants.JobScheduleNames.Daily] = "0 0 1-31 * *",

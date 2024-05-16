@@ -604,8 +604,10 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             streamRepository.Setup(x => x.GetStream(streamId)).ReturnsAsync(streamModel);
             container.Register(Component.For<IStreamRepository>().Instance(streamRepository.Object));
 
-            var cache = new Mock<InMemoryApplicationCache>(MockBehavior.Loose, container);
-            cache.CallBase = true;
+            var cache = new Mock<InMemoryApplicationCache>(MockBehavior.Loose, container)
+            {
+                CallBase = true
+            };
             container.Register(Component.For<IApplicationCache>().Instance(cache.Object));
 
             var systemConnectionStrings = new Mock<ISystemConnectionStrings>();
@@ -716,8 +718,11 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 await connection.OpenAsync();
                 var tableName = CacheTableHelper.GetCacheTableName(streamId);
 
-                var sqlCommand = new SqlCommand($"SELECT COUNT(*) FROM [{tableName}]", connection);
-                sqlCommand.CommandType = CommandType.Text;
+                var getCountSql = $"SELECT COUNT(*) FROM [{tableName}]";
+                var sqlCommand = new SqlCommand(getCountSql, connection)
+                {
+                    CommandType = CommandType.Text
+                };
                 var total = (int)await sqlCommand.ExecuteScalarAsync();
 
                 Assert.Equal(1, total);
