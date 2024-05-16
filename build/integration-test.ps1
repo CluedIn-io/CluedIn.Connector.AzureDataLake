@@ -45,7 +45,7 @@ function Get-ContainerName() {
 function Run-Setup() {
 	$password = "yourStrong(!)Password"
 	$databaseName = "DataStore.Db.StreamCache"
-	$containerName = "datalaketest"
+	$containerName = Get-ContainerName
 	$sqlServerImage = "mcr.microsoft.com/mssql/server:2022-latest"
 	docker run -d -e "ACCEPT_EULA=Y" --name $containerName -p ":1433" -e "MSSQL_SA_PASSWORD=$($password)" $sqlServerImage
 	$port = ((docker inspect $containerName | convertfrom-json).NetworkSettings.Ports."1433/tcp" | Where-Object { $_.HostIp -eq '0.0.0.0'}).HostPort
