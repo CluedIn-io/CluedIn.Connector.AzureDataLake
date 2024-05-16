@@ -72,7 +72,7 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         {
             return JToken.Parse(stringValue);
         }
-        catch (JsonReaderException _)
+        catch (JsonReaderException)
         {
             return value;
         }
