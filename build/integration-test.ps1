@@ -58,6 +58,9 @@ function Run-Setup() {
 	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
 	Write-Host "##[command]docker logs -f $($containerName)"
 	WaitFor { docker container logs --follow "datalaketest" } "SQL Server is now ready for client connections"
+	
+	# Wait for additional 5 seconds to make sure it's really ready
+	Start-Sleep 5
 	docker exec $containerName /opt/mssql-tools/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -Q 'CREATE DATABASE [$databaseName]'
 }
 
