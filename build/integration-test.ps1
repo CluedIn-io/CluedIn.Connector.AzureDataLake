@@ -38,6 +38,10 @@ function Set-Variable($key, $value) {
 	Write-Host "##vso[task.setvariable variable=$key]$value"	
 }
 
+function Get-ContainerName() {
+	return "datalaketest"
+}
+
 function Run-Setup() {
 	$password = "yourStrong(!)Password"
 	$databaseName = "DataStore.Db.StreamCache"
@@ -48,8 +52,8 @@ function Run-Setup() {
 	$connectionString = "Data Source=localhost,$($port);Initial Catalog=$($databaseName);User Id=sa;Password=$($password);connection timeout=0;Max Pool Size=200;Pooling=True"
 	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
 	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
-	Write-Host "##[command]docker logs -f $containerName"
-	WaitFor { docker container logs --follow "datalaketest" } "MS SQL Ready for requests"
+	Write-Host "##[command]docker logs -f $()"
+	WaitFor { docker container logs --follow "$(Get-ContainerName)" } "SQL Server is now ready for client connections"
 	docker exec datalaketest /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'yourStrong(!)Password' -Q 'CREATE DATABASE [DataStore.Db.Streamcache]'
 }
 
