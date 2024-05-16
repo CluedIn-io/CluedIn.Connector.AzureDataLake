@@ -50,7 +50,7 @@ function Run-Setup() {
 	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
 	Write-Host "##[command]docker logs -f $containerName"
 	docker logs --help
-	WaitFor { docker container logs '-f' $containerName" } "MS SQL Ready for requests"
+	WaitFor { docker container logs "--follow" $containerName } "MS SQL Ready for requests"
 	docker exec datalaketest /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'yourStrong(!)Password' -Q 'CREATE DATABASE [DataStore.Db.Streamcache]'
 }
 
@@ -67,7 +67,7 @@ function Run() {
 		}
 		
 		"SetUp" {
-			Write-Host "Performing set up using location '$ResourceLocation'."
+			Write-Host "Performing set up."
 			Run-SetUp
 		}
 	}
