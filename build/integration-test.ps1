@@ -48,8 +48,8 @@ function Run-Setup() {
 	$connectionString = "Data Source=localhost,$($port);Initial Catalog=$($databaseName);User Id=sa;Password=$($password);connection timeout=0;Max Pool Size=200;Pooling=True"
 	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
 	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
-	Write-Host "##[command]docker logs $containerName -f"
-	WaitFor { docker logs -f $containerName } "MS SQL Ready for requests"
+	Write-Host "##[command]docker logs -f $containerName"
+	WaitFor { docker logs --follow $containerName } "MS SQL Ready for requests"
 	docker exec datalaketest /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'yourStrong(!)Password' -Q 'CREATE DATABASE [DataStore.Db.Streamcache]'
 }
 
