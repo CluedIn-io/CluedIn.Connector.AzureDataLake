@@ -109,7 +109,7 @@ namespace CluedIn.Connector.AzureDataLake
                 new Control
                 {
                     name = IsStreamCacheEnabled,
-                    displayName = "Enable Stream Cache",
+                    displayName = "Enable Stream Cache (Sync mode only)",
                     type = "checkbox",
                     isRequired = false,
                 },

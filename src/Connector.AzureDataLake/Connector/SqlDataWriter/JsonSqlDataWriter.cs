@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -8,6 +11,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter;
 
@@ -25,10 +29,18 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         {
             await writer.WriteStartObjectAsync();
 
-            for (var i = 0; i < fieldNames.Count; i++)
-            {
-                await writer.WritePropertyNameAsync(reader.GetName(i));
-                await writer.WriteValueAsync(reader.GetValue(i));
+            foreach(var field in fieldNames)
+            { 
+                await writer.WritePropertyNameAsync(field);
+                var value = GetValue(field, reader);
+                if (value is JArray jArray)
+                {
+                    await jArray.WriteToAsync(writer);
+                }
+                else
+                {
+                    await writer.WriteValueAsync(value);
+                }
             }
 
             await writer.WriteEndObjectAsync();
@@ -40,5 +52,29 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         }
         await writer.WriteEndArrayAsync();
         return totalProcessed;
+    }
+
+    protected override object GetValue(string key, SqlDataReader reader)
+    {
+        var value = base.GetValue(key, reader);
+        if (value == null)
+        {
+            return null;
+        }
+
+
+        if (value is not string stringValue)
+        {
+            return value;
+        }
+
+        try
+        {
+            return JToken.Parse(stringValue);
+        }
+        catch (JsonReaderException _)
+        {
+            return value;
+        }
     }
 }

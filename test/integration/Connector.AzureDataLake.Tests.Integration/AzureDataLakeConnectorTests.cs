@@ -420,147 +420,149 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
                 Assert.Equal(
                     $$"""
-                {
-                  "user.lastName": "Picard",
-                  "Name": "Jean Luc Picard",
-                  "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
-                  "PersistHash": "etypzcezkiehwq8vw4oqog==",
-                  "PersistVersion": 1,
-                  "OriginEntityCode": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
-                  "EntityType": "/Person",
-                  "Codes": [
-                    "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"
-                  ],
-                  "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
-                  "ContainerName": "test",
-                  "OutgoingEdges": [
-                    {
-                      "FromReference": {
-                        "Code": {
-                          "Origin": {
-                            "Code": "Somewhere",
-                            "Id": null
-                          },
-                          "Value": "5678",
-                          "Key": "/EntityB#Somewhere:5678",
-                          "Type": {
-                            "IsEntityContainer": false,
-                            "Root": null,
-                            "Code": "/EntityB"
+                     [
+                      {
+                        "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
+                        "Codes": [
+                          "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"
+                        ],
+                        "ContainerName": "test",
+                        "EntityType": "/Person",
+                        "IncomingEdges": [
+                          {
+                            "FromReference": {
+                              "Code": {
+                                "Origin": {
+                                  "Code": "Acceptance",
+                                  "Id": null
+                                },
+                                "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
+                                "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                                "Type": {
+                                  "IsEntityContainer": false,
+                                  "Root": null,
+                                  "Code": "/Person"
+                                }
+                              },
+                              "Type": {
+                                "IsEntityContainer": false,
+                                "Root": null,
+                                "Code": "/Person"
+                              },
+                              "Name": null,
+                              "Properties": null,
+                              "PropertyCount": null,
+                              "EntityId": null,
+                              "IsEmpty": false
+                            },
+                            "ToReference": {
+                              "Code": {
+                                "Origin": {
+                                  "Code": "Somewhere",
+                                  "Id": null
+                                },
+                                "Value": "1234",
+                                "Key": "/EntityA#Somewhere:1234",
+                                "Type": {
+                                  "IsEntityContainer": false,
+                                  "Root": null,
+                                  "Code": "/EntityA"
+                                }
+                              },
+                              "Type": {
+                                "IsEntityContainer": false,
+                                "Root": null,
+                                "Code": "/EntityA"
+                              },
+                              "Name": null,
+                              "Properties": null,
+                              "PropertyCount": null,
+                              "EntityId": null,
+                              "IsEmpty": false
+                            },
+                            "EdgeType": {
+                              "Root": null,
+                              "Code": "/EntityA"
+                            },
+                            "HasProperties": false,
+                            "Properties": {},
+                            "CreationOptions": 0,
+                            "Weight": null,
+                            "Version": 0
                           }
-                        },
-                        "Type": {
-                          "IsEntityContainer": false,
-                          "Root": null,
-                          "Code": "/EntityB"
-                        },
-                        "Name": null,
-                        "Properties": null,
-                        "PropertyCount": null,
-                        "EntityId": null,
-                        "IsEmpty": false
-                      },
-                      "ToReference": {
-                        "Code": {
-                          "Origin": {
-                            "Code": "Acceptance",
-                            "Id": null
-                          },
-                          "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
-                          "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
-                          "Type": {
-                            "IsEntityContainer": false,
-                            "Root": null,
-                            "Code": "/Person"
+                        ],
+                        "Name": "Jean Luc Picard",
+                        "OriginEntityCode": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                        "OutgoingEdges": [
+                          {
+                            "FromReference": {
+                              "Code": {
+                                "Origin": {
+                                  "Code": "Somewhere",
+                                  "Id": null
+                                },
+                                "Value": "5678",
+                                "Key": "/EntityB#Somewhere:5678",
+                                "Type": {
+                                  "IsEntityContainer": false,
+                                  "Root": null,
+                                  "Code": "/EntityB"
+                                }
+                              },
+                              "Type": {
+                                "IsEntityContainer": false,
+                                "Root": null,
+                                "Code": "/EntityB"
+                              },
+                              "Name": null,
+                              "Properties": null,
+                              "PropertyCount": null,
+                              "EntityId": null,
+                              "IsEmpty": false
+                            },
+                            "ToReference": {
+                              "Code": {
+                                "Origin": {
+                                  "Code": "Acceptance",
+                                  "Id": null
+                                },
+                                "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
+                                "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                                "Type": {
+                                  "IsEntityContainer": false,
+                                  "Root": null,
+                                  "Code": "/Person"
+                                }
+                              },
+                              "Type": {
+                                "IsEntityContainer": false,
+                                "Root": null,
+                                "Code": "/Person"
+                              },
+                              "Name": null,
+                              "Properties": null,
+                              "PropertyCount": null,
+                              "EntityId": null,
+                              "IsEmpty": false
+                            },
+                            "EdgeType": {
+                              "Root": null,
+                              "Code": "/EntityB"
+                            },
+                            "HasProperties": false,
+                            "Properties": {},
+                            "CreationOptions": 0,
+                            "Weight": null,
+                            "Version": 0
                           }
-                        },
-                        "Type": {
-                          "IsEntityContainer": false,
-                          "Root": null,
-                          "Code": "/Person"
-                        },
-                        "Name": null,
-                        "Properties": null,
-                        "PropertyCount": null,
-                        "EntityId": null,
-                        "IsEmpty": false
-                      },
-                      "EdgeType": {
-                        "Root": null,
-                        "Code": "/EntityB"
-                      },
-                      "HasProperties": false,
-                      "Properties": {},
-                      "CreationOptions": 0,
-                      "Weight": null,
-                      "Version": 0
-                    }
-                  ],
-                  "IncomingEdges": [
-                    {
-                      "FromReference": {
-                        "Code": {
-                          "Origin": {
-                            "Code": "Acceptance",
-                            "Id": null
-                          },
-                          "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
-                          "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
-                          "Type": {
-                            "IsEntityContainer": false,
-                            "Root": null,
-                            "Code": "/Person"
-                          }
-                        },
-                        "Type": {
-                          "IsEntityContainer": false,
-                          "Root": null,
-                          "Code": "/Person"
-                        },
-                        "Name": null,
-                        "Properties": null,
-                        "PropertyCount": null,
-                        "EntityId": null,
-                        "IsEmpty": false
-                      },
-                      "ToReference": {
-                        "Code": {
-                          "Origin": {
-                            "Code": "Somewhere",
-                            "Id": null
-                          },
-                          "Value": "1234",
-                          "Key": "/EntityA#Somewhere:1234",
-                          "Type": {
-                            "IsEntityContainer": false,
-                            "Root": null,
-                            "Code": "/EntityA"
-                          }
-                        },
-                        "Type": {
-                          "IsEntityContainer": false,
-                          "Root": null,
-                          "Code": "/EntityA"
-                        },
-                        "Name": null,
-                        "Properties": null,
-                        "PropertyCount": null,
-                        "EntityId": null,
-                        "IsEmpty": false
-                      },
-                      "EdgeType": {
-                        "Root": null,
-                        "Code": "/EntityA"
-                      },
-                      "HasProperties": false,
-                      "Properties": {},
-                      "CreationOptions": 0,
-                      "Weight": null,
-                      "Version": 0
-                    }
-                  ]
-                }
-                """, content);
+                        ],
+                        "PersistHash": "etypzcezkiehwq8vw4oqog==",
+                        "PersistVersion": 1,
+                        "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
+                        "user.lastName": "Picard"
+                      }
+                    ]
+                    """, content);
 
                 data.ChangeType = VersionChangeType.Removed;
                 await connector.StoreData(context, streamModel.Object, data);
@@ -742,15 +744,31 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                     [
                       {
                         "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
-                        "Codes": "[\"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0\"]",
+                        "Codes": [
+                          "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"
+                        ],
                         "ContainerName": "test",
                         "EntityType": "/Person",
-                        "IncomingEdges": "[{\"attribute-type\":\"/EntityA\",\"attribute-creationOptions\":\"Default\",\"attribute-from\":\"C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0\",\"attribute-to\":\"C:/EntityA#Somewhere:1234\"}]",
+                        "IncomingEdges": [
+                          {
+                            "attribute-type": "/EntityA",
+                            "attribute-creationOptions": "Default",
+                            "attribute-from": "C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                            "attribute-to": "C:/EntityA#Somewhere:1234"
+                          }
+                        ],
                         "Name": "Jean Luc Picard",
                         "OriginEntityCode": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
-                        "OutgoingEdges": "[{\"attribute-type\":\"/EntityB\",\"attribute-creationOptions\":\"Default\",\"attribute-from\":\"C:/EntityB#Somewhere:5678\",\"attribute-to\":\"C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0\"}]",
+                        "OutgoingEdges": [
+                          {
+                            "attribute-type": "/EntityB",
+                            "attribute-creationOptions": "Default",
+                            "attribute-from": "C:/EntityB#Somewhere:5678",
+                            "attribute-to": "C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"
+                          }
+                        ],
                         "PersistHash": "etypzcezkiehwq8vw4oqog==",
-                        "PersistVersion": "1",
+                        "PersistVersion": 1,
                         "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
                         "user.lastName": "Picard"
                       }

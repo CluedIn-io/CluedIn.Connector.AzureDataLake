@@ -31,6 +31,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
+        private static readonly JsonSerializerSettings _serializerSettings = GetJsonSerializerSettings();
 
         // TODO: Handle ushort, ulong, uint
         private static readonly Dictionary<Type, string> DotNetToSqlTypeMap = new ()
@@ -280,8 +281,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 return value;
             }
-
-            return JsonUtility.Serialize(value);
+            return JsonConvert.SerializeObject(value, _serializerSettings);
         }
 
         private async Task<SaveResult> WriteToOutputImmediately(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data, Dictionary<string, Type> dataValueTypes)
@@ -296,13 +296,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 }
                 else
                 {
-                    var settings = new JsonSerializerSettings
-                    {
-                        TypeNameHandling = TypeNameHandling.None,
-                        Formatting = Formatting.Indented,
-                    };
-
-                    var json = JsonConvert.SerializeObject(data, settings);
+                    var json = JsonConvert.SerializeObject(data, GetJsonSerializerSettings());
 
                     await _client.SaveData(configurations, json, filePathAndName, JsonMimeType);
 
@@ -318,6 +312,15 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
 
             return SaveResult.Success;
+        }
+
+        private static JsonSerializerSettings GetJsonSerializerSettings()
+        {
+            return new JsonSerializerSettings
+            {
+                TypeNameHandling = TypeNameHandling.None,
+                Formatting = Formatting.Indented,
+            };
         }
 
         public override Task<ConnectorLatestEntityPersistInfo> GetLatestEntityPersistInfo(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, Guid entityId)
