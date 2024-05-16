@@ -43,22 +43,26 @@ function Get-ContainerName() {
 }
 
 function Run-Setup() {
-	$password = "yourStrong(!)Password"
 	$databaseName = "DataStore.Db.StreamCache"
-	$containerName = Get-ContainerName
+	$databaseHost = "localhost"
+	$databaseUser = "sa"
+	$databasePassword = "yourStrong(!)Password"
+	$containerName = (Get-ContainerName)
 	$sqlServerImage = "mcr.microsoft.com/mssql/server:2022-latest"
-	docker run -d -e "ACCEPT_EULA=Y" --name $containerName -p ":1433" -e "MSSQL_SA_PASSWORD=$($password)" $sqlServerImage
+	
+	Write-Host "##[command]docker run -d -e `"ACCEPT_EULA=Y`" --name $containerName -p `":1433`" -e `"MSSQL_SA_PASSWORD=$($databasePassword)`" $sqlServerImage"
+	docker run -d -e "ACCEPT_EULA=Y" --name $containerName -p ":1433" -e "MSSQL_SA_PASSWORD=$($databasePassword)" $sqlServerImage
 	$port = ((docker inspect $containerName | convertfrom-json).NetworkSettings.Ports."1433/tcp" | Where-Object { $_.HostIp -eq '0.0.0.0'}).HostPort
-	$connectionString = "Data Source=localhost,$($port);Initial Catalog=$($databaseName);User Id=sa;Password=$($password);connection timeout=0;Max Pool Size=200;Pooling=True"
+	$connectionString = "Data Source=$($databaseHost),$($port);Initial Catalog=$($databaseName);User Id=$($databaseUser);Password=$($databasePassword);connection timeout=0;Max Pool Size=200;Pooling=True"
 	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
 	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
-	Write-Host "##[command]docker logs -f $()"
-	WaitFor { docker container logs --follow "$(Get-ContainerName)" } "SQL Server is now ready for client connections"
-	docker exec datalaketest /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'yourStrong(!)Password' -Q 'CREATE DATABASE [DataStore.Db.Streamcache]'
+	Write-Host "##[command]docker logs -f $($containerName)"
+	WaitFor { docker container logs --follow "datalaketest" } "SQL Server is now ready for client connections"
+	docker exec $containerName /opt/mssql-tools/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -Q 'CREATE DATABASE [$databaseName]'
 }
 
 function Run-TearDown() {
-	docker rm -f "datalaketest"
+	docker rm -f (Get-ContainerName)
 }
 
 function Run() {
