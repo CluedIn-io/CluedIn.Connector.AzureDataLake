@@ -8,7 +8,7 @@ parameters:
   - name: pipelineTemplateRef
     displayName: Pipeline Template Ref
     type: string
-    default: refs/heads/refactor
+    default: refs/heads/feature/git-version-tool
 
 trigger:
   branches:
