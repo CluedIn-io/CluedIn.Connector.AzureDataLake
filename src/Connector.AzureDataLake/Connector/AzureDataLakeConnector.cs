@@ -514,12 +514,18 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             throw new NotImplementedException(nameof(RemoveContainer));
         }
 
-        private static async Task DeleteCacheTableIfExists(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        private async Task DeleteCacheTableIfExists(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
 
             var jobData = await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
+            if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
+            {
+                _logger.LogDebug("Skipping deletion of cache table because stream cache connection string is null or whitespace.");
+                return;
+            }
+
             await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
             await connection.OpenAsync();
             var tableName = GetCacheTableName(streamModel.Id);
