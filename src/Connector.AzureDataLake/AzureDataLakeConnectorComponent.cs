@@ -25,7 +25,8 @@ namespace CluedIn.Connector.AzureDataLake
         Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
     public sealed class AzureDataLakeConnectorComponent : ServiceApplicationComponent<IServer>
     {
-        private static readonly TimeSpan CheckerScheduleDelay = TimeSpan.FromSeconds(30);
+        private UpdateExportTargetEventHandler _updateExportTargetHandler;
+        private ChangeStreamStateEventHandler _changeStreamStateEvent;
         public AzureDataLakeConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
         {
         }
@@ -34,43 +35,6 @@ namespace CluedIn.Connector.AzureDataLake
         public override void Start()
         {
             Container.Install(new InstallComponents());
-
-            #region Schedule export schedule checker job
-            Task.Run(async () =>
-            {
-                var isFirstTime = true;
-                while (true)
-                {
-                    try
-                    {
-                        var appContext = Container.Resolve<ApplicationContext>();
-                        var logger = Container.Resolve<ILogger<AzureDataLakeConnectorComponent>>();
-                        try
-                        {
-                            var jobServerClient = Container.Resolve<IJobServerClient>();
-
-                            Container
-                                .Resolve<ExportEntitiesScheduleCheckerJob>()
-                                .Schedule(jobServerClient, "0/5 * * * *");
-                            break;
-                        }
-                        catch (Exception ex)
-                        {
-                            if (!isFirstTime)
-                            {
-                                logger.LogError(ex, "Failed to schedule checker job.");
-                            }
-                            isFirstTime = false;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[{nameof(AzureDataLakeConnectorComponent)}] Failed to schedule checker job. {ex.Message}\n{ex.StackTrace}.");
-                    }
-                    await Task.Delay(CheckerScheduleDelay);
-                }
-            });
-            #endregion
 
             #region Set existing streams to EventMode
             Task.Run(async () =>
@@ -167,6 +131,9 @@ namespace CluedIn.Connector.AzureDataLake
                 }
             });
             #endregion
+
+            _updateExportTargetHandler = new UpdateExportTargetEventHandler(ApplicationContext);
+            _changeStreamStateEvent = new ChangeStreamStateEventHandler(ApplicationContext);
 
             Log.LogInformation($"{ComponentName} Registered");
             State = ServiceState.Started;
