@@ -201,12 +201,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             try
             {
-                await ExecuteWrite(connection, syncItem, tableName, propertyKeys);
+                await executeWrite(connection, syncItem, tableName, propertyKeys);
             }
             catch (SqlException ex) when (GetIsTableNotFoundException(ex))
             {
                 await EnsureCacheTableExists(connection, tableName, propertyKeys, syncItem.DataValueTypes);
-                await ExecuteWrite(connection, syncItem, tableName, propertyKeys);
+                await executeWrite(connection, syncItem, tableName, propertyKeys);
             }
             catch(Exception ex)
             {
@@ -214,7 +214,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 throw;
             }
 
-            static async Task ExecuteWrite(SqlConnection connection, SyncItem syncItem, string tableName, List<string> propertyKeys)
+            static async Task executeWrite(SqlConnection connection, SyncItem syncItem, string tableName, List<string> propertyKeys)
             {
                 if (syncItem.ChangeType == VersionChangeType.Removed)
                 {
