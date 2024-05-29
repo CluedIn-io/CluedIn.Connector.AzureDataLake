@@ -116,7 +116,7 @@ namespace CluedIn.Connector.AzureDataLake
                 new ()
                 {
                     name = OutputFormat,
-                    displayName = "JSON (Stream Cache disabled), JSON/Parquet/CSV (Stream cache enabled)",
+                    displayName = "Output Format. JSON/Parquet/CSV (Parquet & CSV only when stream cache is enabled)",
                     type = "input",
                     isRequired = true,
                 },

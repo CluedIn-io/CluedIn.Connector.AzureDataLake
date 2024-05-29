@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
+using System.Transactions;
 
 using Castle.MicroKernel.Registration;
 
@@ -174,7 +175,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             _ = await command.ExecuteNonQueryAsync();
         }
 
-        private async Task<SaveResult> WriteToCacheTable(IReadOnlyStreamModel streamModel, IReadOnlyConnectorEntityData connectorEntityData, AzureDataLakeConnectorJobData configurations, Dictionary<string, object> data, Dictionary<string, Type> dataValueTypes)
+        private async Task<SaveResult> WriteToCacheTable(
+            IReadOnlyStreamModel streamModel,
+            IReadOnlyConnectorEntityData connectorEntityData,
+            AzureDataLakeConnectorJobData configurations,
+            Dictionary<string, object> data,
+            Dictionary<string, Type> dataValueTypes)
         {
             if (streamModel.Mode == StreamMode.Sync)
             {
@@ -182,7 +188,14 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
                 await connection.OpenAsync();
                 var tableName = GetCacheTableName(syncItem.StreamId);
-                await WriteToCacheTable(connection, syncItem, tableName);
+                try
+                {
+                    await WriteToCacheTable(connection, syncItem, tableName);
+                }
+                catch(Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to write to cache table.");
+                }
             }
             else
             {
@@ -199,14 +212,29 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         {
             var propertyKeys = syncItem.Data.Keys.Except(new[] { AzureDataLakeConstants.IdKey }).OrderBy(key => key).ToList();
 
+
+            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
             try
             {
-                await executeWrite(connection, syncItem, tableName, propertyKeys);
+                await executeWrite(propertyKeys);
+                transactionScope.Complete();
             }
             catch (SqlException ex) when (GetIsTableNotFoundException(ex))
             {
-                await EnsureCacheTableExists(connection, tableName, propertyKeys, syncItem.DataValueTypes);
-                await executeWrite(connection, syncItem, tableName, propertyKeys);
+                transactionScope.Dispose();
+
+                try
+                {
+                    using var newTransactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+                    await EnsureCacheTableExists(connection, tableName, propertyKeys, syncItem.DataValueTypes);
+                    await executeWrite(propertyKeys);
+                    newTransactionScope.Complete();
+                }
+                catch (Exception ex2)
+                {
+                    _logger.LogError(ex2, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
+                    throw;
+                }
             }
             catch(Exception ex)
             {
@@ -214,7 +242,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 throw;
             }
 
-            static async Task executeWrite(SqlConnection connection, SyncItem syncItem, string tableName, List<string> propertyKeys)
+            async Task executeWrite(List<string> propertyKeys)
             {
                 if (syncItem.ChangeType == VersionChangeType.Removed)
                 {
@@ -233,7 +261,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 else
                 {
                     var insertOrUpdateSql = $"""
-                        IF EXISTS (SELECT 1 FROM [{tableName}] WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey})  
+                        IF EXISTS (
+                            SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
+                            WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey})  
                         BEGIN  
                         	UPDATE [{tableName}]   
                         	SET
@@ -361,10 +391,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     {
                         return new ConnectionVerificationResult(false, $"Stream cache connection string must be valid when buffer is enabled.");
                     }
-                    await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
-                    await connection.OpenAsync();
 
-                    await VerifyTableOperations(connection);
+                    await VerifyTableOperations(jobData.StreamCacheConnectionString);
                 }
                 else
                 {
@@ -382,8 +410,10 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
         }
 
-        private async Task VerifyTableOperations(SqlConnection connection)
+        private async Task VerifyTableOperations(string connectionString)
         {
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync();
             var testStreamId = Guid.NewGuid();
             var testTableName = GetCacheTableName(testStreamId, true);
 
@@ -400,21 +430,26 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 ["testColumn"] = typeof(string),
             };
 
-            await EnsureCacheTableExists(
-                    connection,
-                    testTableName,
-                    data.Keys.Except(new[] { AzureDataLakeConstants.IdKey }).ToList(),
-                    dataValueTypes);
+            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
             try
             {
+                await EnsureCacheTableExists(
+                        connection,
+                        testTableName,
+                        data.Keys.Except(new[] { AzureDataLakeConstants.IdKey }).ToList(),
+                        dataValueTypes);
                 var baseSyncItem = new SyncItem(testStreamId, entityId, VersionChangeType.Added, data, dataValueTypes);
                 await VerifyOperation(connection, testTableName, baseSyncItem);
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Changed });
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Removed });
-            }
-            finally
-            {
                 await DeleteCacheTableIfExists(connection, testTableName);
+                transactionScope.Complete();
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to verify table operations.");
             }
         }
 
@@ -529,7 +564,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
             await connection.OpenAsync();
             var tableName = GetCacheTableName(streamModel.Id);
-            await DeleteCacheTableIfExists(connection, tableName);
+
+            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+            try
+            {
+                await DeleteCacheTableIfExists(connection, tableName);
+                transactionScope.Complete();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete table.");
+            }
         }
 
         private static async Task DeleteCacheTableIfExists(SqlConnection connection, string tableName)
