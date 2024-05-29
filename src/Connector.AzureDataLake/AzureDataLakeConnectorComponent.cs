@@ -52,6 +52,7 @@ namespace CluedIn.Connector.AzureDataLake
                             Container
                                 .Resolve<ExportEntitiesScheduleCheckerJob>()
                                 .Schedule(jobServerClient, "0/5 * * * *");
+                            break;
                         }
                         catch (Exception ex)
                         {
