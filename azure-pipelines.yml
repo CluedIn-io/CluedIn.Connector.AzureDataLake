@@ -54,7 +54,7 @@ steps:
   - task: NuGetAuthenticate@0
     displayName: 'Authenticate with nuget'
 
-  - template: build/crawler.build.yml
+  - template: crawler.build.yml@templates
     parameters:
       githubReleaseInMaster: true
       publicReleaseForMaster: true
