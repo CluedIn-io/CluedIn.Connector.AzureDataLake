@@ -1,5 +1,4 @@
-﻿using CluedIn.Core;
-using CluedIn.Core.Data.Relational;
+﻿using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Net.Mail;
 using CluedIn.Core.Providers;
 using System;
