@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter;
 using CluedIn.Core;
+using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Jobs;
 using CluedIn.Core.Streams;
 
@@ -22,13 +23,35 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
 
     protected override async Task DoRunAsync(ExecutionContext context, JobArgs args)
     {
+        if (args.Schedule == AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never])
+        {
+            context.Log.LogDebug("Job is disabled because cron is set to {CronSchedule}. Skipping export.", AzureDataLakeConstants.JobScheduleNames.Never);
+            return;
+        }
+
         var streamRepository = context.ApplicationContext.Container.Resolve<IStreamRepository>();
         var client = context.ApplicationContext.Container.Resolve<IAzureDataLakeClient>();
+        var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
+
 
         var streamId = new Guid(args.Message);
         var streamModel = await streamRepository.GetStream(streamId);
 
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+        var provider = await organizationProviderDataStore.GetByIdAsync(context, providerDefinitionId);
+
+        if (provider == null)
+        {
+            context.Log.LogDebug("Unable to get provider {ProviderDefinitionId}. Skipping export.", providerDefinitionId);
+            return;
+        }
+
+        if (!provider.IsEnabled)
+        {
+            context.Log.LogDebug("Provider {ProviderDefinitionId} is not enabled. Skipping export.", providerDefinitionId);
+            return;
+        }
+
         var containerName = streamModel.ContainerName;
         var executionContext = context.ApplicationContext.CreateExecutionContext(streamModel.OrganizationId);
 

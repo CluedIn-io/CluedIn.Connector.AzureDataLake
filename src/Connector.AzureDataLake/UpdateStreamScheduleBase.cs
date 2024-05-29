@@ -13,15 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace CluedIn.Connector.AzureDataLake;
 
 internal abstract class UpdateStreamScheduleBase
-{
-    private static readonly Dictionary<string, string> _cronSchedules = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [AzureDataLakeConstants.JobScheduleNames.Hourly] = "0 0/1 * * *",
-        [AzureDataLakeConstants.JobScheduleNames.Daily] = "0 0 1-31 * *",
-        [AzureDataLakeConstants.JobScheduleNames.Weekly] = "0 0 1-31 * 1",
-        [AzureDataLakeConstants.JobScheduleNames.Never] = "0 5 31 2 *",
-    };
-
+{  
     private readonly ApplicationContext _applicationContext;
 
     protected ApplicationContext ApplicationContext => _applicationContext;
@@ -43,7 +35,7 @@ internal abstract class UpdateStreamScheduleBase
     {
         if (!stream.ConnectorProviderDefinitionId.HasValue)
         {
-            return _cronSchedules[AzureDataLakeConstants.JobScheduleNames.Never];
+            return AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never];
         }
 
         var containerName = stream.ContainerName;
@@ -51,7 +43,7 @@ internal abstract class UpdateStreamScheduleBase
         var configurations = await AzureDataLakeConnectorJobData.Create(context, providerDefinitionId, containerName);
         if (configurations.IsStreamCacheEnabled
             && stream.Status == StreamStatus.Started
-            && _cronSchedules.TryGetValue(configurations.Schedule, out var retrievedSchedule))
+            && AzureDataLakeConstants.CronSchedules.TryGetValue(configurations.Schedule, out var retrievedSchedule))
         {
             context.Log.LogDebug("Enable export for stream {StreamId} using schedule '{Schedule}'.", stream.Id, retrievedSchedule);
             return retrievedSchedule;
@@ -59,6 +51,6 @@ internal abstract class UpdateStreamScheduleBase
 
         context.Log.LogDebug("Disable export for stream {StreamId} that has schedule '{Schedule}'.", stream.Id, configurations.Schedule);
 
-        return _cronSchedules[AzureDataLakeConstants.JobScheduleNames.Never];
+        return AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never];
     }
 }

@@ -195,6 +195,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 catch(Exception ex)
                 {
                     _logger.LogError(ex, "Failed to write to cache table.");
+                    throw;
                 }
             }
             else

@@ -22,20 +22,28 @@ namespace CluedIn.Connector.AzureDataLake
         private const string StreamCacheConnectionKey = "StreamCache";
 
 
-        public static class OutputFormats
+        internal static class OutputFormats
         {
             public const string Csv = "csv";
             public const string Json = "json";
             public const string Parquet = "parquet";
         }
 
-        public static class JobScheduleNames
+        internal static class JobScheduleNames
         {
             public const string Hourly = "Hourly";
             public const string Daily = "Daily";
             public const string Weekly = "Weekly";
             public const string Never = "Never";
         }
+
+        internal static readonly Dictionary<string, string> CronSchedules = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [JobScheduleNames.Hourly] = "0 0/1 * * *",
+            [JobScheduleNames.Daily] = "0 0 1-31 * *",
+            [JobScheduleNames.Weekly] = "0 0 1-31 * 1",
+            [JobScheduleNames.Never] = "0 5 31 2 *",
+        };
 
         public AzureDataLakeConstants(ApplicationContext applicationContext) : base(Guid.Parse("F6178E19-7168-449C-B4B6-F9810E86C1C2"),
             providerName: "Azure DataLake Connector",

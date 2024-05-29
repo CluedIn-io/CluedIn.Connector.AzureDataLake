@@ -37,6 +37,10 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
                 {
                     await jArray.WriteToAsync(writer);
                 }
+                else if (value is JObject jObject)
+                {
+                    await jObject.WriteToAsync(writer);
+                }
                 else
                 {
                     await writer.WriteValueAsync(value);
