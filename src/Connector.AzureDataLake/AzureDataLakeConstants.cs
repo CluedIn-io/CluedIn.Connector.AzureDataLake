@@ -8,6 +8,8 @@ namespace CluedIn.Connector.AzureDataLake
 {
     public class AzureDataLakeConstants : ConfigurationConstantsBase, IAzureDataLakeConstants
     {
+        public static readonly Guid DataLakeProviderId = Guid.Parse("F6178E19-7168-449C-B4B6-F9810E86C1C2");
+
         public const string AccountName = nameof(AccountName);
         public const string AccountKey = nameof(AccountKey);
         public const string FileSystemName = nameof(FileSystemName);
@@ -45,7 +47,7 @@ namespace CluedIn.Connector.AzureDataLake
             [JobScheduleNames.Never] = "0 5 31 2 *",
         };
 
-        public AzureDataLakeConstants(ApplicationContext applicationContext) : base(Guid.Parse("F6178E19-7168-449C-B4B6-F9810E86C1C2"),
+        public AzureDataLakeConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
             providerName: "Azure DataLake Connector",
             componentName: "AzureDataLakeConnector",
             icon: "Resources.azuredatalake.svg",
