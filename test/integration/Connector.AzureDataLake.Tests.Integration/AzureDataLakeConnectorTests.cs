@@ -20,6 +20,7 @@ using CluedIn.Core.Caching;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data;
 using CluedIn.Core.Data.Parts;
+using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Data.Vocabularies;
 using CluedIn.Core.DataStore;
 using CluedIn.Core.Streams;
@@ -585,6 +586,13 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
             container.Register(Component.For<ILogger<ExecutionContext>>()
                 .Instance(new Mock<ILogger<ExecutionContext>>().Object));
+
+            var providerDefinition = new Mock<IRelationalDataStore<ProviderDefinition>>();
+            providerDefinition.Setup(store => store.GetByIdAsync(It.IsAny<ExecutionContext>(), providerDefinitionId))
+                .ReturnsAsync(new ProviderDefinition {  IsEnabled = true });
+            container.Register(Component.For<IRelationalDataStore<ProviderDefinition>>()
+                .Instance(providerDefinition.Object));
+
 
             var streamId = Guid.NewGuid();
             var streamRepository = new Mock<IStreamRepository>();
