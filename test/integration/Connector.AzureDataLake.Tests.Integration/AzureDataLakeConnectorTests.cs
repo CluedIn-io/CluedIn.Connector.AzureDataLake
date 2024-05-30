@@ -14,6 +14,7 @@ using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
 using CluedIn.Connector.AzureDataLake.Connector;
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
 using CluedIn.Core.Caching;
@@ -33,8 +34,6 @@ using Moq;
 
 using Xunit;
 using Xunit.Abstractions;
-
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -95,15 +94,16 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 { "DirectoryName", directoryName },
             });
 
+            var jobDataFactory = new Mock<AzureDataLakeJobDataFactory>();
             var connectorMock = new Mock<AzureDataLakeConnector>(
                 new Mock<ILogger<AzureDataLakeConnector>>().Object,
                 new AzureDataLakeClient(),
-                azureDataLakeConstantsMock.Object
+                azureDataLakeConstantsMock.Object,
+                jobDataFactory.Object
             );
-            connectorMock.Setup(x => x.CreateJobData(context, providerDefinitionId, It.IsAny<string>()  ))
-                .Returns(AzureDataLakeConnectorJobData.Create(
-                    context,
-                    connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
+
+            jobDataFactory.Setup(x => x.GetConfiguration(context, providerDefinitionId, It.IsAny<string>()  ))
+                .ReturnsAsync(new AzureDataLakeConnectorJobData(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
             connectorMock.CallBase = true;
 
             var connector = connectorMock.Object;
@@ -364,15 +364,16 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 { "DirectoryName", directoryName },
             });
 
+            var jobDataFactory = new Mock<AzureDataLakeJobDataFactory>();
             var connectorMock = new Mock<AzureDataLakeConnector>(
                 new Mock<ILogger<AzureDataLakeConnector>>().Object,
                 new AzureDataLakeClient(),
-                azureDataLakeConstantsMock.Object
+                azureDataLakeConstantsMock.Object,
+                jobDataFactory.Object
             );
-            connectorMock.Setup(x => x.CreateJobData(context, providerDefinitionId, It.IsAny<string>()))
-                .Returns(AzureDataLakeConnectorJobData.Create(
-                    context,
-                    connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
+
+            jobDataFactory.Setup(x => x.GetConfiguration(context, providerDefinitionId, It.IsAny<string>()))
+                .ReturnsAsync(new AzureDataLakeConnectorJobData(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
             connectorMock.CallBase = true;
 
             var connector = connectorMock.Object;
@@ -603,7 +604,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var providerDefinition = new Mock<IRelationalDataStore<ProviderDefinition>>();
             providerDefinition.Setup(store => store.GetByIdAsync(It.IsAny<ExecutionContext>(), providerDefinitionId))
-                .ReturnsAsync(new ProviderDefinition {  IsEnabled = true, ProviderId = AzureDataLakeConstants.DataLakeProviderId });
+                .ReturnsAsync(new ProviderDefinition { IsEnabled = true, ProviderId = AzureDataLakeConstants.DataLakeProviderId });
             container.Register(Component.For<IRelationalDataStore<ProviderDefinition>>()
                 .Instance(providerDefinition.Object));
 
@@ -653,6 +654,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
             azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
             azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
+            azureDataLakeConstantsMock.Setup(x => x.ProviderId).Returns(AzureDataLakeConstants.DataLakeProviderId);
 
             var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
@@ -669,32 +671,33 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var connectorConnectionMock = new Mock<IConnectorConnectionV2>();
             connectorConnectionMock.Setup(x => x.Authentication).Returns(new Dictionary<string, object>()
             {
-                { nameof(AzureDataLakeConnectorJobData.AccountName), accountName },
-                { nameof(AzureDataLakeConnectorJobData.AccountKey), accountKey },
-                { nameof(AzureDataLakeConnectorJobData.FileSystemName), fileSystemName },
-                { nameof(AzureDataLakeConnectorJobData.DirectoryName), directoryName },
-                { nameof(AzureDataLakeConnectorJobData.IsStreamCacheEnabled), true },
-                { nameof(AzureDataLakeConnectorJobData.StreamCacheConnectionString), streamCacheConnectionString },
-                { nameof(AzureDataLakeConnectorJobData.OutputFormat), "jSoN" },
-                { nameof(AzureDataLakeConnectorJobData.UseCurrentTimeForExport), true },
+                { nameof(AzureDataLakeConstants.AccountName), accountName },
+                { nameof(AzureDataLakeConstants.AccountKey), accountKey },
+                { nameof(AzureDataLakeConstants.FileSystemName), fileSystemName },
+                { nameof(AzureDataLakeConstants.DirectoryName), directoryName },
+                { nameof(DataLakeConstants.IsStreamCacheEnabled), true },
+                { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
+                { nameof(DataLakeConstants.OutputFormat), "jSoN" },
+                { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
             });
 
             var azureDataLakeClient = new AzureDataLakeClient();
+            var jobDataFactory = new Mock<AzureDataLakeJobDataFactory>();
             var connectorMock = new Mock<AzureDataLakeConnector>(
                 new Mock<ILogger<AzureDataLakeConnector>>().Object,
-                azureDataLakeClient,
-                azureDataLakeConstantsMock.Object
+                new AzureDataLakeClient(),
+                azureDataLakeConstantsMock.Object,
+                jobDataFactory.Object
             );
+
+            jobDataFactory.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
+                .ReturnsAsync(new AzureDataLakeConnectorJobData(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
             var configurationRepository = new Mock<IConfigurationRepository>();
             configurationRepository.Setup(x => x.GetConfigurationById(It.IsAny<ExecutionContext>(), It.IsAny<Guid>()))
                 .Returns(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value));
-            
+
             container.Register(Component.For<IConfigurationRepository>().Instance(configurationRepository.Object));
-            container.Register(Component.For<IAzureDataLakeClient>().Instance(azureDataLakeClient));
-            connectorMock.Setup(x => x.CreateJobData(context, providerDefinitionId, It.IsAny<string>()))
-                .Returns(AzureDataLakeConnectorJobData.Create(
-                    context,
-                    connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
+            container.Register(Component.For<AzureDataLakeClient>().Instance(azureDataLakeClient));
             connectorMock.CallBase = true;
 
             var connector = connectorMock.Object;
@@ -753,14 +756,19 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
                 Assert.Equal(1, total);
 
-                var exportJob = new AzureDataLakeExportEntitiesJob(applicationContext);
+                var exportJob = new AzureDataLakeExportEntitiesJob(
+                    applicationContext,
+                    streamRepository.Object,
+                    azureDataLakeClient,
+                    azureDataLakeConstantsMock.Object,
+                    jobDataFactory.Object);
                 exportJob.Run(new Core.Jobs.JobArgs
                 {
                     OrganizationId = organization.Id.ToString(),
                     Schedule = "* * * * *",
                     Message = streamId.ToString(),
                 });
-                
+
 
                 var path = await WaitForFileToBeCreated(fileSystemName, directoryName, client);
                 var fsClient = client.GetFileSystemClient(fileSystemName);

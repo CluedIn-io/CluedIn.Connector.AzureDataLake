@@ -1,0 +1,14 @@
+﻿using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
+
+using CluedIn.Core;
+
+using Microsoft.Data.SqlClient;
+
+namespace CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
+
+internal interface ISqlDataWriter
+{
+    Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader);
+}

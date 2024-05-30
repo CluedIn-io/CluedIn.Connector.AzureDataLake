@@ -2,13 +2,12 @@
 using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 
-namespace CluedIn.Connector.AzureDataLake
+namespace CluedIn.Connector.OneLake
 {
     internal class InstallComponents : IWindsorInstaller
     {
         public void Install(IWindsorContainer container, IConfigurationStore store)
         {
-
         }
     }
 }

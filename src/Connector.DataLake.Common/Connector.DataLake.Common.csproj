@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CluedIn.Connector.DataLake.Common provides the common functionality to post data to DataLake</Description>
+    <AssemblyName>CluedIn.Connector.DataLake.Common</AssemblyName>
+    <RootNamespace>CluedIn.Connector.DataLake.Common</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Azure.Storage.Files.DataLake" />
+    <PackageReference Include="CluedIn.Core" />
+    <PackageReference Include="CsvHelper" />
+    <PackageReference Include="NCrontab" />
+    <PackageReference Include="Parquet.Net" />
+  </ItemGroup>
+</Project>
