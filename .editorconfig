@@ -98,7 +98,9 @@ csharp_prefer_braces = true : suggestion
 # Dotnet formatting settings:
 [*.{cs,vb}]
 # Organize usings
-dotnet_sort_system_directives_first = false
+dotnet_sort_system_directives_first = true
+vsspell_section_id = 6c0ff858bb074ad983e157ca0c0abd63
+vsspell_additional_dictionary_folders_6c0ff858bb074ad983e157ca0c0abd63 = .\dic
 
 # CSharp formatting settings:
 [*.cs]

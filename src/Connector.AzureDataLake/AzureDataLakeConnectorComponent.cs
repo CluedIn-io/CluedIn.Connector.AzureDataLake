@@ -1,14 +1,20 @@
+using CluedIn.Connector.AzureDataLake.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities;
+using CluedIn.Core.Jobs;
 using CluedIn.Core.Server;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+
 using ComponentHost;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
 using System;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -19,6 +25,8 @@ namespace CluedIn.Connector.AzureDataLake
         Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
     public sealed class AzureDataLakeConnectorComponent : ServiceApplicationComponent<IServer>
     {
+        private UpdateExportTargetEventHandler _updateExportTargetHandler;
+        private ChangeStreamStateEventHandler _changeStreamStateEvent;
         public AzureDataLakeConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
         {
         }
@@ -73,7 +81,7 @@ namespace CluedIn.Connector.AzureDataLake
                         var org = new Organization(ApplicationContext, orgId);
 
                         foreach (var provider in org.Providers.AllProviderDefinitions.Where(x =>
-                                     x.ProviderId == new AzureDataLakeConstants().ProviderId))
+                                     x.ProviderId == new AzureDataLakeConstants(ApplicationContext).ProviderId))
                         {
                             foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))
                             {
@@ -99,7 +107,7 @@ namespace CluedIn.Connector.AzureDataLake
                                         OldContainerName = stream.ContainerName,
                                     };
 
-                                    Log.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{stream.Name}' ({stream.Id})");
+                                    Log.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{{StreamName}}' ({{StreamId}})", stream.Name, stream.Id);
 
                                     await streamRepository.SetupConnector(stream.Id, model, executionContext);
                                 }
@@ -124,6 +132,9 @@ namespace CluedIn.Connector.AzureDataLake
             });
             #endregion
 
+            _updateExportTargetHandler = new UpdateExportTargetEventHandler(ApplicationContext);
+            _changeStreamStateEvent = new ChangeStreamStateEventHandler(ApplicationContext);
+
             Log.LogInformation($"{ComponentName} Registered");
             State = ServiceState.Started;
         }
@@ -139,4 +150,5 @@ namespace CluedIn.Connector.AzureDataLake
 
         public string ComponentName => "Azure Data Lake Storage Gen2";
     }
+
 }
