@@ -14,8 +14,8 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
     private readonly IDisposable _subscription;
     private bool _disposedValue;
 
-    public UpdateExportTargetEventHandler(ApplicationContext applicationContext)
-        : base(applicationContext)
+    public UpdateExportTargetEventHandler(ApplicationContext applicationContext, Guid providerId)
+        : base(applicationContext, providerId)
     {
         _subscription = ApplicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
     }

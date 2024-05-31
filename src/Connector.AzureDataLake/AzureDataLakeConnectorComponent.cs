@@ -3,6 +3,7 @@ using CluedIn.Core;
 using CluedIn.Core.Accounts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities;
+using CluedIn.Core.Events.Types;
 using CluedIn.Core.Jobs;
 using CluedIn.Core.Server;
 using CluedIn.Core.Streams;
@@ -27,6 +28,7 @@ namespace CluedIn.Connector.AzureDataLake
     {
         private UpdateExportTargetEventHandler _updateExportTargetHandler;
         private ChangeStreamStateEventHandler _changeStreamStateEvent;
+        private UpdateStreamEventHandler _updateStreamEvent;
         public AzureDataLakeConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
         {
         }
@@ -36,6 +38,7 @@ namespace CluedIn.Connector.AzureDataLake
         {
             Container.Install(new InstallComponents());
 
+            var providerId = AzureDataLakeConstants.DataLakeProviderId;
             #region Set existing streams to EventMode
             Task.Run(async () =>
             {
@@ -81,7 +84,7 @@ namespace CluedIn.Connector.AzureDataLake
                         var org = new Organization(ApplicationContext, orgId);
 
                         foreach (var provider in org.Providers.AllProviderDefinitions.Where(x =>
-                                     x.ProviderId == new AzureDataLakeConstants(ApplicationContext).ProviderId))
+                                     x.ProviderId == providerId))
                         {
                             foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))
                             {
@@ -132,8 +135,9 @@ namespace CluedIn.Connector.AzureDataLake
             });
             #endregion
 
-            _updateExportTargetHandler = new UpdateExportTargetEventHandler(ApplicationContext);
-            _changeStreamStateEvent = new ChangeStreamStateEventHandler(ApplicationContext);
+            _updateExportTargetHandler = new UpdateExportTargetEventHandler(ApplicationContext, providerId);
+            _changeStreamStateEvent = new ChangeStreamStateEventHandler(ApplicationContext, providerId);
+            _updateStreamEvent = new UpdateStreamEventHandler(ApplicationContext, providerId);
 
             Log.LogInformation($"{ComponentName} Registered");
             State = ServiceState.Started;

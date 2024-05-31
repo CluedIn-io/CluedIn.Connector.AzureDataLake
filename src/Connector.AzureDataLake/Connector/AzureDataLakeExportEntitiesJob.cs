@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -15,9 +16,9 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureDataLake.Connector;
 
-internal class ExportEntitiesJob : AzureDataLakeJobBase
+internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
 {
-    public ExportEntitiesJob(ApplicationContext appContext) : base(appContext)
+    public AzureDataLakeExportEntitiesJob(ApplicationContext appContext) : base(appContext)
     {
     }
 
@@ -33,7 +34,6 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
         var client = context.ApplicationContext.Container.Resolve<IAzureDataLakeClient>();
         var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
 
-
         var streamId = new Guid(args.Message);
         var streamModel = await streamRepository.GetStream(streamId);
 
@@ -43,6 +43,15 @@ internal class ExportEntitiesJob : AzureDataLakeJobBase
         if (provider == null)
         {
             context.Log.LogDebug("Unable to get provider {ProviderDefinitionId}. Skipping export.", providerDefinitionId);
+            return;
+        }
+
+        if (provider.ProviderId != AzureDataLakeConstants.DataLakeProviderId)
+        {
+            context.Log.LogDebug(
+                "ProviderId {ProviderDefinitionId} is not the expected {DataLakeProviderId}. Skipping export.",
+                provider.ProviderId,
+                AzureDataLakeConstants.DataLakeProviderId);
             return;
         }
 

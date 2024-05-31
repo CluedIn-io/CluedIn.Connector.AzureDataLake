@@ -9,15 +9,15 @@ using Newtonsoft.Json.Linq;
 
 namespace CluedIn.Connector.AzureDataLake;
 
-internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDisposable
+internal class UpdateStreamEventHandler : UpdateStreamScheduleBase, IDisposable
 {
     private readonly IDisposable _subscription;
     private bool _disposedValue;
 
-    public ChangeStreamStateEventHandler(ApplicationContext applicationContext, Guid providerId)
+    public UpdateStreamEventHandler(ApplicationContext applicationContext, Guid providerId)
         : base(applicationContext, providerId)
     {
-        _subscription = ApplicationContext.System.Events.Local.Subscribe<ChangeStreamStateEvent>(ProcessEvent);
+        _subscription = ApplicationContext.System.Events.Local.Subscribe<UpdateStreamEvent>(ProcessEvent);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -34,11 +34,11 @@ internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDispos
     }
 
 
-    private void ProcessEvent(ChangeStreamStateEvent eventData)
+    private void ProcessEvent(UpdateStreamEvent eventData)
     {
         ProcessEventAsync(eventData).GetAwaiter().GetResult();
     }
-    private async Task ProcessEventAsync(ChangeStreamStateEvent eventData)
+    private async Task ProcessEventAsync(UpdateStreamEvent eventData)
     {
         if (!(eventData.EventData?.StartsWith("{") ?? false))
         {

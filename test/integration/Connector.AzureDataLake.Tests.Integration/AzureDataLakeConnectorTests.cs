@@ -589,7 +589,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var providerDefinition = new Mock<IRelationalDataStore<ProviderDefinition>>();
             providerDefinition.Setup(store => store.GetByIdAsync(It.IsAny<ExecutionContext>(), providerDefinitionId))
-                .ReturnsAsync(new ProviderDefinition {  IsEnabled = true });
+                .ReturnsAsync(new ProviderDefinition {  IsEnabled = true, ProviderId = AzureDataLakeConstants.DataLakeProviderId });
             container.Register(Component.For<IRelationalDataStore<ProviderDefinition>>()
                 .Instance(providerDefinition.Object));
 
@@ -733,7 +733,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
                 Assert.Equal(1, total);
 
-                var exportJob = new ExportEntitiesJob(applicationContext);
+                var exportJob = new AzureDataLakeExportEntitiesJob(applicationContext);
                 exportJob.Run(new Core.Jobs.JobArgs
                 {
                     OrganizationId = organization.Id.ToString(),
