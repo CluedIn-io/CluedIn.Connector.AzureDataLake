@@ -21,7 +21,7 @@ namespace CluedIn.Connector.AzureDataLake
         public const string UseCurrentTimeForExport = nameof(UseCurrentTimeForExport);
 
         public const string IdKey = "Id";
-        private const string StreamCacheConnectionKey = "StreamCache";
+        internal const string StreamCacheConnectionStringKey = "StreamCache";
 
 
         internal static class OutputFormats
@@ -82,9 +82,9 @@ namespace CluedIn.Connector.AzureDataLake
         private static AuthMethods GetAzureDataLakeAuthMethods(ApplicationContext applicationContext)
         {
             string connectionString = null;
-            if (applicationContext.System.ConnectionStrings.ConnectionStringExists(StreamCacheConnectionKey))
+            if (applicationContext.System.ConnectionStrings.ConnectionStringExists(StreamCacheConnectionStringKey))
             {
-                connectionString = applicationContext.System.ConnectionStrings.GetConnectionString(StreamCacheConnectionKey);
+                connectionString = applicationContext.System.ConnectionStrings.GetConnectionString(StreamCacheConnectionStringKey);
             }
             var controls = new List<Control>
             {
