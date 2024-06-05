@@ -24,14 +24,19 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
     // From documentation, it's ambiguous whether we need at least 5k or 50k rows to be optimal
     // TODO: Find recommendations or method to calculate row group threshold        
     public const int RowGroupThreshold = 10000;
-    public override async Task<long> WriteOutputAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+    public override async Task<long> WriteOutputAsync(
+        ExecutionContext context,
+        IDataLakeJobData configuration,
+        Stream outputStream,
+        ICollection<string> fieldNames,
+        SqlDataReader reader)
     {
         var fields = new List<Field>();
         foreach (var fieldName in fieldNames)
         {
             var type = reader.GetFieldType(fieldName);
 
-            fields.Add(new DataField(fieldName, GetParquetDataType(type)));
+            fields.Add(new DataField(fieldName, GetParquetDataType(type, configuration)));
         }
 
         var schema = new ParquetSchema(fields);
@@ -39,9 +44,10 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         using var parquetWriter = await ParquetWriter.CreateAsync(schema, outputStream);
 
         var totalProcessed = 0L;
+
         while (await reader.ReadAsync())
         {
-            var fieldValues = fieldNames.Select(key => GetValue(key, reader));
+            var fieldValues = fieldNames.Select(key => GetValue(key, reader, configuration));
             parquetTable.Add(new ParquetRow(fieldValues));
 
             totalProcessed++;
@@ -55,7 +61,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
             {
                 context.Log.LogDebug("Row group threshold {Threshold} reached. Current row {CurrentRow}. Writing data.", RowGroupThreshold, totalProcessed);
                 await parquetWriter.WriteAsync(parquetTable);
-                
+
                 parquetTable = new ParquetTable(schema);
             }
         }
@@ -69,7 +75,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         return totalProcessed;
     }
 
-    private static Type GetParquetDataType(Type type)
+    private static Type GetParquetDataType(Type type, IDataLakeJobData configuration)
     {
         if (type == typeof(string))
         {
@@ -86,6 +92,15 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
             return typeof(string);
         }
 
+        if (configuration.ShouldWriteGuidAsString)
+        {
+            if (type == typeof(Guid)
+                || nullableUnderlyingType == typeof(Guid))
+            {
+                return typeof(string);
+            }
+        }
+
         var nullableType = typeof(Nullable<>);
         if (nullableUnderlyingType == null)
         {
@@ -95,9 +110,9 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         return type;
     }
 
-    protected override object GetValue(string key, SqlDataReader reader)
+    protected override object GetValue(string key, SqlDataReader reader, IDataLakeJobData configuration)
     {
-        var value = base.GetValue(key, reader);
+        var value = base.GetValue(key, reader, configuration);
         if (value == null)
         {
             return null;
@@ -110,6 +125,11 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         if (value is DateTimeOffset offset)
         {
             return offset.ToString("o", CultureInfo.InvariantCulture);
+        }
+
+        if (configuration.ShouldWriteGuidAsString && value is Guid guid)
+        {
+            return guid.ToString();
         }
 
         var nullableUnderlyingType = Nullable.GetUnderlyingType(value.GetType());

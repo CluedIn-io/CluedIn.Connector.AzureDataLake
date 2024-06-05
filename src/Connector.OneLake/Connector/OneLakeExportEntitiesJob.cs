@@ -1,4 +1,6 @@
-﻿using CluedIn.Connector.DataLake.Common.Connector;
+﻿using System;
+
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
@@ -14,5 +16,11 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
         OneLakeJobDataFactory dataLakeJobDataFactory)
         : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
     {
+    }
+
+    protected override string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
+    {
+        var fileExtension = GetFileExtension(outputFormat);
+        return $"{streamId:N}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
     }
 }

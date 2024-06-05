@@ -17,7 +17,12 @@ namespace CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
 
 internal class CsvSqlDataWriter : SqlDataWriterBase
 {
-    public override async Task<long> WriteOutputAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+    public override async Task<long> WriteOutputAsync(
+        ExecutionContext context,
+        IDataLakeJobData configuration,
+        Stream outputStream,
+        ICollection<string> fieldNames,
+        SqlDataReader reader)
     {
         context.Log.LogInformation("Begin writing output.");
         using var writer = new StreamWriter(outputStream);
@@ -33,7 +38,7 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         var totalProcessed = 0L;
         while (await reader.ReadAsync())
         {
-            var fieldValues = fieldNames.Select(name => GetValue(name, reader));
+            var fieldValues = fieldNames.Select(name => GetValue(name, reader, configuration));
             foreach (var field in fieldValues)
             {
                 csv.WriteField(field);

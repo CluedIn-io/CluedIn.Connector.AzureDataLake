@@ -151,18 +151,18 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
         await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
 
-        await sqlDataWriter?.WriteAsync(context, outputStream, fieldNames, reader);
+        await sqlDataWriter?.WriteAsync(context, configuration, outputStream, fieldNames, reader);
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
     }
 
-    private static string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
+    protected virtual string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
     {
         var fileExtension = GetFileExtension(outputFormat);
         var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
         return outputFileName;
     }
 
-    private static string GetFileExtension(string outputFormat)
+    protected virtual string GetFileExtension(string outputFormat)
     {
         return outputFormat;
     }

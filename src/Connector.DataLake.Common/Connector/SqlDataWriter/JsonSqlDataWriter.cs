@@ -14,7 +14,12 @@ namespace CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
 
 internal class JsonSqlDataWriter : SqlDataWriterBase
 {
-    public override async Task<long> WriteOutputAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+    public override async Task<long> WriteOutputAsync(
+        ExecutionContext context,
+        IDataLakeJobData configuration,
+        Stream outputStream,
+        ICollection<string> fieldNames,
+        SqlDataReader reader)
     {
         using var stringWriter = new StreamWriter(outputStream);
         using var writer = new JsonTextWriter(stringWriter);
@@ -29,7 +34,7 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
             foreach(var field in fieldNames)
             { 
                 await writer.WritePropertyNameAsync(field);
-                var value = GetValue(field, reader);
+                var value = GetValue(field, reader, configuration);
                 if (value is JArray jArray)
                 {
                     await jArray.WriteToAsync(writer);
@@ -55,9 +60,9 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         return totalProcessed;
     }
 
-    protected override object GetValue(string key, SqlDataReader reader)
+    protected override object GetValue(string key, SqlDataReader reader, IDataLakeJobData configuration)
     {
-        var value = base.GetValue(key, reader);
+        var value = base.GetValue(key, reader, configuration);
         if (value == null)
         {
             return null;

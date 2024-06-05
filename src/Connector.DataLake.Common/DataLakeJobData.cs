@@ -16,6 +16,7 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
     public string Schedule => GetConfigurationValue(DataLakeConstants.Schedule) as string;
     public string ContainerName { get; }
     public bool UseCurrentTimeForExport => GetConfigurationValue(DataLakeConstants.UseCurrentTimeForExport) as bool? ?? false;
+    public virtual bool ShouldWriteGuidAsString => GetConfigurationValue(DataLakeConstants.ShouldWriteGuidAsString) as bool? ?? false;
 
     public override int GetHashCode()
     {
@@ -32,6 +33,7 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
         hash.Add(Schedule);
         hash.Add(ContainerName);
         hash.Add(UseCurrentTimeForExport);
+        hash.Add(ShouldWriteGuidAsString);        
     }
 
     public override bool Equals(object obj)
@@ -47,8 +49,8 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
             IsStreamCacheEnabled == other.IsStreamCacheEnabled &&
             StreamCacheConnectionString == other.StreamCacheConnectionString &&
             Schedule == other.Schedule &&
-            UseCurrentTimeForExport == other.UseCurrentTimeForExport;
-
+            UseCurrentTimeForExport == other.UseCurrentTimeForExport &&
+            ShouldWriteGuidAsString == other.ShouldWriteGuidAsString;
     }
 
     protected object GetConfigurationValue(string key)

@@ -14,6 +14,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     public const string StreamCacheConnectionString = nameof(StreamCacheConnectionString);
     public const string Schedule = nameof(Schedule);
     public const string UseCurrentTimeForExport = nameof(UseCurrentTimeForExport);
+    public const string ShouldWriteGuidAsString = nameof(ShouldWriteGuidAsString);
 
     public const string IdKey = "Id";
     public const string StreamCacheConnectionStringKey = "StreamCache";

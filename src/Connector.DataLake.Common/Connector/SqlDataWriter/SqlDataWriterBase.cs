@@ -14,7 +14,7 @@ namespace CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
 internal abstract class SqlDataWriterBase : ISqlDataWriter
 {
     protected const int LoggingThreshold = 1000;
-    protected virtual object GetValue(string key, SqlDataReader reader)
+    protected virtual object GetValue(string key, SqlDataReader reader, IDataLakeJobData configuration)
     {
         var value = reader.GetValue(key);
 
@@ -26,12 +26,22 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
         return value;
     }
 
-    public async Task WriteAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader)
+    public async Task WriteAsync(
+        ExecutionContext context,
+        IDataLakeJobData configuration,
+        Stream outputStream,
+        ICollection<string> fieldNames,
+        SqlDataReader reader)
     {
         context.Log.LogInformation("Begin writing output.");
 
-        var totalProcessed = await WriteOutputAsync(context, outputStream, fieldNames, reader);
+        var totalProcessed = await WriteOutputAsync(context, configuration, outputStream, fieldNames, reader);
         context.Log.LogInformation("End writing output. Total processed: {TotalProcessed}.", totalProcessed);
     }
-    public abstract Task<long> WriteOutputAsync(ExecutionContext context, Stream outputStream, ICollection<string> fieldNames, SqlDataReader reader);
+    public abstract Task<long> WriteOutputAsync(
+        ExecutionContext context,
+        IDataLakeJobData configuration,
+        Stream outputStream,
+        ICollection<string> fieldNames,
+        SqlDataReader reader);
 }

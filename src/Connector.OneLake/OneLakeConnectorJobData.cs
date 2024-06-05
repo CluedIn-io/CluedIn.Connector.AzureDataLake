@@ -21,6 +21,7 @@ namespace CluedIn.Connector.OneLake
         public string ClientId => Configurations[OneLakeConstants.ClientId] as string;
         public string ClientSecret => Configurations[OneLakeConstants.ClientSecret] as string;
         public string TenantId => Configurations[OneLakeConstants.TenantId] as string;
+        public override bool ShouldWriteGuidAsString => true;
 
         protected override void AddToHashCode(HashCode hash)
         {

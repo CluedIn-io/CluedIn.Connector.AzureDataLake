@@ -8,4 +8,5 @@ public interface IDataLakeJobData
     string StreamCacheConnectionString { get; }
     string OutputFormat { get; }
     string Schedule { get; }
+    bool ShouldWriteGuidAsString { get; }
 }
