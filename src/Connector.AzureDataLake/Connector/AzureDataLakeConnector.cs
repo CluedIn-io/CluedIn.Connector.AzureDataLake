@@ -1,13 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Globalization;
 using System.Linq;
-using System.Numerics;
 using System.Threading.Tasks;
 using System.Transactions;
-
-using Castle.MicroKernel.Registration;
 
 using CluedIn.Core;
 using CluedIn.Core.Configuration;
@@ -29,6 +25,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
     public class AzureDataLakeConnector : ConnectorBaseV2
     {
         private const string JsonMimeType = "application/json";
+        private const int TableCreationLockTimeout = 100;
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
@@ -145,15 +142,15 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
         }
 
-        private static async Task EnsureCacheTableExists(
+        private async Task EnsureCacheTableExists(
             SqlConnection connection,
             string tableName,
-            ICollection<string> propertyKeys,
-            Dictionary<string, Type> dataValueTypes)
+            SyncItem syncItem)
         {
+            var propertyKeys = GetPropertyKeysWithoutId(syncItem);
             var propertiesColumns = propertyKeys.Select(key =>
             {
-                var type = dataValueTypes[key];
+                var type = syncItem.DataValueTypes[key];
                 var sqlType = _dotNetToSqlTypeMap.TryGetValue(type, out var sqlDbType) ? sqlDbType : _dotNetToSqlTypeMap[typeof(string)];
                 return $"[{key}] {sqlType}";
             });
@@ -173,6 +170,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 CommandType = CommandType.Text
             };
             _ = await command.ExecuteNonQueryAsync();
+            
         }
 
         private async Task<SaveResult> WriteToCacheTable(
@@ -182,54 +180,42 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             Dictionary<string, object> data,
             Dictionary<string, Type> dataValueTypes)
         {
-            if (streamModel.Mode == StreamMode.Sync)
+            if (streamModel.Mode != StreamMode.Sync)
             {
-                var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
-                await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
-                await connection.OpenAsync();
-                var tableName = GetCacheTableName(syncItem.StreamId);
-                try
-                {
-                    await WriteToCacheTable(connection, syncItem, tableName);
-                }
-                catch(Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to write to cache table.");
-                    throw;
-                }
-            }
-            else
-            {
-                throw new NotSupportedException($"Buffer mode is not supported with '{StreamMode.EventStream}' mode.");
+                throw new NotSupportedException($"Buffer mode is only supported with '{StreamMode.Sync}' mode.");
             }
 
-            return SaveResult.Success;
-        }
+            var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
+            var tableName = GetCacheTableName(syncItem.StreamId);
 
-        private async Task WriteToCacheTable(
-            SqlConnection connection,
-            SyncItem syncItem,
-            string tableName)
-        {
-            var propertyKeys = syncItem.Data.Keys.Except(new[] { AzureDataLakeConstants.IdKey }).OrderBy(key => key).ToList();
-
-
-            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
             try
             {
-                await executeWrite(propertyKeys);
+                using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+                await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
+                await connection.OpenAsync();
+                await WriteToCacheTable(connection, syncItem, tableName);
                 transactionScope.Complete();
             }
-            catch (SqlException ex) when (GetIsTableNotFoundException(ex))
+            catch (SqlException writeDataException) when (GetIsTableNotFoundException(writeDataException))
             {
-                transactionScope.Dispose();
-
                 try
                 {
-                    using var newTransactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
-                    await EnsureCacheTableExists(connection, tableName, propertyKeys, syncItem.DataValueTypes);
-                    await executeWrite(propertyKeys);
-                    newTransactionScope.Complete();
+                    _logger.LogDebug("Table {TableName} does not exist. Trying to create and retry.", tableName);
+                    using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+                    await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
+                    await connection.OpenAsync();
+                    
+                    var acquiredLock = await TryAcquireTableCreationLock(connection, tableName);
+                    if (!acquiredLock)
+                    {
+                        _logger.LogDebug("Unable to acquire lock for table creation. Table might be in the process of being created.");
+                    }
+                    else
+                    {
+                        await EnsureCacheTableExists(connection, tableName, syncItem);
+                    }
+                    await WriteToCacheTable(connection, syncItem, tableName);
+                    transactionScope.Complete();
                 }
                 catch (Exception ex2)
                 {
@@ -237,64 +223,91 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                     throw;
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex1)
             {
-                _logger.LogError(ex, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
+                _logger.LogError(ex1, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
                 throw;
             }
 
-            async Task executeWrite(List<string> propertyKeys)
+            return SaveResult.Success;
+        }
+
+        private async Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string tableName)
+        {
+            using var lockCommand = new SqlCommand("sp_getapplock", connection);
+            lockCommand.CommandType = CommandType.StoredProcedure;
+            lockCommand.Parameters.Add(new SqlParameter("@Resource", SqlDbType.NVarChar, 255) { Value = $"{nameof(AzureDataLakeConnector)}{tableName}" });
+            lockCommand.Parameters.Add(new SqlParameter("@LockMode", SqlDbType.NVarChar, 32) { Value = "Exclusive" });
+            lockCommand.Parameters.Add(new SqlParameter("@LockTimeout", SqlDbType.Int) { Value = TableCreationLockTimeout });
+            lockCommand.Parameters.Add(new SqlParameter("@Result", SqlDbType.Int) { Direction = ParameterDirection.ReturnValue });
+
+            _ = await lockCommand.ExecuteNonQueryAsync();
+
+            var queryResult = (int)lockCommand.Parameters["@Result"].Value;
+            var acquiredLock = queryResult >= 0;
+            return acquiredLock;
+        }
+
+        private async Task WriteToCacheTable(
+            SqlConnection connection,
+            SyncItem syncItem,
+            string tableName)
+        {
+            var propertyKeys = GetPropertyKeysWithoutId(syncItem);
+            if (syncItem.ChangeType == VersionChangeType.Removed)
             {
-                if (syncItem.ChangeType == VersionChangeType.Removed)
+                var deleteCommandText = $"DELETE FROM [{tableName}] WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey}";
+                var command = new SqlCommand(deleteCommandText, connection)
                 {
-                    var deleteCommandText = $"DELETE FROM [{tableName}] WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey}";
-                    var command = new SqlCommand(deleteCommandText, connection)
-                    {
-                        CommandType = CommandType.Text
-                    };
-                    command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}", syncItem.EntityId));
-                    var rowsAffected = await command.ExecuteNonQueryAsync();
-                    if (rowsAffected != 1)
-                    {
-                        throw new ApplicationException($"Rows affected for deletion is not 1, it is {rowsAffected}.");
-                    }
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}", syncItem.EntityId));
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected != 1)
+                {
+                    throw new ApplicationException($"Rows affected for deletion is not 1, it is {rowsAffected}.");
                 }
-                else
-                {
-                    var insertOrUpdateSql = $"""
+            }
+            else
+            {
+                var insertOrUpdateSql = $"""
                         IF EXISTS (
                             SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
                             WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey})  
                         BEGIN  
-                        	UPDATE [{tableName}]   
-                        	SET
+                            UPDATE [{tableName}]   
+                            SET
                                 {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}  
-                        	WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey};  
+                            WHERE {AzureDataLakeConstants.IdKey} = @{AzureDataLakeConstants.IdKey};  
                         END  
                         ELSE  
                         BEGIN  
-                        	INSERT INTO [{tableName}] ({AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                            INSERT INTO [{tableName}] ({AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
                             VALUES(@{AzureDataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
                         END
                         """;
-                    var command = new SqlCommand(insertOrUpdateSql, connection)
-                    {
-                        CommandType = CommandType.Text
-                    };
-                    command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}", syncItem.EntityId));
+                var command = new SqlCommand(insertOrUpdateSql, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.Add(new SqlParameter($"@{AzureDataLakeConstants.IdKey}", syncItem.EntityId));
 
-                    for (var i = 0; i < propertyKeys.Count; i++)
-                    {
-                        command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem.Data[propertyKeys[i]])));
-                    }
+                for (var i = 0; i < propertyKeys.Count; i++)
+                {
+                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem.Data[propertyKeys[i]])));
+                }
 
-                    var rowsAffected = await command.ExecuteNonQueryAsync();
-                    if (rowsAffected != 1)
-                    {
-                        throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
-                    }
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected != 1)
+                {
+                    throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
                 }
             }
+        }
+
+        private static List<string> GetPropertyKeysWithoutId(SyncItem syncItem)
+        {
+            return syncItem.Data.Keys.Except(new[] { AzureDataLakeConstants.IdKey }).OrderBy(key => key).ToList();
         }
 
         private static bool GetIsTableNotFoundException(SqlException ex)
@@ -413,8 +426,6 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         private async Task VerifyTableOperations(string connectionString)
         {
-            await using var connection = new SqlConnection(connectionString);
-            await connection.OpenAsync();
             var testStreamId = Guid.NewGuid();
             var testTableName = GetCacheTableName(testStreamId, true);
 
@@ -431,26 +442,25 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 ["testColumn"] = typeof(string),
             };
 
-            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
-
             try
             {
+                using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+                await using var connection = new SqlConnection(connectionString);
+                await connection.OpenAsync();
+                var baseSyncItem = new SyncItem(testStreamId, entityId, VersionChangeType.Added, data, dataValueTypes);
                 await EnsureCacheTableExists(
                         connection,
                         testTableName,
-                        data.Keys.Except(new[] { AzureDataLakeConstants.IdKey }).ToList(),
-                        dataValueTypes);
-                var baseSyncItem = new SyncItem(testStreamId, entityId, VersionChangeType.Added, data, dataValueTypes);
+                        baseSyncItem);
                 await VerifyOperation(connection, testTableName, baseSyncItem);
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Changed });
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Removed });
-                await DeleteCacheTableIfExists(connection, testTableName);
-                transactionScope.Complete();
-
+                await RenameCacheTableIfExists(connection, testTableName);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to verify table operations.");
+                throw;
             }
         }
 
@@ -502,7 +512,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             await _buffer.Flush();
-            await DeleteCacheTableIfExists(executionContext, streamModel);
+            await RenameCacheTableIfExists(executionContext, streamModel);
         }
 
         public override Task<IEnumerable<IConnectorContainer>> GetContainers(ExecutionContext executionContext,
@@ -550,7 +560,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             throw new NotImplementedException(nameof(RemoveContainer));
         }
 
-        private async Task DeleteCacheTableIfExists(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        private async Task RenameCacheTableIfExists(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
@@ -558,18 +568,18 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             var jobData = await AzureDataLakeConnectorJobData.Create(executionContext, providerDefinitionId, containerName);
             if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
             {
-                _logger.LogDebug("Skipping deletion of cache table because stream cache connection string is null or whitespace.");
+                _logger.LogDebug("Skipping renaming of cache table because stream cache connection string is null or whitespace.");
                 return;
             }
 
-            await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
-            await connection.OpenAsync();
             var tableName = GetCacheTableName(streamModel.Id);
 
-            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
             try
             {
-                await DeleteCacheTableIfExists(connection, tableName);
+                using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+                await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
+                await connection.OpenAsync();
+                await RenameCacheTableIfExists(connection, tableName);
                 transactionScope.Complete();
             }
             catch (Exception ex)
@@ -578,20 +588,57 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
         }
 
-        private static async Task DeleteCacheTableIfExists(SqlConnection connection, string tableName)
+        private static async Task RenameCacheTableIfExists(SqlConnection connection, string tableName)
         {
-            var deleteTableSql = $"""
-                IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
-                ALTER TABLE dbo.[{tableName}]  SET ( SYSTEM_VERSIONING = Off )
+            var suffixDate = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
 
-                DROP TABLE IF EXISTS [{tableName}];
-                DROP TABLE IF EXISTS [{tableName}_History];
-                """;
-            var command = new SqlCommand(deleteTableSql, connection)
+            await renameTable($"{tableName}_History");
+            await renameTable(tableName);
+
+            async Task renameTable(string currentTableName)
             {
-                CommandType = CommandType.Text
-            };
-            _ = await command.ExecuteNonQueryAsync();
+                var oldTableName = currentTableName;
+                var newTableName = $"{currentTableName}_{suffixDate}";
+                var renameTableSql = @$"
+                IF EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @OldTableName AND TABLE_SCHEMA = @Schema)
+                BEGIN
+                    DECLARE @FullOldTableName SYSNAME = @Schema + N'.' + @OldTableName
+                    EXEC sp_rename @FullOldTableName, @NewTableName;
+                END
+
+                WHILE EXISTS(
+                    SELECT [CONSTRAINT_NAME] 
+                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
+                    WHERE 
+                        [TABLE_NAME] = @NewTableName 
+                        AND 
+                        NOT [CONSTRAINT_NAME] LIKE '%' + @ArchiveSuffix)
+                BEGIN
+                    DECLARE @ConstraintName SYSNAME;
+                    SELECT TOP 1 @ConstraintName = [CONSTRAINT_NAME] 
+                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
+                    WHERE 
+                        [TABLE_NAME] = @NewTableName
+                        AND 
+                        NOT [CONSTRAINT_NAME] LIKE '%' + @ArchiveSuffix;
+
+                    DECLARE @FullConstraintName SYSNAME = @Schema + '.' + @ConstraintName;
+                    DECLARE @NewConstraintName SYSNAME = @ConstraintName + @archiveSuffix;
+                    EXEC sp_rename @objname = @FullConstraintName, @newname = @NewConstraintName, @objtype = N'OBJECT';
+                END";
+                var schemaParameter = new SqlParameter("@Schema", SqlDbType.NVarChar) { Value = "dbo" };
+                var oldTableNameParameter = new SqlParameter("@OldTableName", SqlDbType.NVarChar) { Value = oldTableName.ToString() };
+                var newTableNameParameter = new SqlParameter("@NewTableName", SqlDbType.NVarChar) { Value = newTableName.ToString() };
+                var archiveSuffixParameter = new SqlParameter("@ArchiveSuffix", SqlDbType.NVarChar) { Value = suffixDate };
+                var parameters = new[] { schemaParameter, oldTableNameParameter, newTableNameParameter, archiveSuffixParameter };
+
+                var command = new SqlCommand(renameTableSql, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.AddRange(parameters);
+                _ = await command.ExecuteNonQueryAsync();
+            }
         }
 
         private record SyncItem(
