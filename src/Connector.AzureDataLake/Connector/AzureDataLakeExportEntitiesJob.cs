@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -24,6 +23,13 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
 
     protected override async Task DoRunAsync(ExecutionContext context, JobArgs args)
     {
+        using var exportJobLoggingScope = context.Log.BeginScope(new Dictionary<string, object>
+        {
+            ["StreamId"] = args.Message,
+            ["Schedule"] = args.Schedule,
+            ["ExportJob"] = nameof(AzureDataLakeExportEntitiesJob),
+        });
+        context.Log.LogDebug("Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", nameof(AzureDataLakeExportEntitiesJob), args.Message, args.Schedule);
         if (args.Schedule == AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never])
         {
             context.Log.LogDebug("Job is disabled because cron is set to {CronSchedule}. Skipping export.", AzureDataLakeConstants.JobScheduleNames.Never);
@@ -98,18 +104,22 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
         var fileExtension = GetFileExtension(outputFormat);
         var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
-        var directoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
-        var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
-        await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
 
         using var loggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {
             ["FileName"] = outputFileName,
             ["Format"] = outputFormat,
             ["StartTime"] = DateTimeOffset.UtcNow,
+            ["DataTime"] = asOfTime,
         });
+        context.Log.LogDebug("Begin writing to file '{OutputFileName}' using data at {DataTime}.", outputFileName, asOfTime);
+        var directoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
+        var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
+        await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
+
         var sqlDataWriter = GetSqlDataWriter(outputFormat);
         await sqlDataWriter?.WriteAsync(context, outputStream, fieldNames, reader);
+        context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", nameof(AzureDataLakeExportEntitiesJob), args.Message, args.Schedule);
     }
 
     private static string GetFileExtension(string outputFormat)
