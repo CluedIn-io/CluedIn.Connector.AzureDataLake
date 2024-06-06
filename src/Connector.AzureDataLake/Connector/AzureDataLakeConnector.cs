@@ -25,7 +25,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
     public class AzureDataLakeConnector : ConnectorBaseV2
     {
         private const string JsonMimeType = "application/json";
-        private const int TableCreationLockTimeout = 100;
+        private const int TableCreationLockTimeoutInMillliseconds = 100;
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
@@ -232,20 +232,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return SaveResult.Success;
         }
 
-        private async Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string tableName)
+        private Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string tableName)
         {
-            using var lockCommand = new SqlCommand("sp_getapplock", connection);
-            lockCommand.CommandType = CommandType.StoredProcedure;
-            lockCommand.Parameters.Add(new SqlParameter("@Resource", SqlDbType.NVarChar, 255) { Value = $"{nameof(AzureDataLakeConnector)}{tableName}" });
-            lockCommand.Parameters.Add(new SqlParameter("@LockMode", SqlDbType.NVarChar, 32) { Value = "Exclusive" });
-            lockCommand.Parameters.Add(new SqlParameter("@LockTimeout", SqlDbType.Int) { Value = TableCreationLockTimeout });
-            lockCommand.Parameters.Add(new SqlParameter("@Result", SqlDbType.Int) { Direction = ParameterDirection.ReturnValue });
-
-            _ = await lockCommand.ExecuteNonQueryAsync();
-
-            var queryResult = (int)lockCommand.Parameters["@Result"].Value;
-            var acquiredLock = queryResult >= 0;
-            return acquiredLock;
+            return DistributedLockHelper.TryAcquireTableCreationLock(
+                connection,
+                $"{nameof(AzureDataLakeConnector)}_{tableName}",
+                TableCreationLockTimeoutInMillliseconds);
         }
 
         private async Task WriteToCacheTable(
