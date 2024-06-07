@@ -127,12 +127,14 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
             ["StartTime"] = DateTimeOffset.UtcNow,
             ["DataTime"] = asOfTime,
         });
+
+        var sqlDataWriter = GetSqlDataWriter(outputFormat);
+
         context.Log.LogDebug("Begin writing to file '{OutputFileName}' using data at {DataTime}.", outputFileName, asOfTime);
         var directoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
         await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
 
-        var sqlDataWriter = GetSqlDataWriter(outputFormat);
         await sqlDataWriter?.WriteAsync(context, outputStream, fieldNames, reader);
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", nameof(AzureDataLakeExportEntitiesJob), args.Message, args.Schedule);
     }
@@ -159,21 +161,19 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
 
     private static ISqlDataWriter GetSqlDataWriter(string outputFormat)
     {
-        ISqlDataWriter sqlDataWriter = null;
-
         if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
         {
-            sqlDataWriter = new CsvSqlDataWriter();
+            return new CsvSqlDataWriter();
         }
         else if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Json, StringComparison.OrdinalIgnoreCase))
         {
-            sqlDataWriter = new JsonSqlDataWriter();
+            return new JsonSqlDataWriter();
         }
         else if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
         {
-            sqlDataWriter = new ParquetSqlDataWriter();
+            return new ParquetSqlDataWriter();
         }
 
-        return sqlDataWriter;
+        throw new NotSupportedException($"Format '{outputFormat}' is not supported.");
     }
 }
