@@ -439,6 +439,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
                 await using var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync();
+
+                if (!await DistributedLockHelper.TryAcquireTableCreationLock(connection, nameof(VerifyConnection), -1))
+                {
+                    throw new ApplicationException("Failed to acquire lock for verifying connection.");
+                }
+
                 var baseSyncItem = new SyncItem(testStreamId, entityId, VersionChangeType.Added, data, dataValueTypes);
                 await EnsureCacheTableExists(
                         connection,
@@ -447,6 +453,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 await VerifyOperation(connection, testTableName, baseSyncItem);
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Changed });
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Removed });
+
                 await RenameCacheTableIfExists(connection, testTableName);
             }
             catch (Exception ex)
