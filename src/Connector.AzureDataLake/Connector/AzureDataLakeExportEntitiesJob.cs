@@ -24,7 +24,7 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
     {
     }
 
-    protected override async Task DoRunAsync(ExecutionContext context, JobArgs args)
+    public override async Task DoRunAsync(ExecutionContext context, JobArgs args)
     {
         using var exportJobLoggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {
@@ -33,14 +33,7 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
             ["ExportJob"] = nameof(AzureDataLakeExportEntitiesJob),
         });
         context.Log.LogDebug("Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", nameof(AzureDataLakeExportEntitiesJob), args.Message, args.Schedule);
-
-        
-        if (args.Schedule == AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never])
-        {
-            context.Log.LogDebug("Job is disabled because cron is set to {CronSchedule}. Skipping export.", AzureDataLakeConstants.JobScheduleNames.Never);
-            return;
-        }
-
+                
         var streamRepository = context.ApplicationContext.Container.Resolve<IStreamRepository>();
         var client = context.ApplicationContext.Container.Resolve<IAzureDataLakeClient>();
         var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
@@ -103,7 +96,7 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
             return;
         }
 
-        var asOfTime = GetLastOccurence(args, configuration);
+        var asOfTime = GetLastOccurence(context, args, configuration);
 
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
         var command = new SqlCommand(getDataSql, connection)
@@ -144,10 +137,12 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
         return outputFormat;
     }
 
-    private static DateTime GetLastOccurence(JobArgs args, AzureDataLakeConnectorJobData configuration)
+    private static DateTime GetLastOccurence(ExecutionContext context, JobArgs args, AzureDataLakeConnectorJobData configuration)
     {
-        if (configuration.UseCurrentTimeForExport)
+        if (configuration.UseCurrentTimeForExport
+            || args.Schedule == AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never])
         {
+            context.Log.LogDebug("Using current time for export.");
             return DateTime.UtcNow;
         }
 
