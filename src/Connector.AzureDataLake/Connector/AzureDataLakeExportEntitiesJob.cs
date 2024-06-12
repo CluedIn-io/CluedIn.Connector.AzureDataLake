@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Transactions;
 
 using CluedIn.Connector.AzureDataLake.Connector.SqlDataWriter;
 using CluedIn.Core;
@@ -17,6 +18,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector;
 
 internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
 {
+    private static readonly TimeSpan exportTimeout = TimeSpan.MaxValue;
+    private const int ExportEntitiesLockInMilliseconds = 100;
     public AzureDataLakeExportEntitiesJob(ApplicationContext appContext) : base(appContext)
     {
     }
@@ -30,6 +33,8 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
             ["ExportJob"] = nameof(AzureDataLakeExportEntitiesJob),
         });
         context.Log.LogDebug("Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", nameof(AzureDataLakeExportEntitiesJob), args.Message, args.Schedule);
+
+        
         if (args.Schedule == AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never])
         {
             context.Log.LogDebug("Job is disabled because cron is set to {CronSchedule}. Skipping export.", AzureDataLakeConstants.JobScheduleNames.Never);
@@ -84,9 +89,19 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
             return;
         }
 
+
         var tableName = CacheTableHelper.GetCacheTableName(streamId);
+        using var transactionScope = new TransactionScope(
+            TransactionScopeOption.Required,
+            exportTimeout,
+            TransactionScopeAsyncFlowOption.Enabled);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
+        if (!await DistributedLockHelper.TryAcquireTableCreationLock(connection, $"{nameof(AzureDataLakeExportEntitiesJob)}_{streamModel.Id}", ExportEntitiesLockInMilliseconds))
+        {
+            context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamModel.Id);
+            return;
+        }
 
         var asOfTime = GetLastOccurence(args, configuration);
 
@@ -112,12 +127,14 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
             ["StartTime"] = DateTimeOffset.UtcNow,
             ["DataTime"] = asOfTime,
         });
+
+        var sqlDataWriter = GetSqlDataWriter(outputFormat);
+
         context.Log.LogDebug("Begin writing to file '{OutputFileName}' using data at {DataTime}.", outputFileName, asOfTime);
         var directoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
         await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
 
-        var sqlDataWriter = GetSqlDataWriter(outputFormat);
         await sqlDataWriter?.WriteAsync(context, outputStream, fieldNames, reader);
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", nameof(AzureDataLakeExportEntitiesJob), args.Message, args.Schedule);
     }
@@ -144,21 +161,19 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
 
     private static ISqlDataWriter GetSqlDataWriter(string outputFormat)
     {
-        ISqlDataWriter sqlDataWriter = null;
-
         if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
         {
-            sqlDataWriter = new CsvSqlDataWriter();
+            return new CsvSqlDataWriter();
         }
         else if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Json, StringComparison.OrdinalIgnoreCase))
         {
-            sqlDataWriter = new JsonSqlDataWriter();
+            return new JsonSqlDataWriter();
         }
         else if (outputFormat.Equals(AzureDataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
         {
-            sqlDataWriter = new ParquetSqlDataWriter();
+            return new ParquetSqlDataWriter();
         }
 
-        return sqlDataWriter;
+        throw new NotSupportedException($"Format '{outputFormat}' is not supported.");
     }
 }
