@@ -294,7 +294,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
                 for (var i = 0; i < propertyKeys.Count; i++)
                 {
-                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem.Data[propertyKeys[i]])));
+                    var key = propertyKeys[i];
+                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
                 }
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
@@ -325,11 +326,20 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return CacheTableHelper.GetCacheTableName(streamId);
         }
 
-        private static object GetDatabaseValue(object value)
+        private static object GetDatabaseValue(SyncItem syncItem, string key)
         {
+            var value = syncItem.Data[key];
+            var dataValueType = syncItem.DataValueTypes[key];
             if (value == null)
             {
                 return DBNull.Value;
+            }
+
+            // bug with CluedIn where a DateTime vocab key is sent as string to bus but deserialized as DateTime
+            if (dataValueType == typeof(string) && value is DateTime datetime)
+            {
+                var serialized = JsonConvert.SerializeObject(datetime, _serializerSettings);
+                return serialized[1..^1];
             }
 
             if (_dotNetToSqlTypeMap.ContainsKey(value.GetType()))
