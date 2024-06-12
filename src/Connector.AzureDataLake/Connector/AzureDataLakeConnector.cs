@@ -91,11 +91,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             foreach(var property in connectorEntityData.Properties)
             {
                 var type = property.GetDataType();
-                var nullableUnderlyingType = Nullable.GetUnderlyingType(type);
-                if (nullableUnderlyingType != null)
-                {
-                    type = nullableUnderlyingType;
-                }
+                type = RemoveNullableType(type);
 
                 dataValueTypes.Add(property.Name, type);
             }
@@ -103,8 +99,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             void AddToData<T>(string key, T value)
             {
                 data.Add(key, value);
-                dataValueTypes.Add(key, typeof(T));
+                dataValueTypes.Add(key, RemoveNullableType(typeof(T)));
             }
+
             AddToData(AzureDataLakeConstants.IdKey, connectorEntityData.EntityId);
             AddToData("PersistHash", connectorEntityData.PersistInfo?.PersistHash);
             AddToData("PersistVersion", connectorEntityData.PersistInfo?.PersistVersion);
@@ -132,6 +129,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
             }
+        }
+
+        private static Type RemoveNullableType(Type type)
+        {
+            var nullableUnderlyingType = Nullable.GetUnderlyingType(type);
+            if (nullableUnderlyingType != null)
+            {
+                type = nullableUnderlyingType;
+            }
+
+            return type;
         }
 
         public virtual async Task<AzureDataLakeConnectorJobData> CreateJobData(

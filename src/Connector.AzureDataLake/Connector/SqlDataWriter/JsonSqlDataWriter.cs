@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 
 using CluedIn.Core;
 
+using CsvHelper;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
@@ -71,7 +73,13 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
 
         try
         {
-            return JToken.Parse(stringValue);
+            var parsed = JToken.Parse(stringValue);
+            if (parsed is JArray || parsed is JObject)
+            {
+                return parsed;
+            }
+
+            return stringValue;
         }
         catch (JsonReaderException)
         {
