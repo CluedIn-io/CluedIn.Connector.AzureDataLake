@@ -34,7 +34,6 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
         });
         context.Log.LogDebug("Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", nameof(AzureDataLakeExportEntitiesJob), args.Message, args.Schedule);
 
-        
         if (args.Schedule == AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never])
         {
             context.Log.LogDebug("Job is disabled because cron is set to {CronSchedule}. Skipping export.", AzureDataLakeConstants.JobScheduleNames.Never);
@@ -104,6 +103,15 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
         }
 
         var asOfTime = GetLastOccurence(args, configuration);
+        var outputFormat = configuration.OutputFormat.ToLowerInvariant();
+        var outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
+
+        if (await client.FileInPathExists(configuration, outputFileName))
+        {
+            context.Log.LogDebug("Output file '{OutputFileName}' exists using data at {DataTime}. Switching to using current time", outputFileName, asOfTime);
+            asOfTime = DateTime.UtcNow;
+            outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
+        }
 
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
         var command = new SqlCommand(getDataSql, connection)
@@ -115,10 +123,6 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
             .Select(reader.GetName)
             .ToList();
-
-        var outputFormat = configuration.OutputFormat.ToLowerInvariant();
-        var fileExtension = GetFileExtension(outputFormat);
-        var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
 
         using var loggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {
@@ -137,6 +141,13 @@ internal class AzureDataLakeExportEntitiesJob : AzureDataLakeJobBase
 
         await sqlDataWriter?.WriteAsync(context, outputStream, fieldNames, reader);
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", nameof(AzureDataLakeExportEntitiesJob), args.Message, args.Schedule);
+    }
+
+    private static string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
+    {
+        var fileExtension = GetFileExtension(outputFormat);
+        var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
+        return outputFileName;
     }
 
     private static string GetFileExtension(string outputFormat)

@@ -53,6 +53,26 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             }
         }
 
+        public async Task<bool> FileInPathExists(AzureDataLakeConnectorJobData configuration, string fileName)
+        {
+            var serviceClient = GetDataLakeServiceClient(configuration);
+            var fileSystemClient = serviceClient.GetFileSystemClient(configuration.FileSystemName);
+
+            if (!await fileSystemClient.ExistsAsync())
+            {
+                return false;
+            }
+
+            var directoryClient = fileSystemClient.GetDirectoryClient(configuration.DirectoryName);
+            if (!await directoryClient.ExistsAsync())
+            {
+                return false;
+            }
+
+            var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+            return await dataLakeFileClient.ExistsAsync();
+        }
+
         private DataLakeServiceClient GetDataLakeServiceClient(AzureDataLakeConnectorJobData configuration)
         {
             return new DataLakeServiceClient(
