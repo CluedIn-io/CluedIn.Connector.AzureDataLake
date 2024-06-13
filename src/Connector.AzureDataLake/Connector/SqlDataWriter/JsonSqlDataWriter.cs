@@ -4,8 +4,6 @@ using System.Threading.Tasks;
 
 using CluedIn.Core;
 
-using CsvHelper;
-
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
