@@ -117,6 +117,12 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 {
                     new ConnectorPropertyData("user.lastName", "Picard",
                         new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
+                    new ConnectorPropertyData("user.age", "123",
+                        new VocabularyKeyConnectorPropertyDataType(
+                            new VocabularyKey("user.age", dataType: VocabularyKeyDataType.Integer)
+                            {
+                                Storage = VocabularyKeyStorage.Typed,
+                            })),
                     new ConnectorPropertyData("Name", "Jean Luc Picard",
                         new EntityPropertyConnectorPropertyDataType(typeof(string))),
                 },
@@ -162,6 +168,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                     [
                       {
                         "user.lastName": "Picard",
+                        "user.age": "123",
                         "Name": "Jean Luc Picard",
                         "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
                         "PersistHash": "etypzcezkiehwq8vw4oqog==",
@@ -379,6 +386,12 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 {
                     new ConnectorPropertyData("user.lastName", "Picard",
                         new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
+                    new ConnectorPropertyData("user.age", "123",
+                        new VocabularyKeyConnectorPropertyDataType(
+                            new VocabularyKey("user.age", dataType: VocabularyKeyDataType.Integer)
+                            {
+                                Storage = VocabularyKeyStorage.Typed,
+                            })),
                     new ConnectorPropertyData("Name", "Jean Luc Picard",
                         new EntityPropertyConnectorPropertyDataType(typeof(string))),
                 },
@@ -423,6 +436,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                     $$"""
                     {
                       "user.lastName": "Picard",
+                      "user.age": "123",
                       "Name": "Jean Luc Picard",
                       "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
                       "PersistHash": "etypzcezkiehwq8vw4oqog==",
@@ -694,6 +708,12 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 {
                     new ConnectorPropertyData("user.lastName", "Picard",
                         new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
+                    new ConnectorPropertyData("user.age", "123",
+                        new VocabularyKeyConnectorPropertyDataType(
+                            new VocabularyKey("user.age", dataType: VocabularyKeyDataType.Integer)
+                            {
+                                Storage = VocabularyKeyStorage.Typed,
+                            })),
                     new ConnectorPropertyData("Name", "Jean Luc Picard",
                         new EntityPropertyConnectorPropertyDataType(typeof(string))),
                 },
@@ -891,6 +911,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                         "PersistHash": "etypzcezkiehwq8vw4oqog==",
                         "PersistVersion": 1,
                         "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
+                        "user.age": "123",
                         "user.lastName": "Picard"
                       }
                     ]

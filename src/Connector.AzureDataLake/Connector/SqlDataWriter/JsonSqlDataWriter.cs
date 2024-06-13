@@ -71,7 +71,13 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
 
         try
         {
-            return JToken.Parse(stringValue);
+            var parsed = JToken.Parse(stringValue);
+            if (parsed is JArray || parsed is JObject)
+            {
+                return parsed;
+            }
+
+            return stringValue;
         }
         catch (JsonReaderException)
         {
