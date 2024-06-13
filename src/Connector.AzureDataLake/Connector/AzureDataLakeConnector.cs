@@ -29,7 +29,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
-        private static readonly JsonSerializerSettings _serializerSettings = GetJsonSerializerSettings();
+        private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
+        private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
 
         // TODO: Handle ushort, ulong, uint
         private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new ()
@@ -338,7 +339,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             // bug with CluedIn where a DateTime vocab key is sent as string to bus but deserialized as DateTime
             if (dataValueType == typeof(string) && value is DateTime datetime)
             {
-                var serialized = JsonConvert.SerializeObject(datetime, _serializerSettings);
+                var serialized = JsonConvert.SerializeObject(datetime, _cacheTableSerializerSettings);
                 return serialized[1..^1];
             }
 
@@ -346,7 +347,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 return value;
             }
-            return JsonConvert.SerializeObject(value, _serializerSettings);
+            return JsonConvert.SerializeObject(value, _cacheTableSerializerSettings);
         }
 
         private async Task<SaveResult> WriteToOutputImmediately(
@@ -365,7 +366,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 }
                 else
                 {
-                    var json = JsonConvert.SerializeObject(data, GetJsonSerializerSettings());
+                    var json = JsonConvert.SerializeObject(data, _immediateOutputSerializerSettings);
 
                     await _client.SaveData(configurations, json, filePathAndName, JsonMimeType);
 
@@ -383,12 +384,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return SaveResult.Success;
         }
 
-        private static JsonSerializerSettings GetJsonSerializerSettings()
+        private static JsonSerializerSettings GetJsonSerializerSettings(Formatting formatting)
         {
             return new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.None,
-                Formatting = Formatting.Indented,
+                Formatting = formatting,
             };
         }
 
@@ -507,13 +508,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 return;
             }
 
-            var settings = new JsonSerializerSettings
-            {
-                TypeNameHandling = TypeNameHandling.None,
-                Formatting = Formatting.Indented,
-            };
-
-            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), settings);
+            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), _immediateOutputSerializerSettings);
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
