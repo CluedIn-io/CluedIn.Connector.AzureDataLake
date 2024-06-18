@@ -151,8 +151,9 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
         await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
+        using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
 
-        await sqlDataWriter?.WriteAsync(context, configuration, outputStream, fieldNames, reader);
+        await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNames, reader);
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
     }
 
