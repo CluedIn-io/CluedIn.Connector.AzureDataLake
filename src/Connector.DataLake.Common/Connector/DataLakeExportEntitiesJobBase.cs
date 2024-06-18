@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
@@ -109,13 +110,13 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var asOfTime = GetLastOccurence(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
-        var outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
+        var outputFileName = GetOutputFileName(configuration, streamId, asOfTime, outputFormat);
 
         if (await _dataLakeClient.FileInPathExists(configuration, outputFileName))
         {
             context.Log.LogDebug("Output file '{OutputFileName}' exists using data at {DataTime}. Switching to using current time", outputFileName, asOfTime);
             asOfTime = DateTime.UtcNow;
-            outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
+            outputFileName = GetOutputFileName(configuration, streamId, asOfTime, outputFormat);
         }
 
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
@@ -149,11 +150,66 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
     }
 
-    protected virtual string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
+    protected virtual string GetOutputFileName(IDataLakeJobData configuration, Guid streamId, DateTime asOfTime, string outputFormat)
+    {
+        if (!string.IsNullOrWhiteSpace(configuration.FileNamePattern))
+        {
+            return GetOutputFileNameUsingPattern(configuration.FileNamePattern, streamId, asOfTime, outputFormat);
+        }
+
+        return GetDefaultOutputFileName(streamId, asOfTime, outputFormat);
+    }
+
+    protected virtual string GetDefaultOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
     {
         var fileExtension = GetFileExtension(outputFormat);
         var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
         return outputFileName;
+    }
+
+    private static string GetOutputFileNameUsingPattern(string outputFileNamePattern, Guid streamId, DateTime asOfTime, string outputFormat)
+    {
+        var timeRegexPattern = @"\{(DataTime)(\:[a-zA-Z0-9\-\._]+)?\}";
+        var streamIdRegexPattern = @"\{(StreamId)(\:[a-zA-Z0-9\-\._]+)?\}";
+        var outputFormatRegexPattern = @"\{(OutputFormat)(\:[a-zA-Z0-9\-\._]+)?\}";
+
+        var timeReplaced = Replace(timeRegexPattern, outputFileNamePattern, (match, format) => asOfTime.ToString(format ?? "o"));
+        var streamIdReplaced = Replace(streamIdRegexPattern, timeReplaced, (match, format) => streamId.ToString(format ?? "D"));
+        var outputFormatReplaced = Replace(outputFormatRegexPattern, streamIdReplaced, (match, format) =>
+        {
+            return format?.ToLowerInvariant() switch
+            {
+                "toupper" => outputFormat.ToUpperInvariant(),
+                "toupperinvariant" => outputFormat.ToUpperInvariant(),
+                "tolower" => outputFormat.ToLowerInvariant(),
+                "tolowerinvariant" => outputFormat.ToLowerInvariant(),
+                null => outputFormat,
+                _ => throw new NotSupportedException($"Format '{format}' is not supported"),
+            };
+        });
+
+        return outputFormatReplaced;
+    }
+
+    private static string Replace(string pattern, string input, Func<Match, string, string> formatter)
+    {
+        var regex = new Regex(pattern);
+        var matches = regex.Matches(input);
+        var result = input;
+        foreach (var match in matches.Reverse())
+        {
+            if (match.Groups.Count != 3 || !match.Groups[1].Success)
+            {
+                continue;
+            }
+            var format = match.Groups[2].Success
+                ? match.Groups[2].Captures.Single().Value.Substring(1)
+                : null;
+            var formatted = formatter(match, format);
+            result = $"{result[0..match.Index]}{formatted}{result[(match.Index + match.Length)..]}";
+        }
+
+        return result;
     }
 
     protected virtual string GetFileExtension(string outputFormat)
