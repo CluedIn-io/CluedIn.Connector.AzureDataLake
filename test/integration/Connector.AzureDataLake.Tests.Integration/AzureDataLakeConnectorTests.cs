@@ -699,6 +699,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var connector = connectorMock.Object;
 
+            var dobInDateTime = new DateTime(2000, 01, 02, 03, 04, 05);
+            var dobInDateTimeOffset = new DateTimeOffset(2000, 01, 02, 03, 04, 05, TimeSpan.FromMinutes(12 * 60 + 34));
             var data = new ConnectorEntityData(VersionChangeType.Added, StreamMode.EventStream,
                 Guid.Parse("f55c66dc-7881-55c9-889f-344992e71cb8"),
                 new ConnectorEntityPersistInfo("etypzcezkiehwq8vw4oqog==", 1), null,
@@ -711,6 +713,18 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                     new ConnectorPropertyData("user.age", "123",
                         new VocabularyKeyConnectorPropertyDataType(
                             new VocabularyKey("user.age", dataType: VocabularyKeyDataType.Integer)
+                            {
+                                Storage = VocabularyKeyStorage.Typed,
+                            })),
+                    new ConnectorPropertyData("user.dobInDateTime", dobInDateTime,
+                        new VocabularyKeyConnectorPropertyDataType(
+                            new VocabularyKey("user.dobInDateTime", dataType: VocabularyKeyDataType.DateTime)
+                            {
+                                Storage = VocabularyKeyStorage.Typed,
+                            })),
+                    new ConnectorPropertyData("user.dobInDateTimeOffset", dobInDateTimeOffset,
+                        new VocabularyKeyConnectorPropertyDataType(
+                            new VocabularyKey("user.dobInDateTimeOffset", dataType: VocabularyKeyDataType.DateTime)
                             {
                                 Storage = VocabularyKeyStorage.Typed,
                             })),
@@ -912,6 +926,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                         "PersistVersion": 1,
                         "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
                         "user.age": "123",
+                        "user.dobInDateTime": "2000-01-02T03:04:05",
+                        "user.dobInDateTimeOffset": "2000-01-02T03:04:05+12:34",
                         "user.lastName": "Picard"
                       }
                     ]
