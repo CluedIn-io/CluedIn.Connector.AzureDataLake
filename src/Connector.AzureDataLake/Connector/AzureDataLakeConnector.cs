@@ -29,7 +29,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
-        private static readonly JsonSerializerSettings _serializerSettings = GetJsonSerializerSettings();
+        private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
+        private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
 
         // TODO: Handle ushort, ulong, uint
         private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new ()
@@ -91,11 +92,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             foreach(var property in connectorEntityData.Properties)
             {
                 var type = property.GetDataType();
-                var nullableUnderlyingType = Nullable.GetUnderlyingType(type);
-                if (nullableUnderlyingType != null)
-                {
-                    type = nullableUnderlyingType;
-                }
+                type = RemoveNullableType(type);
 
                 dataValueTypes.Add(property.Name, type);
             }
@@ -103,8 +100,9 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             void AddToData<T>(string key, T value)
             {
                 data.Add(key, value);
-                dataValueTypes.Add(key, typeof(T));
+                dataValueTypes.Add(key, RemoveNullableType(typeof(T)));
             }
+
             AddToData(AzureDataLakeConstants.IdKey, connectorEntityData.EntityId);
             AddToData("PersistHash", connectorEntityData.PersistInfo?.PersistHash);
             AddToData("PersistVersion", connectorEntityData.PersistInfo?.PersistVersion);
@@ -132,6 +130,17 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
             }
+        }
+
+        private static Type RemoveNullableType(Type type)
+        {
+            var nullableUnderlyingType = Nullable.GetUnderlyingType(type);
+            if (nullableUnderlyingType != null)
+            {
+                type = nullableUnderlyingType;
+            }
+
+            return type;
         }
 
         public virtual async Task<AzureDataLakeConnectorJobData> CreateJobData(
@@ -286,7 +295,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
                 for (var i = 0; i < propertyKeys.Count; i++)
                 {
-                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem.Data[propertyKeys[i]])));
+                    var key = propertyKeys[i];
+                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
                 }
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
@@ -317,18 +327,28 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return CacheTableHelper.GetCacheTableName(streamId);
         }
 
-        private static object GetDatabaseValue(object value)
+        private static object GetDatabaseValue(SyncItem syncItem, string key)
         {
+            var value = syncItem.Data[key];
+            var dataValueType = syncItem.DataValueTypes[key];
             if (value == null)
             {
                 return DBNull.Value;
+            }
+
+            // Bug with CluedIn where a DateTime vocab key is sent as string to bus but deserialized as DateTime
+            // In CluedIn > 4.3.0, it's deserialized as DateTimeOffset instead of DateTime
+            if (dataValueType == typeof(string) && (value is DateTime || value is DateTimeOffset))
+            {
+                var serialized = JsonConvert.SerializeObject(value, _cacheTableSerializerSettings);
+                return serialized[1..^1];
             }
 
             if (_dotNetToSqlTypeMap.ContainsKey(value.GetType()))
             {
                 return value;
             }
-            return JsonConvert.SerializeObject(value, _serializerSettings);
+            return JsonConvert.SerializeObject(value, _cacheTableSerializerSettings);
         }
 
         private async Task<SaveResult> WriteToOutputImmediately(
@@ -347,7 +367,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 }
                 else
                 {
-                    var json = JsonConvert.SerializeObject(data, GetJsonSerializerSettings());
+                    var json = JsonConvert.SerializeObject(data, _immediateOutputSerializerSettings);
 
                     await _client.SaveData(configurations, json, filePathAndName, JsonMimeType);
 
@@ -365,12 +385,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             return SaveResult.Success;
         }
 
-        private static JsonSerializerSettings GetJsonSerializerSettings()
+        private static JsonSerializerSettings GetJsonSerializerSettings(Formatting formatting)
         {
             return new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.None,
-                Formatting = Formatting.Indented,
+                Formatting = formatting,
             };
         }
 
@@ -489,13 +509,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 return;
             }
 
-            var settings = new JsonSerializerSettings
-            {
-                TypeNameHandling = TypeNameHandling.None,
-                Formatting = Formatting.Indented,
-            };
-
-            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), settings);
+            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), _immediateOutputSerializerSettings);
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";

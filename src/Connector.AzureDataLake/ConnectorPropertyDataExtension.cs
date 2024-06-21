@@ -11,7 +11,7 @@ internal static class ConnectorPropertyDataExtension
         var dataType = connectorPropertyData.DataType;
         if (dataType is VocabularyKeyConnectorPropertyDataType vocabularyKeyType)
         {
-            return vocabularyKeyType.VocabularyKey.DataType.ConvertToType();
+            return typeof(string);
         }
         else if (dataType is EntityPropertyConnectorPropertyDataType entityPropertyType)
         {
@@ -19,7 +19,7 @@ internal static class ConnectorPropertyDataExtension
         }
         else if (dataType is VocabularyKeyDataTypeConnectorPropertyDataType vocabularyKeyDataTypeType)
         {
-            return vocabularyKeyDataTypeType.VocabularyKeyDataType.ConvertToType();
+            return typeof(string);
         }
 
         throw new NotSupportedException($"{nameof(ConnectorPropertyDataType)} of type {dataType} is not supported.");
