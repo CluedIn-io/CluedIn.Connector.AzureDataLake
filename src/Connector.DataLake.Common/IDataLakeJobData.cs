@@ -9,4 +9,5 @@ public interface IDataLakeJobData
     string OutputFormat { get; }
     string Schedule { get; }
     bool ShouldWriteGuidAsString { get; }
+    bool ShouldEscapeVocabularyKeys { get; }
 }

@@ -22,6 +22,7 @@ internal class OneLakeConnectorJobData : DataLakeJobData
     public string ClientSecret => Configurations[OneLakeConstants.ClientSecret] as string;
     public string TenantId => Configurations[OneLakeConstants.TenantId] as string;
     public override bool ShouldWriteGuidAsString => true;
+    public override bool ShouldEscapeVocabularyKeys => true;
 
     protected override void AddToHashCode(HashCode hash)
     {

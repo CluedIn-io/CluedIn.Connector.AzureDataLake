@@ -4,12 +4,15 @@ using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CluedIn.Core;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Parquet;
 using Parquet.Schema;
+using SixLabors.ImageSharp.ColorSpaces;
+
 using ParquetRow = Parquet.Rows.Row;
 using ParquetTable = Parquet.Rows.Table;
 
@@ -20,6 +23,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
     // From documentation, it's ambiguous whether we need at least 5k or 50k rows to be optimal
     // TODO: Find recommendations or method to calculate row group threshold        
     public const int RowGroupThreshold = 10000;
+    private static readonly Regex NonAlphaNumericRegex = new ("[^a-zA-Z0-9 -]");
     public override async Task<long> WriteOutputAsync(
         ExecutionContext context,
         IDataLakeJobData configuration,
@@ -32,6 +36,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         {
             var type = reader.GetFieldType(fieldName);
 
+            var parquetFieldName = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
             fields.Add(new DataField(fieldName, GetParquetDataType(type, configuration)));
         }
 
@@ -69,6 +74,11 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         }
 
         return totalProcessed;
+    }
+
+    private string EscapeVocabularyKey(string fieldName)
+    {
+        return NonAlphaNumericRegex.Replace(fieldName, "_");
     }
 
     private static Type GetParquetDataType(Type type, IDataLakeJobData configuration)
