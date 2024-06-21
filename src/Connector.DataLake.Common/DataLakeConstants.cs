@@ -13,7 +13,6 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     public const string StreamCacheConnectionString = nameof(StreamCacheConnectionString);
     public const string Schedule = nameof(Schedule);
     public const string UseCurrentTimeForExport = nameof(UseCurrentTimeForExport);
-    public const string FileNamePattern = nameof(FileNamePattern);
     public const string ShouldWriteGuidAsString = nameof(ShouldWriteGuidAsString);
 
     public const string IdKey = "Id";
@@ -128,16 +127,6 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                 type = "input",
                 isRequired = true,
             });
-
-        controls.Add(
-            new()
-            {
-                name = FileNamePattern,
-                displayName = "File Name Pattern",
-                type = "input",
-                isRequired = false,
-            });
-
         return controls;
     }
 }
