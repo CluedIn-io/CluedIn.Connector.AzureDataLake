@@ -30,9 +30,31 @@ internal abstract class UpdateStreamScheduleBase
 
     protected async Task UpdateStreamSchedule(ExecutionContext executionContext, StreamModel stream)
     {
+        if (!await IsDataLakeProvider(executionContext, stream))
+        {
+            return;
+        }
         var jobServerClient = ApplicationContext.Container.Resolve<IJobServerClient>();
         var exportJob = ApplicationContext.Container.Resolve<AzureDataLakeExportEntitiesJob>();
         var neverCron = AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never];
         exportJob.Schedule(jobServerClient, neverCron, stream.Id.ToString());
+    }
+
+    private async Task<bool> IsDataLakeProvider(ExecutionContext executionContext, StreamModel stream)
+    {
+        if (stream.ConnectorProviderDefinitionId == null)
+        {
+            return false;
+        }
+
+        var organizationProviderDataStore = executionContext.Organization.DataStores.GetDataStore<ProviderDefinition>();
+        var provider = await organizationProviderDataStore.GetByIdAsync(executionContext, stream.ConnectorProviderDefinitionId.Value);
+
+        if (provider == null)
+        {
+            return false;
+        }
+
+        return provider.ProviderId == _providerId;
     }
 }
