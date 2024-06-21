@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -31,13 +29,12 @@ namespace CluedIn.Connector.AzureDataLake
         private UpdateStreamEventHandler _updateStreamEvent;
         public AzureDataLakeConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
         {
+            Container.Install(new InstallComponents());
         }
 
         /// <summary>Starts this instance.</summary>
         public override void Start()
         {
-            Container.Install(new InstallComponents());
-
             var constants = new AzureDataLakeConstants(ApplicationContext);
             #region Set existing streams to EventMode
             Task.Run(async () =>
