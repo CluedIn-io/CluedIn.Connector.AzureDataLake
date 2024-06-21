@@ -14,8 +14,9 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
 
     public UpdateExportTargetEventHandler(
         ApplicationContext applicationContext,
+        IDataLakeConstants constants,
         Type exportEntitiesJobType)
-        : base(applicationContext, exportEntitiesJobType)
+        : base(applicationContext, constants, exportEntitiesJobType)
     {
         _subscription = ApplicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
     }

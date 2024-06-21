@@ -14,8 +14,9 @@ internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDispos
 
     public ChangeStreamStateEventHandler(
         ApplicationContext applicationContext,
+        IDataLakeConstants constants,
         Type exportEntitiesJobType)
-        : base(applicationContext, exportEntitiesJobType)
+        : base(applicationContext, constants, exportEntitiesJobType)
     {
         _subscription = ApplicationContext.System.Events.Local.Subscribe<ChangeStreamStateEvent>(ProcessEvent);
     }

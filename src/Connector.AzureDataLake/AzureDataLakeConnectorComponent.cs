@@ -32,7 +32,7 @@ namespace CluedIn.Connector.AzureDataLake
         /// <summary>Starts this instance.</summary>
         public override void Start()
         {
-            var dataLakeConstants = Container.Resolve<AzureDataLakeConstants>();
+            var dataLakeConstants = Container.Resolve<IAzureDataLakeConstants>();
             var jobDataFactory = Container.Resolve<AzureDataLakeJobDataFactory>();
 
             #region Set existing streams to EventMode
@@ -132,7 +132,7 @@ namespace CluedIn.Connector.AzureDataLake
             #endregion
 
             var exportEntitiesJobType = typeof(AzureDataLakeExportEntitiesJob);
-            SubscribeToEvents(exportEntitiesJobType);
+            SubscribeToEvents(dataLakeConstants, exportEntitiesJobType);
             _ = Task.Run(() => RunScheduler(dataLakeConstants, jobDataFactory, exportEntitiesJobType));
 
             Log.LogInformation($"{ComponentName} Registered");

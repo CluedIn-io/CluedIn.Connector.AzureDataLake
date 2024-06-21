@@ -23,10 +23,10 @@ public sealed class OneLakeConnectorComponent : DataLakeConnectorComponentBase
     /// <summary>Starts this instance.</summary>
     public override void Start()
     {
-        var dataLakeConstants = Container.Resolve<OneLakeConstants>();
+        var dataLakeConstants = Container.Resolve<IOneLakeConstants>();
         var jobDataFactory = Container.Resolve<OneLakeJobDataFactory>();
         var exportEntitiesJobType = typeof(OneLakeExportEntitiesJob);
-        SubscribeToEvents(exportEntitiesJobType);
+        SubscribeToEvents(dataLakeConstants, exportEntitiesJobType);
         _ = Task.Run(() => RunScheduler(dataLakeConstants, jobDataFactory, exportEntitiesJobType));
 
         Log.LogInformation($"{ComponentName} Registered");

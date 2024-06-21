@@ -14,8 +14,9 @@ internal class UpdateStreamEventHandler : UpdateStreamScheduleBase, IDisposable
 
     public UpdateStreamEventHandler(
         ApplicationContext applicationContext,
+        IDataLakeConstants constants,
         Type exportEntitiesJobType)
-        : base(applicationContext, exportEntitiesJobType)
+        : base(applicationContext, constants, exportEntitiesJobType)
     {
         _subscription = ApplicationContext.System.Events.Local.Subscribe<UpdateStreamEvent>(ProcessEvent);
     }

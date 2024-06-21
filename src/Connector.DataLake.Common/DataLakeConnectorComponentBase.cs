@@ -30,11 +30,11 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
     {
     }
 
-    protected void SubscribeToEvents(Type exportEntitiesJobType)
+    protected void SubscribeToEvents(IDataLakeConstants constants, Type exportEntitiesJobType)
     {
-        _updateExportTargetHandler = new(ApplicationContext, exportEntitiesJobType);
-        _changeStreamStateEvent = new(ApplicationContext, exportEntitiesJobType);
-        _updateStreamEvent = new(ApplicationContext, exportEntitiesJobType);
+        _updateExportTargetHandler = new(ApplicationContext, constants, exportEntitiesJobType);
+        _changeStreamStateEvent = new(ApplicationContext, constants, exportEntitiesJobType);
+        _updateStreamEvent = new(ApplicationContext, constants, exportEntitiesJobType);
     }
 
     protected async Task RunScheduler(IDataLakeConstants dataLakeConstants, IDataLakeJobDataFactory dataLakeJobDataFactory, Type jobType)
