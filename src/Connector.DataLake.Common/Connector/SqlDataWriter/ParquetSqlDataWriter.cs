@@ -37,7 +37,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
             var type = reader.GetFieldType(fieldName);
 
             var parquetFieldName = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
-            fields.Add(new DataField(fieldName, GetParquetDataType(type, configuration)));
+            fields.Add(new DataField(parquetFieldName, GetParquetDataType(type, configuration)));
         }
 
         var schema = new ParquetSchema(fields);
