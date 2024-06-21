@@ -11,7 +11,6 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Parquet;
 using Parquet.Schema;
-using SixLabors.ImageSharp.ColorSpaces;
 
 using ParquetRow = Parquet.Rows.Row;
 using ParquetTable = Parquet.Rows.Table;
