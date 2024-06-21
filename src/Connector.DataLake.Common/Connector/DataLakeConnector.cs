@@ -331,12 +331,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 return DBNull.Value;
             }
 
-            // bug with CluedIn where a DateTime vocab key is sent as string to bus but deserialized as DateTime
-            if (dataValueType == typeof(string) && value is DateTime datetime)
+            // Bug with CluedIn where a DateTime vocab key is sent as string to bus but deserialized as DateTime
+            // In CluedIn > 4.3.0, it's deserialized as DateTimeOffset instead of DateTime
+            if (dataValueType == typeof(string) && (value is DateTime || value is DateTimeOffset))
             {
-                var serialized = JsonConvert.SerializeObject(datetime, _cacheTableSerializerSettings);
+                var serialized = JsonConvert.SerializeObject(value, _cacheTableSerializerSettings);
                 return serialized[1..^1];
             }
+
 
             if (_dotNetToSqlTypeMap.ContainsKey(value.GetType()))
             {

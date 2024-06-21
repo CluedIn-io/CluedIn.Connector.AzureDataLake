@@ -49,12 +49,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         });
         context.Log.LogDebug("Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
 
-        if (args.Schedule == DataLakeConstants.CronSchedules[DataLakeConstants.JobScheduleNames.Never])
-        {
-            context.Log.LogDebug("Job is disabled because cron is set to {CronSchedule}. Skipping export.", DataLakeConstants.JobScheduleNames.Never);
-            return;
-        }
-
         var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
 
         var streamId = new Guid(args.Message);
