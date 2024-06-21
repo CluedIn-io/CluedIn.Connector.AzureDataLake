@@ -2,8 +2,7 @@
 
 using Azure.Storage;
 using Azure.Storage.Files.DataLake;
-
-using CluedIn.Connector.DataLake;
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 
 namespace CluedIn.Connector.AzureDataLake.Connector;

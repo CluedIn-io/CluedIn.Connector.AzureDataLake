@@ -1,5 +1,4 @@
 using CluedIn.Core;
-using CluedIn.Core.Configuration;
 using CluedIn.Core.Providers;
 using System;
 using System.Collections.Generic;
@@ -44,7 +43,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
         [JobScheduleNames.Never] = "0 5 31 2 *",
     };
 
-    public DataLakeConstants(
+    protected DataLakeConstants(
         Guid providerId,
         string providerName,
         string componentName,

@@ -1,38 +1,32 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-
-using CluedIn.Connector.AzureDataLake.Connector;
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
-using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Jobs;
-using CluedIn.Core.Providers;
-using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
-using Microsoft.Extensions.Logging;
-
-namespace CluedIn.Connector.AzureDataLake;
+namespace CluedIn.Connector.DataLake.Common.EventHandlers;
 
 internal abstract class UpdateStreamScheduleBase
-{  
-    private readonly ApplicationContext _applicationContext;
-    private readonly Guid _providerId;
+{
+    protected ApplicationContext ApplicationContext { get; }
 
-    protected ApplicationContext ApplicationContext => _applicationContext;
+    protected Type ExportEntitiesJobType { get; }
 
-    protected UpdateStreamScheduleBase(ApplicationContext applicationContext, Guid providerId)
+    protected UpdateStreamScheduleBase(
+        ApplicationContext applicationContext,
+        Type exportEntitiesJobType)
     {
-        _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
-        _providerId = providerId;
+        ApplicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
+        ExportEntitiesJobType = exportEntitiesJobType;
     }
 
-    protected async Task UpdateStreamSchedule(ExecutionContext executionContext, StreamModel stream)
+    protected Task UpdateStreamSchedule(ExecutionContext executionContext, StreamModel stream)
     {
         var jobServerClient = ApplicationContext.Container.Resolve<IJobServerClient>();
-        var exportJob = ApplicationContext.Container.Resolve<AzureDataLakeExportEntitiesJob>();
-        var neverCron = AzureDataLakeConstants.CronSchedules[AzureDataLakeConstants.JobScheduleNames.Never];
+        var exportJob = ApplicationContext.Container.Resolve(ExportEntitiesJobType) as DataLakeExportEntitiesJobBase;
+        var neverCron = DataLakeConstants.CronSchedules[DataLakeConstants.JobScheduleNames.Never];
         exportJob.Schedule(jobServerClient, neverCron, stream.Id.ToString());
+        return Task.CompletedTask;
     }
 }

@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using System;
+
 using CluedIn.Core;
 
-namespace CluedIn.Connector.DataLake;
+namespace CluedIn.Connector.DataLake.Common;
 
 public interface IDataLakeJobDataFactory
 {

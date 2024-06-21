@@ -1,19 +1,15 @@
 ﻿using System.Collections.Generic;
-using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-
 using CluedIn.Core;
-
 using CsvHelper;
 using CsvHelper.Configuration;
-
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
-namespace CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
+namespace CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 
 internal class CsvSqlDataWriter : SqlDataWriterBase
 {
@@ -25,10 +21,10 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         SqlDataReader reader)
     {
         context.Log.LogInformation("Begin writing output.");
-        using var writer = new StreamWriter(outputStream);
+        await using var writer = new StreamWriter(outputStream);
 
         var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture);
-        using var csv = new CsvWriter(writer, csvConfig);
+        await using var csv = new CsvWriter(writer, csvConfig);
         foreach (var fieldName in fieldNames)
         {
             csv.WriteField(fieldName);

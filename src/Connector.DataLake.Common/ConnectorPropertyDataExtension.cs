@@ -9,7 +9,7 @@ internal static class ConnectorPropertyDataExtension
     internal static Type GetDataType(this ConnectorPropertyData connectorPropertyData)
     {
         var dataType = connectorPropertyData.DataType;
-        if (dataType is VocabularyKeyConnectorPropertyDataType vocabularyKeyType)
+        if (dataType is VocabularyKeyConnectorPropertyDataType)
         {
             return typeof(string);
         }
@@ -17,7 +17,7 @@ internal static class ConnectorPropertyDataExtension
         {
             return entityPropertyType.Type;
         }
-        else if (dataType is VocabularyKeyDataTypeConnectorPropertyDataType vocabularyKeyDataTypeType)
+        else if (dataType is VocabularyKeyDataTypeConnectorPropertyDataType)
         {
             return typeof(string);
         }

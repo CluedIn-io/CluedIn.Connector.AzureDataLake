@@ -5,7 +5,7 @@ namespace CluedIn.Connector.DataLake.Common;
 
 internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
 {
-    public DataLakeJobData(IDictionary<string, object> configurations, string containerName = null) : base(configurations)
+    protected DataLakeJobData(IDictionary<string, object> configurations, string containerName = null) : base(configurations)
     {
         ContainerName = containerName;
     }

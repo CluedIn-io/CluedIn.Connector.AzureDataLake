@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Threading.Tasks;
-
-using CluedIn.Connector.DataLake.Common;
 using CluedIn.Core;
 using CluedIn.Core.Events.Types;
 using CluedIn.Core.Streams;
-
 using Newtonsoft.Json.Linq;
 
-namespace CluedIn.Connector.DataLake.EventHandlers;
+namespace CluedIn.Connector.DataLake.Common.EventHandlers;
 
 internal class UpdateStreamEventHandler : UpdateStreamScheduleBase, IDisposable
 {
@@ -17,10 +14,8 @@ internal class UpdateStreamEventHandler : UpdateStreamScheduleBase, IDisposable
 
     public UpdateStreamEventHandler(
         ApplicationContext applicationContext,
-        IDataLakeConstants constants,
-        IDataLakeJobDataFactory dataLakeConfigurationFactory,
         Type exportEntitiesJobType)
-        : base(applicationContext, constants, dataLakeConfigurationFactory, exportEntitiesJobType)
+        : base(applicationContext, exportEntitiesJobType)
     {
         _subscription = ApplicationContext.System.Events.Local.Subscribe<UpdateStreamEvent>(ProcessEvent);
     }

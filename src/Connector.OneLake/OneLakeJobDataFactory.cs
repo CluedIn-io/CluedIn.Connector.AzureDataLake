@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Core;
 

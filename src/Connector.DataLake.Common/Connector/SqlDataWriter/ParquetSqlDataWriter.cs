@@ -5,19 +5,15 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-
 using CluedIn.Core;
-
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-
 using Parquet;
 using Parquet.Schema;
-
 using ParquetRow = Parquet.Rows.Row;
 using ParquetTable = Parquet.Rows.Table;
 
-namespace CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
+namespace CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 
 internal class ParquetSqlDataWriter : SqlDataWriterBase
 {

@@ -3,13 +3,11 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Threading.Tasks;
-
 using CluedIn.Core;
-
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
-namespace CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
+namespace CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 
 internal abstract class SqlDataWriterBase : ISqlDataWriter
 {

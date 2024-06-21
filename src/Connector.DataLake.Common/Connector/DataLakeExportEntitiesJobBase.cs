@@ -5,8 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
-
-using CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
+using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Jobs;
@@ -39,7 +38,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         _dataLakeJobDataFactory = dataLakeJobDataFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataFactory));
     }
 
-    protected override async Task DoRunAsync(ExecutionContext context, JobArgs args)
+    public override async Task DoRunAsync(ExecutionContext context, JobArgs args)
     {
         var typeName = this.GetType().Name;
         using var exportJobLoggingScope = context.Log.BeginScope(new Dictionary<string, object>

@@ -1,4 +1,4 @@
-﻿namespace CluedIn.Connector.DataLake;
+﻿namespace CluedIn.Connector.DataLake.Common;
 
 public interface IDataLakeJobData
 {

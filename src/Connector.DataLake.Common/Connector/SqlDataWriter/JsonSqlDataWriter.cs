@@ -1,16 +1,13 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-
 using CluedIn.Core;
-
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace CluedIn.Connector.DataLake.Common.SqlDataWriter.Connector;
+namespace CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 
 internal class JsonSqlDataWriter : SqlDataWriterBase
 {
@@ -21,8 +18,8 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         ICollection<string> fieldNames,
         SqlDataReader reader)
     {
-        using var stringWriter = new StreamWriter(outputStream);
-        using var writer = new JsonTextWriter(stringWriter);
+        await using var stringWriter = new StreamWriter(outputStream);
+        await using var writer = new JsonTextWriter(stringWriter);
         writer.Formatting = Formatting.Indented;
 
         var totalProcessed = 0L;

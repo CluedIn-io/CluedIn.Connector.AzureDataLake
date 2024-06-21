@@ -3,7 +3,7 @@
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
 
-using CluedIn.Connector.DataLake;
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 
 namespace CluedIn.Connector.OneLake.Connector;

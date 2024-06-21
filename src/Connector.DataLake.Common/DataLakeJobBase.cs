@@ -7,7 +7,7 @@ namespace CluedIn.Connector.DataLake.Common;
 
 internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob
 {
-    public DataLakeJobBase(ApplicationContext appContext) : base(appContext, JobType.CustomScheduledJob)
+    protected DataLakeJobBase(ApplicationContext appContext) : base(appContext, JobType.CustomScheduledJob)
     {
     }
 
