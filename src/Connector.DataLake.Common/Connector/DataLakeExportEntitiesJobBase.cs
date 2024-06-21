@@ -108,7 +108,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return;
         }
 
-        var asOfTime = GetLastOccurence(args, configuration);
+        var asOfTime = GetLastOccurence(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
         var outputFileName = GetOutputFileName(configuration, streamId, asOfTime, outputFormat);
 
@@ -217,10 +217,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return outputFormat;
     }
 
-    private static DateTime GetLastOccurence(JobArgs args, IDataLakeJobData jobData)
+    private DateTime GetLastOccurence(ExecutionContext context, JobArgs args, IDataLakeJobData jobData)
     {
-        if (jobData.UseCurrentTimeForExport)
+        if (jobData.UseCurrentTimeForExport
+            || args.Schedule == DataLakeConstants.CronSchedules[DataLakeConstants.JobScheduleNames.Never])
         {
+            context.Log.LogDebug("Using current time for export.");
             return DateTime.UtcNow;
         }
 
