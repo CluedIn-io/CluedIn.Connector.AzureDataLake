@@ -16,7 +16,7 @@ public class DataLakeJobDataFactoryBase
         return await AuthenticationDetailsHelper.GetAuthenticationDetails(executionContext, providerDefinitionId);
     }
 
-    protected static void UpdateAuthenticationDetails(ExecutionContext executionContext, IDictionary<string, object> authenticationDetails)
+    protected static void UpdateStreamCacheConnectionString(ExecutionContext executionContext, IDictionary<string, object> authenticationDetails)
     {
         var connectionStrings = executionContext.ApplicationContext.System.ConnectionStrings;
         var connectionStringKey = DataLakeConstants.StreamCacheConnectionStringKey;

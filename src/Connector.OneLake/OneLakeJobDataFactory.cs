@@ -18,7 +18,7 @@ public class OneLakeJobDataFactory : DataLakeJobDataFactoryBase, IDataLakeJobDat
 
     public Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, IDictionary<string, object> authenticationDetails, string containerName = null)
     {
-        UpdateAuthenticationDetails(executionContext, authenticationDetails);
+        UpdateStreamCacheConnectionString(executionContext, authenticationDetails);
 
         var configurations = new OneLakeConnectorJobData(authenticationDetails, containerName);
         return Task.FromResult<IDataLakeJobData>(configurations);

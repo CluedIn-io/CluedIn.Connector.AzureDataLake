@@ -139,7 +139,7 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
                     var jobInstance = Container.Resolve(jobData.Type) as DataLakeJobBase;
                     if (jobInstance == null)
                     {
-                        throw new ApplicationException($"Job {jobInstance.GetType()} is not of type {typeof(DataLakeJobBase)}.");
+                        throw new ApplicationException($"Job {jobData.Type} is not of type {typeof(DataLakeJobBase)}.");
                     }
                     var executionContext = ApplicationContext.CreateExecutionContext(jobData.OrganizationId);
                     await jobInstance.DoRunAsync(executionContext, new JobArgs
