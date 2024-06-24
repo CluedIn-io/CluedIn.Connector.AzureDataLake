@@ -28,4 +28,12 @@
   <ItemGroup Label="Package Includes">
     <None Include="$(MSBuildThisFileDirectory)build\assets\nugetlogo.png" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <!--
+  We need this to stop build from producing .deps.json files that contains "ReferencedProject.Reference". 
+  It will cause exceptions in CluedIn Server, saying that the item has already been added (ReferencedProject.dll)
+  -->
+  <PropertyGroup Label="FixBuildDefault">
+    <IncludeProjectsNotInAssetsFileInDepsFile>false</IncludeProjectsNotInAssetsFileInDepsFile>
+  </PropertyGroup>
 </Project>

@@ -12,10 +12,6 @@
     <EmbeddedResource Include="Resources\azuredatalake.svg" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Azure.Storage.Files.DataLake" />
-    <PackageReference Include="CluedIn.Core" />
-    <PackageReference Include="CsvHelper" />
-    <PackageReference Include="NCrontab" />
-    <PackageReference Include="Parquet.Net" />
+    <ProjectReference Include="..\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
   </ItemGroup>
 </Project>
