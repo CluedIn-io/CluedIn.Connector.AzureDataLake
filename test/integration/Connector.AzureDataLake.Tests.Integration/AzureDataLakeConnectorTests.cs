@@ -32,10 +32,14 @@ using Microsoft.Extensions.Logging;
 
 using Moq;
 
+using ParquetSharp;
+
 using Xunit;
 using Xunit.Abstractions;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
+using Encoding = System.Text.Encoding;
+using Newtonsoft.Json.Linq;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 {
@@ -590,7 +594,24 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
         }
 
         [Fact]
-        public async Task VerifyStoreData_Sync_WithStreamCache()
+        public async Task VerifyStoreData_Sync_WithStreamCacheAndJsonFormat()
+        {
+            await VerifyStoreData_Sync_WithStreamCache("JSON", AssertJsonResult);
+        }
+
+        [Fact]
+        public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormat()
+        {
+            await VerifyStoreData_Sync_WithStreamCache("csv", AssertCsvResult);
+        }
+
+        [Fact]
+        public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormat()
+        {
+            await VerifyStoreData_Sync_WithStreamCache("pArQuet", AssertParquetResult);
+        }
+
+        private async Task VerifyStoreData_Sync_WithStreamCache(string format, Func<DataLakeFileClient, Task> assertMethod)
         {
             var organizationId = Guid.NewGuid();
             var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
@@ -677,7 +698,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 { nameof(AzureDataLakeConstants.DirectoryName), directoryName },
                 { nameof(DataLakeConstants.IsStreamCacheEnabled), true },
                 { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
-                { nameof(DataLakeConstants.OutputFormat), "jSoN" },
+                { nameof(DataLakeConstants.OutputFormat), format },
                 { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
             });
 
@@ -788,171 +809,267 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 var fsClient = client.GetFileSystemClient(fileSystemName);
                 var fileClient = fsClient.GetFileClient(path.Name);
 
-                var content = new StreamReader(fileClient.Read().Value.Content).ReadToEnd();
-
-                _testOutputHelper.WriteLine(content);
-
-                Assert.Equal(
-                    $$"""
-                    [
-                      {
-                        "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
-                        "Codes": [
-                          "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"
-                        ],
-                        "ContainerName": "test",
-                        "EntityType": "/Person",
-                        "IncomingEdges": [
-                          {
-                            "FromReference": {
-                              "Code": {
-                                "Origin": {
-                                  "Code": "Acceptance",
-                                  "Id": null
-                                },
-                                "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
-                                "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
-                                "Type": {
-                                  "IsEntityContainer": false,
-                                  "Root": null,
-                                  "Code": "/Person"
-                                }
-                              },
-                              "Type": {
-                                "IsEntityContainer": false,
-                                "Root": null,
-                                "Code": "/Person"
-                              },
-                              "Name": null,
-                              "Properties": null,
-                              "PropertyCount": null,
-                              "EntityId": null,
-                              "IsEmpty": false
-                            },
-                            "ToReference": {
-                              "Code": {
-                                "Origin": {
-                                  "Code": "Somewhere",
-                                  "Id": null
-                                },
-                                "Value": "1234",
-                                "Key": "/EntityA#Somewhere:1234",
-                                "Type": {
-                                  "IsEntityContainer": false,
-                                  "Root": null,
-                                  "Code": "/EntityA"
-                                }
-                              },
-                              "Type": {
-                                "IsEntityContainer": false,
-                                "Root": null,
-                                "Code": "/EntityA"
-                              },
-                              "Name": null,
-                              "Properties": null,
-                              "PropertyCount": null,
-                              "EntityId": null,
-                              "IsEmpty": false
-                            },
-                            "EdgeType": {
-                              "Root": null,
-                              "Code": "/EntityA"
-                            },
-                            "HasProperties": false,
-                            "Properties": {},
-                            "CreationOptions": 0,
-                            "Weight": null,
-                            "Version": 0
-                          }
-                        ],
-                        "Name": "Jean Luc Picard",
-                        "OriginEntityCode": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
-                        "OutgoingEdges": [
-                          {
-                            "FromReference": {
-                              "Code": {
-                                "Origin": {
-                                  "Code": "Somewhere",
-                                  "Id": null
-                                },
-                                "Value": "5678",
-                                "Key": "/EntityB#Somewhere:5678",
-                                "Type": {
-                                  "IsEntityContainer": false,
-                                  "Root": null,
-                                  "Code": "/EntityB"
-                                }
-                              },
-                              "Type": {
-                                "IsEntityContainer": false,
-                                "Root": null,
-                                "Code": "/EntityB"
-                              },
-                              "Name": null,
-                              "Properties": null,
-                              "PropertyCount": null,
-                              "EntityId": null,
-                              "IsEmpty": false
-                            },
-                            "ToReference": {
-                              "Code": {
-                                "Origin": {
-                                  "Code": "Acceptance",
-                                  "Id": null
-                                },
-                                "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
-                                "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
-                                "Type": {
-                                  "IsEntityContainer": false,
-                                  "Root": null,
-                                  "Code": "/Person"
-                                }
-                              },
-                              "Type": {
-                                "IsEntityContainer": false,
-                                "Root": null,
-                                "Code": "/Person"
-                              },
-                              "Name": null,
-                              "Properties": null,
-                              "PropertyCount": null,
-                              "EntityId": null,
-                              "IsEmpty": false
-                            },
-                            "EdgeType": {
-                              "Root": null,
-                              "Code": "/EntityB"
-                            },
-                            "HasProperties": false,
-                            "Properties": {},
-                            "CreationOptions": 0,
-                            "Weight": null,
-                            "Version": 0
-                          }
-                        ],
-                        "PersistHash": "etypzcezkiehwq8vw4oqog==",
-                        "PersistVersion": 1,
-                        "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
-                        "user.age": "123",
-                        "user.dobInDateTime": "2000-01-02T03:04:05",
-                        "user.dobInDateTimeOffset": "2000-01-02T03:04:05+12:34",
-                        "user.lastName": "Picard"
-                      }
-                    ]
-                    """, content);
-
-                //data.ChangeType = VersionChangeType.Removed;
-                //await connector.StoreData(context, streamModel.Object, data);
-
-                //await WaitForFileToBeDeleted(fileSystemName, directoryName, client, path);
+                await assertMethod(fileClient);
 
                 await fsClient.GetDirectoryClient(directoryName).DeleteAsync();
             }
             finally
             {
                 await DeleteFileSystem(client, fileSystemName);
+                await DeleteTable(streamId, streamCacheConnectionString);
             }
         }
+
+        private static async Task DeleteTable(Guid streamId, string streamCacheConnectionString)
+        {
+            await using var connection = new SqlConnection(streamCacheConnectionString);
+            await connection.OpenAsync();
+            var tableName = CacheTableHelper.GetCacheTableName(streamId);
+            var deleteTableSql = $"""
+                IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
+                ALTER TABLE dbo.[{tableName}]  SET ( SYSTEM_VERSIONING = Off )
+
+                DROP TABLE IF EXISTS [{tableName}];
+                DROP TABLE IF EXISTS [{tableName}_History];
+                """;
+            var command = new SqlCommand(deleteTableSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
+            _ = await command.ExecuteNonQueryAsync();
+        }
+
+        private async Task AssertJsonResult(DataLakeFileClient fileClient)
+        {
+            using var streamReader = new StreamReader(fileClient.Read().Value.Content);
+            var content = await streamReader.ReadToEndAsync();
+            _testOutputHelper.WriteLine(content);
+            Assert.Equal(
+            $$"""
+            [
+              {
+                "Id": "f55c66dc-7881-55c9-889f-344992e71cb8",
+                "Codes": [
+                  "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"
+                ],
+                "ContainerName": "test",
+                "EntityType": "/Person",
+                "IncomingEdges": [
+                  {
+                    "FromReference": {
+                      "Code": {
+                        "Origin": {
+                          "Code": "Acceptance",
+                          "Id": null
+                        },
+                        "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
+                        "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                        "Type": {
+                          "IsEntityContainer": false,
+                          "Root": null,
+                          "Code": "/Person"
+                        }
+                      },
+                      "Type": {
+                        "IsEntityContainer": false,
+                        "Root": null,
+                        "Code": "/Person"
+                      },
+                      "Name": null,
+                      "Properties": null,
+                      "PropertyCount": null,
+                      "EntityId": null,
+                      "IsEmpty": false
+                    },
+                    "ToReference": {
+                      "Code": {
+                        "Origin": {
+                          "Code": "Somewhere",
+                          "Id": null
+                        },
+                        "Value": "1234",
+                        "Key": "/EntityA#Somewhere:1234",
+                        "Type": {
+                          "IsEntityContainer": false,
+                          "Root": null,
+                          "Code": "/EntityA"
+                        }
+                      },
+                      "Type": {
+                        "IsEntityContainer": false,
+                        "Root": null,
+                        "Code": "/EntityA"
+                      },
+                      "Name": null,
+                      "Properties": null,
+                      "PropertyCount": null,
+                      "EntityId": null,
+                      "IsEmpty": false
+                    },
+                    "EdgeType": {
+                      "Root": null,
+                      "Code": "/EntityA"
+                    },
+                    "HasProperties": false,
+                    "Properties": {},
+                    "CreationOptions": 0,
+                    "Weight": null,
+                    "Version": 0
+                  }
+                ],
+                "Name": "Jean Luc Picard",
+                "OriginEntityCode": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                "OutgoingEdges": [
+                  {
+                    "FromReference": {
+                      "Code": {
+                        "Origin": {
+                          "Code": "Somewhere",
+                          "Id": null
+                        },
+                        "Value": "5678",
+                        "Key": "/EntityB#Somewhere:5678",
+                        "Type": {
+                          "IsEntityContainer": false,
+                          "Root": null,
+                          "Code": "/EntityB"
+                        }
+                      },
+                      "Type": {
+                        "IsEntityContainer": false,
+                        "Root": null,
+                        "Code": "/EntityB"
+                      },
+                      "Name": null,
+                      "Properties": null,
+                      "PropertyCount": null,
+                      "EntityId": null,
+                      "IsEmpty": false
+                    },
+                    "ToReference": {
+                      "Code": {
+                        "Origin": {
+                          "Code": "Acceptance",
+                          "Id": null
+                        },
+                        "Value": "7c5591cf-861a-4642-861d-3b02485854a0",
+                        "Key": "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0",
+                        "Type": {
+                          "IsEntityContainer": false,
+                          "Root": null,
+                          "Code": "/Person"
+                        }
+                      },
+                      "Type": {
+                        "IsEntityContainer": false,
+                        "Root": null,
+                        "Code": "/Person"
+                      },
+                      "Name": null,
+                      "Properties": null,
+                      "PropertyCount": null,
+                      "EntityId": null,
+                      "IsEmpty": false
+                    },
+                    "EdgeType": {
+                      "Root": null,
+                      "Code": "/EntityB"
+                    },
+                    "HasProperties": false,
+                    "Properties": {},
+                    "CreationOptions": 0,
+                    "Weight": null,
+                    "Version": 0
+                  }
+                ],
+                "PersistHash": "etypzcezkiehwq8vw4oqog==",
+                "PersistVersion": 1,
+                "ProviderDefinitionId": "c444cda8-d9b5-45cc-a82d-fef28e08d55c",
+                "user.age": "123",
+                "user.dobInDateTime": "2000-01-02T03:04:05",
+                "user.dobInDateTimeOffset": "2000-01-02T03:04:05+12:34",
+                "user.lastName": "Picard"
+              }
+            ]
+            """, content);
+        }
+
+        private async Task AssertCsvResult(DataLakeFileClient fileClient)
+        {
+            using var streamReader = new StreamReader(fileClient.Read().Value.Content);
+            var content = await streamReader.ReadToEndAsync();
+
+            _testOutputHelper.WriteLine(content);
+            Assert.Equal(
+            $$$"""
+            Id,Codes,ContainerName,EntityType,IncomingEdges,Name,OriginEntityCode,OutgoingEdges,PersistHash,PersistVersion,ProviderDefinitionId,user.age,user.dobInDateTime,user.dobInDateTimeOffset,user.lastName
+            f55c66dc-7881-55c9-889f-344992e71cb8,"[""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0""]",test,/Person,"[{""FromReference"":{""Code"":{""Origin"":{""Code"":""Acceptance"",""Id"":null},""Value"":""7c5591cf-861a-4642-861d-3b02485854a0"",""Key"":""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""ToReference"":{""Code"":{""Origin"":{""Code"":""Somewhere"",""Id"":null},""Value"":""1234"",""Key"":""/EntityA#Somewhere:1234"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityA""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityA""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""EdgeType"":{""Root"":null,""Code"":""/EntityA""},""HasProperties"":false,""Properties"":{},""CreationOptions"":0,""Weight"":null,""Version"":0}]",Jean Luc Picard,/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0,"[{""FromReference"":{""Code"":{""Origin"":{""Code"":""Somewhere"",""Id"":null},""Value"":""5678"",""Key"":""/EntityB#Somewhere:5678"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityB""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityB""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""ToReference"":{""Code"":{""Origin"":{""Code"":""Acceptance"",""Id"":null},""Value"":""7c5591cf-861a-4642-861d-3b02485854a0"",""Key"":""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""EdgeType"":{""Root"":null,""Code"":""/EntityB""},""HasProperties"":false,""Properties"":{},""CreationOptions"":0,""Weight"":null,""Version"":0}]",etypzcezkiehwq8vw4oqog==,1,c444cda8-d9b5-45cc-a82d-fef28e08d55c,123,2000-01-02T03:04:05,2000-01-02T03:04:05+12:34,Picard
+
+            """, content);
+        }
+
+        private async Task AssertParquetResult(DataLakeFileClient fileClient)
+        {
+            using var memoryStream = new MemoryStream();
+            await fileClient.ReadToAsync(memoryStream);
+            using var file = new ParquetFileReader(memoryStream);
+
+            var sb = new StringBuilder();
+            for (var rowGroup = 0; rowGroup < file.FileMetaData.NumRowGroups; ++rowGroup)
+            {
+                using var rowGroupReader = file.RowGroup(rowGroup);
+                var groupNumRows = checked((int)rowGroupReader.MetaData.NumRows);
+
+                var totalColumns = rowGroupReader.MetaData.NumColumns;
+
+                for (var column = 0; column <totalColumns; ++column)
+                {
+                    var columnType = rowGroupReader.MetaData.Schema.Column(column).LogicalType.Type;
+                    var columnReader = rowGroupReader.Column(column);
+
+                    object value = getValue(groupNumRows, columnType, columnReader);
+                    sb.AppendLine($"{rowGroupReader.MetaData.Schema.Column(column).Name} {value}");
+                }
+            }
+
+            _testOutputHelper.WriteLine(sb.ToString());
+            Assert.Equal(
+            $$$"""
+            Id f55c66dc-7881-55c9-889f-344992e71cb8
+            Codes ["/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"]
+            ContainerName test
+            EntityType /Person
+            IncomingEdges [{"FromReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"1234","Key":"/EntityA#Somewhere:1234","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityA"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
+            Name Jean Luc Picard
+            OriginEntityCode /Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0
+            OutgoingEdges [{"FromReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"5678","Key":"/EntityB#Somewhere:5678","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityB"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
+            PersistHash etypzcezkiehwq8vw4oqog==
+            PersistVersion 1
+            ProviderDefinitionId c444cda8-d9b5-45cc-a82d-fef28e08d55c
+            user.age 123
+            user.dobInDateTime 2000-01-02T03:04:05
+            user.dobInDateTimeOffset 2000-01-02T03:04:05+12:34
+            user.lastName Picard
+
+            """, sb.ToString());
+
+            object getValue(int groupNumRows, LogicalTypeEnum columnType, ColumnReader columnReader)
+            {
+                switch (columnType)
+                {
+                    case LogicalTypeEnum.Uuid:
+                        return columnReader.LogicalReader<Guid?>().ReadAll(groupNumRows).Single();
+                    case LogicalTypeEnum.Int:
+                        return columnReader.LogicalReader<int?>().ReadAll(groupNumRows).Single();
+                    case LogicalTypeEnum.String:
+                        return columnReader.LogicalReader<string>().ReadAll(groupNumRows).Single();
+                    default:
+                        throw new NotSupportedException($"Type {columnType} not supported.");
+                }
+            }
+        }
+
+        
 
         private static async Task WaitForFileToBeDeleted(string fileSystemName, string directoryName, DataLakeServiceClient client, PathItem path)
         {
