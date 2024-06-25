@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -26,6 +27,8 @@ using CluedIn.Core.Data.Vocabularies;
 using CluedIn.Core.DataStore;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+
+using CsvHelper.Configuration;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -995,14 +998,15 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
         private async Task AssertCsvResult(DataLakeFileClient fileClient)
         {
+            var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture);
             using var streamReader = new StreamReader(fileClient.Read().Value.Content);
             var content = await streamReader.ReadToEndAsync();
 
             var sb = new StringBuilder();
             var dataLine =
-            sb.AppendLine("Id,Codes,ContainerName,EntityType,IncomingEdges,Name,OriginEntityCode,OutgoingEdges,PersistHash,PersistVersion,ProviderDefinitionId,user.age,user.dobInDateTime,user.dobInDateTimeOffset,user.lastName");
-            sb.AppendLine($$$"""
-            f55c66dc-7881-55c9-889f-344992e71cb8,"[""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0""]",test,/Person,"[{""FromReference"":{""Code"":{""Origin"":{""Code"":""Acceptance"",""Id"":null},""Value"":""7c5591cf-861a-4642-861d-3b02485854a0"",""Key"":""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""ToReference"":{""Code"":{""Origin"":{""Code"":""Somewhere"",""Id"":null},""Value"":""1234"",""Key"":""/EntityA#Somewhere:1234"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityA""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityA""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""EdgeType"":{""Root"":null,""Code"":""/EntityA""},""HasProperties"":false,""Properties"":{},""CreationOptions"":0,""Weight"":null,""Version"":0}]",Jean Luc Picard,/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0,"[{""FromReference"":{""Code"":{""Origin"":{""Code"":""Somewhere"",""Id"":null},""Value"":""5678"",""Key"":""/EntityB#Somewhere:5678"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityB""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityB""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""ToReference"":{""Code"":{""Origin"":{""Code"":""Acceptance"",""Id"":null},""Value"":""7c5591cf-861a-4642-861d-3b02485854a0"",""Key"":""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""EdgeType"":{""Root"":null,""Code"":""/EntityB""},""HasProperties"":false,""Properties"":{},""CreationOptions"":0,""Weight"":null,""Version"":0}]",etypzcezkiehwq8vw4oqog==,1,c444cda8-d9b5-45cc-a82d-fef28e08d55c,123,2000-01-02T03:04:05,2000-01-02T03:04:05+12:34,Picard
+            sb.Append($"Id,Codes,ContainerName,EntityType,IncomingEdges,Name,OriginEntityCode,OutgoingEdges,PersistHash,PersistVersion,ProviderDefinitionId,user.age,user.dobInDateTime,user.dobInDateTimeOffset,user.lastName{csvConfig.NewLineString}");
+            sb.Append($$$"""
+            f55c66dc-7881-55c9-889f-344992e71cb8,"[""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0""]",test,/Person,"[{""FromReference"":{""Code"":{""Origin"":{""Code"":""Acceptance"",""Id"":null},""Value"":""7c5591cf-861a-4642-861d-3b02485854a0"",""Key"":""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""ToReference"":{""Code"":{""Origin"":{""Code"":""Somewhere"",""Id"":null},""Value"":""1234"",""Key"":""/EntityA#Somewhere:1234"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityA""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityA""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""EdgeType"":{""Root"":null,""Code"":""/EntityA""},""HasProperties"":false,""Properties"":{},""CreationOptions"":0,""Weight"":null,""Version"":0}]",Jean Luc Picard,/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0,"[{""FromReference"":{""Code"":{""Origin"":{""Code"":""Somewhere"",""Id"":null},""Value"":""5678"",""Key"":""/EntityB#Somewhere:5678"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityB""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/EntityB""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""ToReference"":{""Code"":{""Origin"":{""Code"":""Acceptance"",""Id"":null},""Value"":""7c5591cf-861a-4642-861d-3b02485854a0"",""Key"":""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""}},""Type"":{""IsEntityContainer"":false,""Root"":null,""Code"":""/Person""},""Name"":null,""Properties"":null,""PropertyCount"":null,""EntityId"":null,""IsEmpty"":false},""EdgeType"":{""Root"":null,""Code"":""/EntityB""},""HasProperties"":false,""Properties"":{},""CreationOptions"":0,""Weight"":null,""Version"":0}]",etypzcezkiehwq8vw4oqog==,1,c444cda8-d9b5-45cc-a82d-fef28e08d55c,123,2000-01-02T03:04:05,2000-01-02T03:04:05+12:34,Picard{{{csvConfig.NewLineString}}}
             """);
 
             _testOutputHelper.WriteLine(content);
