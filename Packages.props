@@ -28,5 +28,6 @@
     <PackageReference Update="Moq" Version="4.13.1" />
     <PackageReference Update="NCrontab" Version="3.3.3" />
     <PackageReference Update="Parquet.Net" Version="4.23.5" />
+    <PackageReference Update="ParquetSharp" Version="15.0.2.1" />
   </ItemGroup>
 </Project>
