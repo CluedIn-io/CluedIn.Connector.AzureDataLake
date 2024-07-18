@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CluedIn.Connector.OneLake provides the ability to post data to OneLake</Description>
+    <AssemblyName>CluedIn.Connector.OneLake</AssemblyName>
+    <RootNamespace>CluedIn.Connector.OneLake</RootNamespace>
+    <IsCluedInServerComponent>true</IsCluedInServerComponent>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Resources\onelake.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\onelake.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
+  </ItemGroup>
+</Project>
