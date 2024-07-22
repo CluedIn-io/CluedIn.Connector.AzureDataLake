@@ -124,13 +124,21 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 AddToData("IncomingEdges", connectorEntityData.IncomingEdges.SafeEnumerate());
             }
 
-            if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+            try
             {
-                return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+                if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+                {
+                    return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+                }
+                else
+                {
+                    return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
+                _logger.LogError(ex, "Exception thrown. Returning SaveResult.ReQueue");
+                return SaveResult.ReQueue;
             }
         }
 
@@ -185,7 +193,8 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             if (streamModel.Mode != StreamMode.Sync)
             {
-                throw new NotSupportedException($"Buffer mode is only supported with '{StreamMode.Sync}' mode.");
+                _logger.LogError($"Buffer mode is only supported with '{StreamMode.Sync}' mode.");
+                return SaveResult.Failed;
             }
 
             var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
