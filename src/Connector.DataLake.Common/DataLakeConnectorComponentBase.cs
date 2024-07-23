@@ -86,7 +86,7 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
                 {
                     if (stream.Mode != StreamMode.Sync)
                     {
-                        Log.LogDebug("Stream is not in {Mode}. Skipping", StreamMode.Sync);
+                        Log.LogDebug("Stream {StreamId} is not in {Mode} mode. Skipping", stream.Id, StreamMode.Sync);
                         continue;
                     }
 

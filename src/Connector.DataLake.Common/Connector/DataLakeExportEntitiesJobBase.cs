@@ -180,15 +180,16 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
     private static ISqlDataWriter GetSqlDataWriter(string outputFormat)
     {
-        if (outputFormat.Equals(DataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
+        var format = outputFormat.Trim();
+        if (format.Equals(DataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
         {
             return new CsvSqlDataWriter();
         }
-        else if (outputFormat.Equals(DataLakeConstants.OutputFormats.Json, StringComparison.OrdinalIgnoreCase))
+        else if (format.Equals(DataLakeConstants.OutputFormats.Json, StringComparison.OrdinalIgnoreCase))
         {
             return new JsonSqlDataWriter();
         }
-        else if (outputFormat.Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
+        else if (format.Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
         {
             return new ParquetSqlDataWriter();
         }

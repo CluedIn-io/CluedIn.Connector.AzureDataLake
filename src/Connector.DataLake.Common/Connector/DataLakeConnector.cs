@@ -433,6 +433,21 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                         return new ConnectionVerificationResult(false, $"Only JSON is supported when stream cache is disabled.");
                     }
                 }
+
+                if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
+                {
+                    var supported = string.Join(',', DataLakeConstants.OutputFormats.SupportedFormats);
+                    var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
+                if (!DataLakeConstants.JobScheduleNames.IsValid(jobData.Schedule))
+                {
+                    var supported = string.Join(',', DataLakeConstants.JobScheduleNames.SupportedSchedules);
+                    var errorMessage = $"Format '{jobData.Schedule}' is not supported. Supported schedules are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
                 return new ConnectionVerificationResult(true);
             }
             catch (Exception e)
