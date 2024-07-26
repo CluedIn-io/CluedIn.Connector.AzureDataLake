@@ -48,7 +48,7 @@ function Run-Setup() {
 	$databaseUser = "sa"
 	$databasePassword = "yourStrong(!)Password"
 	$containerName = (Get-ContainerName)
-	$sqlServerImage = "cluedinprod.azurecr.io/mssql/server:2022-latest"
+	$sqlServerImage = "docker.io/cluedin/mssql-server:2022-latest"
 	
 	Write-Host "##[command]docker run -d -e `"ACCEPT_EULA=Y`" --name $containerName -p `":1433`" -e `"MSSQL_SA_PASSWORD=$($databasePassword)`" $sqlServerImage"
 	docker run -d -e "ACCEPT_EULA=Y" --name $containerName -p ":1433" -e "MSSQL_SA_PASSWORD=$($databasePassword)" $sqlServerImage
