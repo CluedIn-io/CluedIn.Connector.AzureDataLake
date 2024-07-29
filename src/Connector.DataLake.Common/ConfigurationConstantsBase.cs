@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace CluedIn.Connector.AzureDataLake
+namespace CluedIn.Connector.DataLake.Common
 {
     public abstract class ConfigurationConstantsBase : IConfigurationConstants
     {
@@ -39,7 +39,7 @@ namespace CluedIn.Connector.AzureDataLake
         private string FeatureCategory { get; }
         private string FeatureDescription { get; }
 
-        private ComponentEmailDetails ComponentEmailDetails => new ComponentEmailDetails
+        private ComponentEmailDetails ComponentEmailDetails => new()
         {
             Features = new Dictionary<string, string> { { FeatureCategory, FeatureDescription } },
             Icon = ProviderIconFactory.CreateConnectorUri(ProviderId),
@@ -55,7 +55,7 @@ namespace CluedIn.Connector.AzureDataLake
         public IEnumerable<Control> Properties { get; }
         public IntegrationType Type { get; }
 
-        public Guide Guide => new Guide
+        public Guide Guide => new()
         {
             Instructions = GuideInstructions,
             Value = new List<string> { About },

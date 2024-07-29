@@ -1,6 +1,6 @@
 name: $(Date:yyyyMMdd)$(Rev:.r)
 parameters:
-  - name: runIngegrationTests
+  - name: runIntegrationTests
     displayName: Run Integration Tests
     type: boolean
     default: true
@@ -33,7 +33,7 @@ resources:
       ref: ${{ parameters.pipelineTemplateRef }}
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'ubuntu-latest'
 
 variables:
   - name: testFolderPath
@@ -46,7 +46,11 @@ variables:
     value: Release
 
 steps:
-  # Configure NuGet
+  - task: UseDotNet@2
+    displayName: Install .NET SDK 6.0
+    inputs:
+      version: 6.0.x
+
   - task: NuGetAuthenticate@0
     displayName: 'Authenticate with nuget'
 
@@ -54,5 +58,10 @@ steps:
     parameters:
       githubReleaseInMaster: true
       publicReleaseForMaster: true
-      executeIntegrationTests: ${{ parameters.runIngegrationTests }}
+      executeIntegrationTests: ${{ parameters.runIntegrationTests }}
+      createIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
+      createIntegrationEnvironmentScriptArguments: '-Action SetUp'
+      deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
+      deleteIntegrationEnvironmentScriptArguments: '-Action TearDown'
       publishCodeCoverage: true
+      useGitVersionDotNetTool: true

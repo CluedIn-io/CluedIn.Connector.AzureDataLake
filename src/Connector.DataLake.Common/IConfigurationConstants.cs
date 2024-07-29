@@ -1,7 +1,7 @@
 ﻿using CluedIn.Core.Providers;
 using System;
 
-namespace CluedIn.Connector.AzureDataLake
+namespace CluedIn.Connector.DataLake.Common
 {
     /// <summary>
     ///     Base interface for configuration constants.

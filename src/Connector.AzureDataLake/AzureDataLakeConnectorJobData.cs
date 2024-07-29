@@ -1,40 +1,52 @@
 using System;
 using System.Collections.Generic;
 
-namespace CluedIn.Connector.AzureDataLake
+using CluedIn.Connector.DataLake.Common;
+
+namespace CluedIn.Connector.AzureDataLake;
+
+internal class AzureDataLakeConnectorJobData : DataLakeJobData
 {
-    public class AzureDataLakeConnectorJobData : CrawlJobDataWrapper
+    public AzureDataLakeConnectorJobData(
+        IDictionary<string, object> configurations,
+        string containerName = null)
+        : base(configurations, containerName)
     {
-        public AzureDataLakeConnectorJobData(IDictionary<string, object> configurations, string containerName = null) : base(configurations)
-        {
-            ContainerName = containerName;
-        }
+    }
 
-        public string AccountName => Configurations[AzureDataLakeConstants.AccountName] as string;
-        public string AccountKey => Configurations[AzureDataLakeConstants.AccountKey] as string;
-        public string FileSystemName => Configurations[AzureDataLakeConstants.FileSystemName] as string;
-        public string DirectoryName => Configurations[AzureDataLakeConstants.DirectoryName] as string;
-        public string ContainerName { get; }
+    public string AccountName => GetConfigurationValue(AzureDataLakeConstants.AccountName) as string;
+    public string AccountKey => GetConfigurationValue(AzureDataLakeConstants.AccountKey) as string;
+    public string DirectoryName => GetConfigurationValue(AzureDataLakeConstants.DirectoryName) as string;
+    public string FileSystemName => GetConfigurationValue(AzureDataLakeConstants.FileSystemName) as string;
 
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(AccountName, AccountKey, FileSystemName, DirectoryName, ContainerName);
-        }
+    protected override void AddToHashCode(HashCode hash)
+    {
+        hash.Add(AccountName);
+        hash.Add(AccountKey);
+        hash.Add(FileSystemName);
+        hash.Add(DirectoryName);
 
-        public override bool Equals(object obj)
-        {
-            return Equals(obj as AzureDataLakeConnectorJobData);
-        }
+        base.AddToHashCode(hash);
+    }
 
-        public bool Equals(AzureDataLakeConnectorJobData other)
-        {
-            return other != null &&
-                AccountName == other.AccountName &&
-                AccountKey == other.AccountKey &&
-                FileSystemName == other.FileSystemName &&
-                DirectoryName == other.DirectoryName &&
-                ContainerName == other.ContainerName;
-                
-        }
+    public override bool Equals(object obj)
+    {
+        return Equals(obj as AzureDataLakeConnectorJobData);
+    }
+
+    public bool Equals(AzureDataLakeConnectorJobData other)
+    {
+        return other != null &&
+            AccountName == other.AccountName &&
+            AccountKey == other.AccountKey &&
+            FileSystemName == other.FileSystemName &&
+            DirectoryName == other.DirectoryName &&
+            base.Equals(other);
+            
+    }
+
+    public override int GetHashCode()
+    {
+        return base.GetHashCode();
     }
 }

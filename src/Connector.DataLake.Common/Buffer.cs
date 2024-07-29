@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 
-namespace CluedIn.Connector.AzureDataLake
+namespace CluedIn.Connector.DataLake.Common
 {
     internal class Buffer<T> : IDisposable
     {

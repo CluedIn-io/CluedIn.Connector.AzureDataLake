@@ -1,32 +1,39 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+
+using CluedIn.Connector.AzureDataLake.Connector;
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities;
-using CluedIn.Core.Server;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+
 using ComponentHost;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace CluedIn.Connector.AzureDataLake
 {
     [Component(nameof(AzureDataLakeConnectorComponent), "Providers", ComponentType.Service,
         ServerComponents.ProviderWebApi,
         Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
-    public sealed class AzureDataLakeConnectorComponent : ServiceApplicationComponent<IServer>
+    public sealed class AzureDataLakeConnectorComponent : DataLakeConnectorComponentBase
     {
+
         public AzureDataLakeConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
         {
+            Container.Install(new InstallComponents());
         }
 
         /// <summary>Starts this instance.</summary>
         public override void Start()
         {
-            Container.Install(new InstallComponents());
+            var dataLakeConstants = Container.Resolve<IAzureDataLakeConstants>();
+            var jobDataFactory = Container.Resolve<AzureDataLakeJobDataFactory>();
 
             #region Set existing streams to EventMode
             Task.Run(async () =>
@@ -73,7 +80,7 @@ namespace CluedIn.Connector.AzureDataLake
                         var org = new Organization(ApplicationContext, orgId);
 
                         foreach (var provider in org.Providers.AllProviderDefinitions.Where(x =>
-                                     x.ProviderId == new AzureDataLakeConstants().ProviderId))
+                                     x.ProviderId == dataLakeConstants.ProviderId))
                         {
                             foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))
                             {
@@ -99,7 +106,7 @@ namespace CluedIn.Connector.AzureDataLake
                                         OldContainerName = stream.ContainerName,
                                     };
 
-                                    Log.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{stream.Name}' ({stream.Id})");
+                                    Log.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{{StreamName}}' ({{StreamId}})", stream.Name, stream.Id);
 
                                     await streamRepository.SetupConnector(stream.Id, model, executionContext);
                                 }
@@ -124,6 +131,10 @@ namespace CluedIn.Connector.AzureDataLake
             });
             #endregion
 
+            var exportEntitiesJobType = typeof(AzureDataLakeExportEntitiesJob);
+            SubscribeToEvents(dataLakeConstants, exportEntitiesJobType);
+            _ = Task.Run(() => RunScheduler(dataLakeConstants, jobDataFactory, exportEntitiesJobType));
+
             Log.LogInformation($"{ComponentName} Registered");
             State = ServiceState.Started;
         }
@@ -132,11 +143,14 @@ namespace CluedIn.Connector.AzureDataLake
         public override void Stop()
         {
             if (State == ServiceState.Stopped)
+            {
                 return;
+            }
 
             State = ServiceState.Stopped;
         }
 
-        public string ComponentName => "Azure Data Lake Storage Gen2";
+
+        public const string ComponentName = "Azure Data Lake Storage Gen2";
     }
 }

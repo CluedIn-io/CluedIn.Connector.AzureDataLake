@@ -12,7 +12,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CluedIn.Connector.AzureDataLake
+namespace CluedIn.Connector.DataLake.Common
 {
     public abstract class ConnectorProviderBase<TConnectorProvider> : ProviderBase, IExtendedProviderMetadata
         where TConnectorProvider : ConnectorProviderBase<TConnectorProvider>
@@ -67,14 +67,20 @@ namespace CluedIn.Connector.AzureDataLake
         {
             _logger.LogDebug($"GetAccountInformation CrawlJobData input: {JsonConvert.SerializeObject(jobData)}");
 
-            if (!(jobData is CrawlJobDataWrapper dataWrapper))
+            if (jobData is not CrawlJobDataWrapper dataWrapper)
+            {
                 return Task.FromResult(new AccountInformation(string.Empty, string.Empty));
+            }
 
             var displayNameBuilder = new StringBuilder();
             var configurations = dataWrapper.Configurations;
             foreach (var key in ProviderNameParts)
+            {
                 if (configurations.TryGetValue(key, out var value) && value != null)
-                    displayNameBuilder.Append(value).Append(" ");
+                {
+                    displayNameBuilder.Append(value).Append(' ');
+                }
+            }
 
             return Task.FromResult(new AccountInformation(string.Empty, displayNameBuilder.ToString()));
         }
@@ -92,7 +98,9 @@ namespace CluedIn.Connector.AzureDataLake
             _logger.LogDebug($"GetHelperConfiguration CrawlJobData input: {JsonConvert.SerializeObject(jobData)}");
 
             if (jobData is CrawlJobDataWrapper dataWrapper)
+            {
                 return Task.FromResult(dataWrapper.Configurations);
+            }
 
             return Task.FromResult<IDictionary<string, object>>(new Dictionary<string, object>());
         }

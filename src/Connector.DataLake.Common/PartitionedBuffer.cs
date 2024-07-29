@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace CluedIn.Connector.AzureDataLake
+namespace CluedIn.Connector.DataLake.Common
 {
     internal class PartitionedBuffer<TPartition, TItem> : IDisposable
     {
