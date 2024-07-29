@@ -62,8 +62,8 @@ function Run-Setup() {
 	# Wait for additional 5 seconds to make sure it's really ready
 	Start-Sleep 5
 	$createDatabaseCommand = "CREATE DATABASE [$databaseName]"
-	Write-Host "##[command]docker exec $containerName /opt/mssql-tools/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -Q $createDatabaseCommand"
-	docker exec $containerName /opt/mssql-tools/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -Q $createDatabaseCommand
+	Write-Host "##[command]docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand"
+	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand
 }
 
 function Run-TearDown() {
