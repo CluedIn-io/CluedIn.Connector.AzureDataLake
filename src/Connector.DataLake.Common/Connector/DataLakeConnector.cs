@@ -124,13 +124,21 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 AddToData("IncomingEdges", connectorEntityData.IncomingEdges.SafeEnumerate());
             }
 
-            if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+            try
             {
-                return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+                if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+                {
+                    return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+                }
+                else
+                {
+                    return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
+                _logger.LogError(ex, "Exception thrown. Returning SaveResult.ReQueue");
+                return SaveResult.ReQueue;
             }
         }
 
@@ -185,7 +193,8 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             if (streamModel.Mode != StreamMode.Sync)
             {
-                throw new NotSupportedException($"Buffer mode is only supported with '{StreamMode.Sync}' mode.");
+                _logger.LogError($"Buffer mode is only supported with '{StreamMode.Sync}' mode.");
+                return SaveResult.Failed;
             }
 
             var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
@@ -424,6 +433,21 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                         return new ConnectionVerificationResult(false, $"Only JSON is supported when stream cache is disabled.");
                     }
                 }
+
+                if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
+                {
+                    var supported = string.Join(',', DataLakeConstants.OutputFormats.SupportedFormats);
+                    var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
+                if (!DataLakeConstants.JobScheduleNames.IsValid(jobData.Schedule))
+                {
+                    var supported = string.Join(',', DataLakeConstants.JobScheduleNames.SupportedSchedules);
+                    var errorMessage = $"Format '{jobData.Schedule}' is not supported. Supported schedules are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
                 return new ConnectionVerificationResult(true);
             }
             catch (Exception e)
