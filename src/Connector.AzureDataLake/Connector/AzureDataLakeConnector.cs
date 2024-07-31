@@ -90,34 +90,43 @@ namespace CluedIn.Connector.AzureDataLake.Connector
                 data.Add("IncomingEdges", connectorEntityData.IncomingEdges);
             }
 
-            if (streamModel.Mode == StreamMode.Sync)
+            try
             {
-                var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
 
-                if (connectorEntityData.ChangeType == VersionChangeType.Removed)
+                if (streamModel.Mode == StreamMode.Sync)
                 {
-                    await _client.DeleteFile(configurations, filePathAndName);
+                    var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
+
+                    if (connectorEntityData.ChangeType == VersionChangeType.Removed)
+                    {
+                        await _client.DeleteFile(configurations, filePathAndName);
+                    }
+                    else
+                    {
+                        var settings = new JsonSerializerSettings
+                        {
+                            TypeNameHandling = TypeNameHandling.None,
+                            Formatting = Formatting.Indented,
+                        };
+
+                        var json = JsonConvert.SerializeObject(data, settings);
+
+                        await _client.SaveData(configurations, json, filePathAndName);
+                    }
                 }
                 else
                 {
-                    var settings = new JsonSerializerSettings
-                    {
-                        TypeNameHandling = TypeNameHandling.None,
-                        Formatting = Formatting.Indented,
-                    };
+                    data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
 
-                    var json = JsonConvert.SerializeObject(data, settings);
+                    var json = JsonConvert.SerializeObject(data);
 
-                    await _client.SaveData(configurations, json, filePathAndName);
+                    await _buffer.Add(configurations, json);
                 }
             }
-            else
+            catch (Exception ex)
             {
-                data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
-
-                var json = JsonConvert.SerializeObject(data);
-
-                await _buffer.Add(configurations, json);
+                _logger.LogWarning(ex, $"[{nameof(AzureDataLakeConnector)}] Exception storing data will {nameof(SaveResult.ReQueue)}");
+                return SaveResult.ReQueue;
             }
 
             return SaveResult.Success;

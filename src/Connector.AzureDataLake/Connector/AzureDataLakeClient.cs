@@ -1,6 +1,7 @@
 ﻿using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
+using CluedIn.Core;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -23,21 +24,25 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
         public async Task SaveData(AzureDataLakeConnectorJobData configuration, string content, string fileName)
         {
-            var directoryClient = await EnsureDataLakeDirectoryExist(configuration);
-
-            var dataLakeFileClient = directoryClient.GetFileClient(fileName);
-            var options = new DataLakeFileUploadOptions
+            await ActionExtensions.ExecuteWithRetryAsync(async () =>
             {
-                HttpHeaders = new PathHttpHeaders { ContentType = "application/json" }
-            };
+                var directoryClient = await EnsureDataLakeDirectoryExist(configuration);
 
-            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
-            var response = await dataLakeFileClient.UploadAsync(stream, options);
-            
-            if (response?.Value == null)
-            {
-                throw new Exception($"{nameof(DataLakeFileClient)}.{nameof(DataLakeFileClient.UploadAsync)} did not return a valid path");
-            }
+                var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+                var options = new DataLakeFileUploadOptions
+                {
+                    HttpHeaders = new PathHttpHeaders { ContentType = "application/json" }
+                };
+
+                using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+
+                var response = await dataLakeFileClient.UploadAsync(stream, options);
+
+                if (response?.Value == null)
+                {
+                    throw new Exception($"{nameof(DataLakeFileClient)}.{nameof(DataLakeFileClient.UploadAsync)} did not return a valid path");
+                }
+            });
         }
 
         public async Task DeleteFile(AzureDataLakeConnectorJobData configuration, string fileName)
