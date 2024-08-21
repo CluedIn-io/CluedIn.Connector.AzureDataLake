@@ -4,6 +4,7 @@ using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
+using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -19,16 +20,19 @@ namespace CluedIn.Connector.AzureDataLake.Connector
     {
         private readonly ILogger<AzureDataLakeConnector> _logger;
         private readonly IAzureDataLakeClient _client;
+        private readonly ISystemClock _systemClock;
         private readonly PartitionedBuffer<AzureDataLakeConnectorJobData, string> _buffer;
 
         public AzureDataLakeConnector(
             ILogger<AzureDataLakeConnector> logger,
             IAzureDataLakeClient client,
-            IAzureDataLakeConstants constants)
+            IAzureDataLakeConstants constants,
+            ISystemClock systemClock)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
             _client = client;
+            _systemClock = systemClock;
 
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
@@ -82,12 +86,12 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             if (!data.ContainsKey("Timestamp"))
             {
-                data.Add("Timestamp", DateTime.UtcNow.ToString("O"));
+                data.Add("Timestamp", _systemClock.UtcNow.ToString("O"));
             }
 
             if (!data.ContainsKey("Epoch"))
             {
-                data.Add("Epoch", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                data.Add("Epoch", _systemClock.UtcNow.ToUnixTimeMilliseconds());
             }
 
             if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())

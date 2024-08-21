@@ -12,14 +12,14 @@ using CluedIn.Core.Data;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Data.Vocabularies;
 using CluedIn.Core.Streams.Models;
+using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -28,6 +28,7 @@ using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 {
+
     public class AzureDataLakeConnectorTests
     {
         private readonly ITestOutputHelper _testOutputHelper;
@@ -44,6 +45,9 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
 
             var container = new WindsorContainer();
+
+            var mockClock = new Mock<ISystemClock>();
+            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.Zero));
 
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
@@ -73,18 +77,19 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var directoryName = $"xunit-{DateTime.Now.Ticks}";
 
             var connectorConnectionMock = new Mock<IConnectorConnectionV2>();
-            connectorConnectionMock.Setup(x => x.Authentication).Returns(new Dictionary<string, object>
+            connectorConnectionMock.Setup(x => x.Authentication).Returns(new Dictionary<string, object>()
             {
                 { "AccountName", accountName },
                 { "AccountKey", accountKey },
                 { "FileSystemName", fileSystemName },
-                { "DirectoryName", directoryName }
+                { "DirectoryName", directoryName },
             });
 
             var connectorMock = new Mock<AzureDataLakeConnector>(
                 new Mock<ILogger<AzureDataLakeConnector>>().Object,
                 new AzureDataLakeClient(),
-                azureDataLakeConstantsMock.Object
+                azureDataLakeConstantsMock.Object,
+                mockClock.Object
             );
             connectorMock.Setup(x => x.GetAuthenticationDetails(context, providerDefinitionId))
                 .Returns(Task.FromResult(connectorConnectionMock.Object));
@@ -102,7 +107,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                     new ConnectorPropertyData("user.lastName", "Picard",
                         new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
                     new ConnectorPropertyData("Name", "Jean Luc Picard",
-                        new EntityPropertyConnectorPropertyDataType(typeof(string)))
+                        new EntityPropertyConnectorPropertyDataType(typeof(string))),
                 },
                 new IEntityCode[] { EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0") },
                 new[]
@@ -170,21 +175,10 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var content = new StreamReader(fileClient.Read().Value.Content).ReadToEnd();
 
-            using (var doc = JsonDocument.Parse(content))
-            {
-                foreach (var element in doc.RootElement.EnumerateArray())
-                {
-                    Assert.True(element.TryGetProperty("Timestamp", out _));
-                    Assert.True(element.TryGetProperty("Epoch", out _));
-                }
-            }
-
-            content = Regex.Replace(content, @"^\s*""(Timestamp|Epoch)"":.*(\,\s*|\s*)\n", "", RegexOptions.Multiline);
-
             _testOutputHelper.WriteLine(content);
 
-            Assert.Equal(@"[
-  {
+            Assert.Equal($@"[
+  {{
     ""user.lastName"": ""Picard"",
     ""Name"": ""Jean Luc Picard"",
     ""Id"": ""f55c66dc-7881-55c9-889f-344992e71cb8"",
@@ -196,134 +190,136 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
     ],
     ""ProviderDefinitionId"": ""c444cda8-d9b5-45cc-a82d-fef28e08d55c"",
     ""ContainerName"": ""test"",
+    ""Timestamp"": ""2024-08-21T13:16:00+10:00"",
+    ""Epoch"": 1724210160000,
     ""OutgoingEdges"": [
-      {
-        ""FromReference"": {
-          ""Code"": {
-            ""Origin"": {
+      {{
+        ""FromReference"": {{
+          ""Code"": {{
+            ""Origin"": {{
               ""Code"": ""Somewhere"",
               ""Id"": null
-            },
+            }},
             ""Value"": ""5678"",
             ""Key"": ""/EntityB#Somewhere:5678"",
-            ""Type"": {
+            ""Type"": {{
               ""IsEntityContainer"": false,
               ""Root"": null,
               ""Code"": ""/EntityB""
-            }
-          },
-          ""Type"": {
+            }}
+          }},
+          ""Type"": {{
             ""IsEntityContainer"": false,
             ""Root"": null,
             ""Code"": ""/EntityB""
-          },
+          }},
           ""Name"": null,
           ""Properties"": null,
           ""PropertyCount"": null,
           ""EntityId"": null,
           ""IsEmpty"": false
-        },
-        ""ToReference"": {
-          ""Code"": {
-            ""Origin"": {
+        }},
+        ""ToReference"": {{
+          ""Code"": {{
+            ""Origin"": {{
               ""Code"": ""Acceptance"",
               ""Id"": null
-            },
+            }},
             ""Value"": ""7c5591cf-861a-4642-861d-3b02485854a0"",
             ""Key"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-            ""Type"": {
+            ""Type"": {{
               ""IsEntityContainer"": false,
               ""Root"": null,
               ""Code"": ""/Person""
-            }
-          },
-          ""Type"": {
+            }}
+          }},
+          ""Type"": {{
             ""IsEntityContainer"": false,
             ""Root"": null,
             ""Code"": ""/Person""
-          },
+          }},
           ""Name"": null,
           ""Properties"": null,
           ""PropertyCount"": null,
           ""EntityId"": null,
           ""IsEmpty"": false
-        },
-        ""EdgeType"": {
+        }},
+        ""EdgeType"": {{
           ""Root"": null,
           ""Code"": ""/EntityB""
-        },
+        }},
         ""HasProperties"": false,
-        ""Properties"": {},
+        ""Properties"": {{}},
         ""CreationOptions"": 0,
         ""Weight"": null,
         ""Version"": 0
-      }
+      }}
     ],
     ""IncomingEdges"": [
-      {
-        ""FromReference"": {
-          ""Code"": {
-            ""Origin"": {
+      {{
+        ""FromReference"": {{
+          ""Code"": {{
+            ""Origin"": {{
               ""Code"": ""Acceptance"",
               ""Id"": null
-            },
+            }},
             ""Value"": ""7c5591cf-861a-4642-861d-3b02485854a0"",
             ""Key"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-            ""Type"": {
+            ""Type"": {{
               ""IsEntityContainer"": false,
               ""Root"": null,
               ""Code"": ""/Person""
-            }
-          },
-          ""Type"": {
+            }}
+          }},
+          ""Type"": {{
             ""IsEntityContainer"": false,
             ""Root"": null,
             ""Code"": ""/Person""
-          },
+          }},
           ""Name"": null,
           ""Properties"": null,
           ""PropertyCount"": null,
           ""EntityId"": null,
           ""IsEmpty"": false
-        },
-        ""ToReference"": {
-          ""Code"": {
-            ""Origin"": {
+        }},
+        ""ToReference"": {{
+          ""Code"": {{
+            ""Origin"": {{
               ""Code"": ""Somewhere"",
               ""Id"": null
-            },
+            }},
             ""Value"": ""1234"",
             ""Key"": ""/EntityA#Somewhere:1234"",
-            ""Type"": {
+            ""Type"": {{
               ""IsEntityContainer"": false,
               ""Root"": null,
               ""Code"": ""/EntityA""
-            }
-          },
-          ""Type"": {
+            }}
+          }},
+          ""Type"": {{
             ""IsEntityContainer"": false,
             ""Root"": null,
             ""Code"": ""/EntityA""
-          },
+          }},
           ""Name"": null,
           ""Properties"": null,
           ""PropertyCount"": null,
           ""EntityId"": null,
           ""IsEmpty"": false
-        },
-        ""EdgeType"": {
+        }},
+        ""EdgeType"": {{
           ""Root"": null,
           ""Code"": ""/EntityA""
-        },
+        }},
         ""HasProperties"": false,
-        ""Properties"": {},
+        ""Properties"": {{}},
         ""CreationOptions"": 0,
         ""Weight"": null,
         ""Version"": 0
-      }
+      }}
     ],
     ""ChangeType"": ""Added""
-  }
+  }}
 ]", content);
 
             await fsClient.GetDirectoryClient(directoryName).DeleteAsync();
@@ -336,6 +332,9 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
 
             var container = new WindsorContainer();
+
+            var mockClock = new Mock<ISystemClock>();
+            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.Zero));
 
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
@@ -365,18 +364,19 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var directoryName = $"xunit-{DateTime.Now.Ticks}";
 
             var connectorConnectionMock = new Mock<IConnectorConnectionV2>();
-            connectorConnectionMock.Setup(x => x.Authentication).Returns(new Dictionary<string, object>
+            connectorConnectionMock.Setup(x => x.Authentication).Returns(new Dictionary<string, object>()
             {
                 { "AccountName", accountName },
                 { "AccountKey", accountKey },
                 { "FileSystemName", fileSystemName },
-                { "DirectoryName", directoryName }
+                { "DirectoryName", directoryName },
             });
 
             var connectorMock = new Mock<AzureDataLakeConnector>(
                 new Mock<ILogger<AzureDataLakeConnector>>().Object,
                 new AzureDataLakeClient(),
-                azureDataLakeConstantsMock.Object
+                azureDataLakeConstantsMock.Object,
+                mockClock.Object
             );
             connectorMock.Setup(x => x.GetAuthenticationDetails(context, providerDefinitionId))
                 .Returns(Task.FromResult(connectorConnectionMock.Object));
@@ -394,7 +394,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                     new ConnectorPropertyData("user.lastName", "Picard",
                         new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
                     new ConnectorPropertyData("Name", "Jean Luc Picard",
-                        new EntityPropertyConnectorPropertyDataType(typeof(string)))
+                        new EntityPropertyConnectorPropertyDataType(typeof(string))),
                 },
                 new IEntityCode[] { EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0") },
                 new[]
@@ -462,17 +462,9 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var content = new StreamReader(fileClient.Read().Value.Content).ReadToEnd();
 
-            using (var doc = JsonDocument.Parse(content))
-            {
-                Assert.True(doc.RootElement.TryGetProperty("Timestamp", out _));
-                Assert.True(doc.RootElement.TryGetProperty("Epoch", out _));
-            }
-
-            content = Regex.Replace(content, @"^\s*""(Timestamp|Epoch)"":.*(\,\s*|\s*)\n", "", RegexOptions.Multiline);
-
             _testOutputHelper.WriteLine(content);
 
-            Assert.Equal(@"{
+            Assert.Equal($@"{{
   ""user.lastName"": ""Picard"",
   ""Name"": ""Jean Luc Picard"",
   ""Id"": ""f55c66dc-7881-55c9-889f-344992e71cb8"",
@@ -484,133 +476,135 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
   ],
   ""ProviderDefinitionId"": ""c444cda8-d9b5-45cc-a82d-fef28e08d55c"",
   ""ContainerName"": ""test"",
+  ""Timestamp"": ""2024-08-21T03:16:00.0000000+00:00"",
+  ""Epoch"": 1724210160000,
   ""OutgoingEdges"": [
-    {
-      ""FromReference"": {
-        ""Code"": {
-          ""Origin"": {
+    {{
+      ""FromReference"": {{
+        ""Code"": {{
+          ""Origin"": {{
             ""Code"": ""Somewhere"",
             ""Id"": null
-          },
+          }},
           ""Value"": ""5678"",
           ""Key"": ""/EntityB#Somewhere:5678"",
-          ""Type"": {
+          ""Type"": {{
             ""IsEntityContainer"": false,
             ""Root"": null,
             ""Code"": ""/EntityB""
-          }
-        },
-        ""Type"": {
+          }}
+        }},
+        ""Type"": {{
           ""IsEntityContainer"": false,
           ""Root"": null,
           ""Code"": ""/EntityB""
-        },
+        }},
         ""Name"": null,
         ""Properties"": null,
         ""PropertyCount"": null,
         ""EntityId"": null,
         ""IsEmpty"": false
-      },
-      ""ToReference"": {
-        ""Code"": {
-          ""Origin"": {
+      }},
+      ""ToReference"": {{
+        ""Code"": {{
+          ""Origin"": {{
             ""Code"": ""Acceptance"",
             ""Id"": null
-          },
+          }},
           ""Value"": ""7c5591cf-861a-4642-861d-3b02485854a0"",
           ""Key"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-          ""Type"": {
+          ""Type"": {{
             ""IsEntityContainer"": false,
             ""Root"": null,
             ""Code"": ""/Person""
-          }
-        },
-        ""Type"": {
+          }}
+        }},
+        ""Type"": {{
           ""IsEntityContainer"": false,
           ""Root"": null,
           ""Code"": ""/Person""
-        },
+        }},
         ""Name"": null,
         ""Properties"": null,
         ""PropertyCount"": null,
         ""EntityId"": null,
         ""IsEmpty"": false
-      },
-      ""EdgeType"": {
+      }},
+      ""EdgeType"": {{
         ""Root"": null,
         ""Code"": ""/EntityB""
-      },
+      }},
       ""HasProperties"": false,
-      ""Properties"": {},
+      ""Properties"": {{}},
       ""CreationOptions"": 0,
       ""Weight"": null,
       ""Version"": 0
-    }
+    }}
   ],
   ""IncomingEdges"": [
-    {
-      ""FromReference"": {
-        ""Code"": {
-          ""Origin"": {
+    {{
+      ""FromReference"": {{
+        ""Code"": {{
+          ""Origin"": {{
             ""Code"": ""Acceptance"",
             ""Id"": null
-          },
+          }},
           ""Value"": ""7c5591cf-861a-4642-861d-3b02485854a0"",
           ""Key"": ""/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"",
-          ""Type"": {
+          ""Type"": {{
             ""IsEntityContainer"": false,
             ""Root"": null,
             ""Code"": ""/Person""
-          }
-        },
-        ""Type"": {
+          }}
+        }},
+        ""Type"": {{
           ""IsEntityContainer"": false,
           ""Root"": null,
           ""Code"": ""/Person""
-        },
+        }},
         ""Name"": null,
         ""Properties"": null,
         ""PropertyCount"": null,
         ""EntityId"": null,
         ""IsEmpty"": false
-      },
-      ""ToReference"": {
-        ""Code"": {
-          ""Origin"": {
+      }},
+      ""ToReference"": {{
+        ""Code"": {{
+          ""Origin"": {{
             ""Code"": ""Somewhere"",
             ""Id"": null
-          },
+          }},
           ""Value"": ""1234"",
           ""Key"": ""/EntityA#Somewhere:1234"",
-          ""Type"": {
+          ""Type"": {{
             ""IsEntityContainer"": false,
             ""Root"": null,
             ""Code"": ""/EntityA""
-          }
-        },
-        ""Type"": {
+          }}
+        }},
+        ""Type"": {{
           ""IsEntityContainer"": false,
           ""Root"": null,
           ""Code"": ""/EntityA""
-        },
+        }},
         ""Name"": null,
         ""Properties"": null,
         ""PropertyCount"": null,
         ""EntityId"": null,
         ""IsEmpty"": false
-      },
-      ""EdgeType"": {
+      }},
+      ""EdgeType"": {{
         ""Root"": null,
         ""Code"": ""/EntityA""
-      },
+      }},
       ""HasProperties"": false,
-      ""Properties"": {},
+      ""Properties"": {{}},
       ""CreationOptions"": 0,
       ""Weight"": null,
       ""Version"": 0
-    }
+    }}
   ]
-}", content);
+}}", content);
 
             data.ChangeType = VersionChangeType.Removed;
             await connector.StoreData(context, streamModel.Object, data);
