@@ -56,3 +56,4 @@ steps:
       publicReleaseForMaster: true
       executeIntegrationTests: ${{ parameters.runIngegrationTests }}
       publishCodeCoverage: true
+      publishToDevFeed: true
