@@ -80,6 +80,16 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             data["ContainerName"] = containerName;
             // end match previous version of the connector
 
+            if (!data.ContainsKey("Timestamp"))
+            {
+                data.Add("Timestamp", DateTime.UtcNow.ToString("O"));
+            }
+
+            if (!data.ContainsKey("Epoch"))
+            {
+                data.Add("Epoch", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            }
+
             if (connectorEntityData.OutgoingEdges.SafeEnumerate().Any())
             {
                 data.Add("OutgoingEdges", connectorEntityData.OutgoingEdges);
@@ -174,7 +184,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
         }
-        
+
         public override Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
             return Task.CompletedTask;
