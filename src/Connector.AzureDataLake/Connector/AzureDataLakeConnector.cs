@@ -10,7 +10,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -179,9 +181,11 @@ namespace CluedIn.Connector.AzureDataLake.Connector
             {
                 TypeNameHandling = TypeNameHandling.None,
                 Formatting = Formatting.Indented,
+                DateParseHandling = DateParseHandling.None,
             };
 
-            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), settings);
+            var content = JsonConvert.SerializeObject(
+                entityData.Select(x => (JObject)JsonConvert.DeserializeObject(x, settings)).ToArray(), settings);
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";

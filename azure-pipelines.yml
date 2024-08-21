@@ -56,4 +56,4 @@ steps:
       publicReleaseForMaster: true
       executeIntegrationTests: ${{ parameters.runIngegrationTests }}
       publishCodeCoverage: true
-      publishToDevFeed: true
+      publishToDevFeed: ${{ eq(variables['Build.Reason'], 'PullRequest') }}

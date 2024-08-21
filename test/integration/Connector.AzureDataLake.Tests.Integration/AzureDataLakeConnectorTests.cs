@@ -47,7 +47,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var container = new WindsorContainer();
 
             var mockClock = new Mock<ISystemClock>();
-            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.Zero));
+            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5)));
 
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
@@ -190,8 +190,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
     ],
     ""ProviderDefinitionId"": ""c444cda8-d9b5-45cc-a82d-fef28e08d55c"",
     ""ContainerName"": ""test"",
-    ""Timestamp"": ""2024-08-21T13:16:00+10:00"",
-    ""Epoch"": 1724210160000,
+    ""Timestamp"": ""2024-08-21T03:16:00.0000000+05:00"",
+    ""Epoch"": 1724192160000,
     ""OutgoingEdges"": [
       {{
         ""FromReference"": {{
@@ -334,7 +334,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var container = new WindsorContainer();
 
             var mockClock = new Mock<ISystemClock>();
-            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.Zero));
+            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5)));
 
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
@@ -476,8 +476,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
   ],
   ""ProviderDefinitionId"": ""c444cda8-d9b5-45cc-a82d-fef28e08d55c"",
   ""ContainerName"": ""test"",
-  ""Timestamp"": ""2024-08-21T03:16:00.0000000+00:00"",
-  ""Epoch"": 1724210160000,
+  ""Timestamp"": ""2024-08-21T03:16:00.0000000+05:00"",
+  ""Epoch"": 1724192160000,
   ""OutgoingEdges"": [
     {{
       ""FromReference"": {{
