@@ -188,7 +188,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector
 
             _client.SaveData(configuration, content, fileName).GetAwaiter().GetResult();
         }
-
+        
         public override Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
             return Task.CompletedTask;

@@ -2,6 +2,7 @@
 using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 using CluedIn.Connector.AzureDataLake.Connector;
+using Microsoft.Extensions.Internal;
 
 namespace CluedIn.Connector.AzureDataLake
 {
@@ -11,6 +12,8 @@ namespace CluedIn.Connector.AzureDataLake
         {
             container.Register(Component.For<IAzureDataLakeClient>().ImplementedBy<AzureDataLakeClient>().OnlyNewServices());
             container.Register(Component.For<IAzureDataLakeConstants>().ImplementedBy<AzureDataLakeConstants>().LifestyleSingleton());
+            container.Register(Component.For<ISystemClock>().ImplementedBy<SystemClock>().LifestyleSingleton());
+
         }
     }
 }
