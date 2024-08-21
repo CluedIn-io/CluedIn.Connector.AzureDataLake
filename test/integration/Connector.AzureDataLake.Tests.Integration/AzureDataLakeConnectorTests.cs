@@ -609,7 +609,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
       ""Weight"": null,
       ""Version"": 0
     }
-  ],
+  ]
 }", content);
 
             data.ChangeType = VersionChangeType.Removed;
