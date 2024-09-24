@@ -549,12 +549,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             await RenameCacheTableIfExists(executionContext, streamModel);
         }
 
-        public override Task<IEnumerable<IConnectorContainer>> GetContainers(ExecutionContext executionContext,
+        public override async Task<IEnumerable<IConnectorContainer>> GetContainers(ExecutionContext executionContext,
             Guid providerDefinitionId)
         {
             _logger.LogInformation($"DataLakeConnector.GetContainers: entry");
 
-            throw new NotImplementedException(nameof(GetContainers));
+            var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, "");
+
+            return await _client.GetFilesInDirectory(jobData);
         }
 
         public override Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)

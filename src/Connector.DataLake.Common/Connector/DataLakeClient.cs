@@ -1,7 +1,8 @@
 ﻿using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
-
+using CluedIn.Core.Connectors;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -102,6 +103,51 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
 
             return dataLakeFileSystemClient;
+        }
+
+        public async Task<IEnumerable<IConnectorContainer>> GetFilesInDirectory(IDataLakeJobData configuration)
+        {
+            var serviceClient = GetDataLakeServiceClient(configuration);
+            var fileSystemName = GetFileSystemName(configuration);
+            var fileSystemClient = serviceClient.GetFileSystemClient(fileSystemName);
+
+            if (!await fileSystemClient.ExistsAsync())
+            {
+                return null;
+            }
+
+            var directory = GetDirectory(configuration);
+            var directoryClient = fileSystemClient.GetDirectoryClient(directory);
+            if (!await directoryClient.ExistsAsync())
+            {
+                return null;
+            }
+
+            var files = directoryClient.GetPathsAsync().GetAsyncEnumerator();
+            await files.MoveNextAsync();
+            var item = files.Current;
+
+            var result = new List<IConnectorContainer>();
+            while (item != null)
+            {
+                if (!item.IsDirectory.GetValueOrDefault())
+                {
+                    result.Add(new DataLakeContainer
+                    {
+                        Name = Path.GetFileName(item.Name),
+                        FullyQualifiedName = directoryClient.Uri.ToString() + "/" + Path.GetFileName(item.Name)
+                    });
+                }
+
+                if (!await files.MoveNextAsync())
+                {
+                    break;
+                }
+
+                item = files.Current;
+            }
+
+            return result;
         }
     }
 }
