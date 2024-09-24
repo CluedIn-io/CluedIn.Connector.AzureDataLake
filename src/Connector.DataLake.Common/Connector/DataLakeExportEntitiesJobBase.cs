@@ -109,13 +109,13 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var asOfTime = GetLastOccurence(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
-        var outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
+        var outputFileName = GetOutputFileName(streamModel.ContainerName, asOfTime, outputFormat);
 
         if (await _dataLakeClient.FileInPathExists(configuration, outputFileName))
         {
             context.Log.LogDebug("Output file '{OutputFileName}' exists using data at {DataTime}. Switching to using current time", outputFileName, asOfTime);
             asOfTime = DateTime.UtcNow;
-            outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
+            outputFileName = GetOutputFileName(streamModel.ContainerName, asOfTime, outputFormat);
         }
 
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
@@ -149,10 +149,10 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
     }
 
-    protected virtual string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
+    protected virtual string GetOutputFileName(string containerName, DateTime asOfTime, string outputFormat)
     {
         var fileExtension = GetFileExtension(outputFormat);
-        var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
+        var outputFileName = $"{containerName}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
         return outputFileName;
     }
 

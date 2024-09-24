@@ -18,9 +18,9 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
     {
     }
 
-    protected override string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
+    protected override string GetOutputFileName(string containerName, DateTime asOfTime, string outputFormat)
     {
         var fileExtension = GetFileExtension(outputFormat);
-        return $"{streamId:N}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
+        return $"{containerName}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
     }
 }
