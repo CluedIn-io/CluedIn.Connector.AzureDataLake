@@ -5,5 +5,5 @@ branches:
   master:
     mode: ContinuousDelivery
   pull-request:
-    tag: pr
+    tag: alpha-pr
     increment: None

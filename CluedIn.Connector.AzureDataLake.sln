@@ -14,6 +14,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{F7C0EE1B-7F6C-4B2E-99AB-3345DA66E5D0}"
 	ProjectSection(SolutionItems) = preProject
 		azure-pipelines.yml = azure-pipelines.yml
+		GitVersion.yml = GitVersion.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Code Style", "Code Style", "{9C4B34BE-212C-426D-8256-FD497E912220}"
@@ -53,11 +54,22 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.DataLake.Common",
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.OneLake", "src\Connector.OneLake\Connector.OneLake.csproj", "{1AA8B845-9762-47DD-B0E4-3B2C20C7486A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AzureDatabricks", "src\Connector.AzureDatabricks\Connector.AzureDatabricks.csproj", "{B0A8FAB9-8809-492F-A2B1-C141CE53A724}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDatabricks", "src\Connector.AzureDatabricks\Connector.AzureDatabricks.csproj", "{B0A8FAB9-8809-492F-A2B1-C141CE53A724}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.SynapseDataEngineering", "src\Connector.SynapseDataEngineering\Connector.SynapseDataEngineering.csproj", "{61607CFA-7A18-4DD6-9512-83B620B288EB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.SynapseDataEngineering", "src\Connector.SynapseDataEngineering\Connector.SynapseDataEngineering.csproj", "{61607CFA-7A18-4DD6-9512-83B620B288EB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AzureAIStudio", "src\Connector.AzureAIStudio\Connector.AzureAIStudio.csproj", "{5F8EDA0E-5F95-4A7A-A7F3-217210674FDE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureAIStudio", "src\Connector.AzureAIStudio\Connector.AzureAIStudio.csproj", "{5F8EDA0E-5F95-4A7A-A7F3-217210674FDE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{140DAFBB-752D-48C4-9242-9DBA3FF5031D}"
+	ProjectSection(SolutionItems) = preProject
+		docs\3.2.5-release-notes.md = docs\3.2.5-release-notes.md
+		docs\3.4.0-release-notes.md = docs\3.4.0-release-notes.md
+		docs\3.4.1-release-notes.md = docs\3.4.1-release-notes.md
+		docs\3.4.2-release-notes.md = docs\3.4.2-release-notes.md
+		docs\4.0.0-release-notes.md = docs\4.0.0-release-notes.md
+		docs\4.3.0-release-notes.md = docs\4.3.0-release-notes.md
+		docs\4.4.0-release-notes.md = docs\4.4.0-release-notes.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
