@@ -14,17 +14,25 @@ internal class AzureDatabricksConnectorJobData : DataLakeJobData
     {
     }
 
-    public string AccountName => GetConfigurationValue(AzureDatabricksConstants.AccountName) as string;
-    public string AccountKey => GetConfigurationValue(AzureDatabricksConstants.AccountKey) as string;
-    public string DirectoryName => GetConfigurationValue(AzureDatabricksConstants.DirectoryName) as string;
-    public string FileSystemName => GetConfigurationValue(AzureDatabricksConstants.FileSystemName) as string;
+    public string WorkspaceName => Configurations[AzureDatabricksConstants.WorkspaceName] as string;
+    public string ItemName => Configurations[AzureDatabricksConstants.ItemName] as string;
+    public string ItemType => Configurations[AzureDatabricksConstants.ItemType] as string;
+    public string ItemFolder => Configurations[AzureDatabricksConstants.ItemFolder] as string;
+    public string ClientId => Configurations[AzureDatabricksConstants.ClientId] as string;
+    public string ClientSecret => Configurations[AzureDatabricksConstants.ClientSecret] as string;
+    public string TenantId => Configurations[AzureDatabricksConstants.TenantId] as string;
+    public override bool ShouldWriteGuidAsString => true;
+    public override bool ShouldEscapeVocabularyKeys => true;
 
     protected override void AddToHashCode(HashCode hash)
     {
-        hash.Add(AccountName);
-        hash.Add(AccountKey);
-        hash.Add(FileSystemName);
-        hash.Add(DirectoryName);
+        hash.Add(WorkspaceName);
+        hash.Add(ItemName);
+        hash.Add(ItemType);
+        hash.Add(ItemFolder);
+        hash.Add(ClientId);
+        hash.Add(ClientSecret);
+        hash.Add(TenantId);
 
         base.AddToHashCode(hash);
     }
@@ -37,12 +45,14 @@ internal class AzureDatabricksConnectorJobData : DataLakeJobData
     public bool Equals(AzureDatabricksConnectorJobData other)
     {
         return other != null &&
-            AccountName == other.AccountName &&
-            AccountKey == other.AccountKey &&
-            FileSystemName == other.FileSystemName &&
-            DirectoryName == other.DirectoryName &&
+            WorkspaceName == other.WorkspaceName &&
+            ItemName == other.ItemName &&
+            ItemType == other.ItemType &&
+            ItemFolder == other.ItemFolder &&
+            ClientId == other.ClientId &&
+            ClientSecret == other.ClientSecret &&
+            TenantId == other.TenantId &&
             base.Equals(other);
-
     }
 
     public override int GetHashCode()
