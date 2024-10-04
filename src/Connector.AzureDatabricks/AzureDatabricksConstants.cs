@@ -12,17 +12,20 @@ public class AzureDatabricksConstants : DataLakeConstants, IAzureDatabricksConst
 {
     internal static readonly Guid DataLakeProviderId = Guid.Parse("615F15FD-91A2-4B8A-9CE5-FEF4F7C44ACE");
 
-    public const string AccountName = nameof(AccountName);
-    public const string AccountKey = nameof(AccountKey);
-    public const string FileSystemName = nameof(FileSystemName);
-    public const string DirectoryName = nameof(DirectoryName);
+    public const string WorkspaceName = nameof(WorkspaceName);
+    public const string ItemName = nameof(ItemName);
+    public const string ItemType = nameof(ItemType);
+    public const string ItemFolder = nameof(ItemFolder);
+    public const string ClientId = nameof(ClientId);
+    public const string ClientSecret = nameof(ClientSecret);
+    public const string TenantId = nameof(TenantId);
 
-     public AzureDatabricksConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
+    public AzureDatabricksConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
         providerName: "Azure Databricks Connector",
         componentName: "AzureDatabricksConnector",
         icon: "Resources.azuredatabricks.svg",
         domain: "https://azure.microsoft.com/en-au/products/databricks",
-        about: "Supports publishing of data to Azure Databricks via its support for ADLSG2.",
+        about: "Supports publishing of data to Azure Databricks via OneLake.",
         authMethods: GetAzureDataLakeAuthMethods(applicationContext),
         guideDetails: "Supports publishing of data to Azure Databricks.",
         guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
@@ -37,29 +40,50 @@ public class AzureDatabricksConstants : DataLakeConstants, IAzureDatabricksConst
         {
             new ()
             {
-                name = AccountName,
-                displayName = AccountName,
+                name = WorkspaceName,
+                displayName = WorkspaceName,
                 type = "input",
                 isRequired = true
             },
             new ()
             {
-                name = AccountKey,
-                displayName = AccountKey,
+                name = ItemName,
+                displayName = ItemName,
+                type = "input",
+                isRequired = true
+            },
+            new ()
+            {
+                name = ItemType,
+                displayName = ItemType,
+                type = "input",
+                isRequired = true
+            },
+            new ()
+            {
+                name = ItemFolder,
+                displayName = ItemFolder,
+                type = "input",
+                isRequired = true
+            },
+            new ()
+            {
+                name = ClientId,
+                displayName = ClientId,
+                type = "input",
+                isRequired = true
+            },
+            new ()
+            {
+                name = ClientSecret,
+                displayName = ClientSecret,
                 type = "password",
                 isRequired = true
             },
             new ()
             {
-                name = FileSystemName,
-                displayName = FileSystemName,
-                type = "input",
-                isRequired = true
-            },
-            new ()
-            {
-                name = DirectoryName,
-                displayName = DirectoryName,
+                name = TenantId,
+                displayName = TenantId,
                 type = "input",
                 isRequired = true
             },

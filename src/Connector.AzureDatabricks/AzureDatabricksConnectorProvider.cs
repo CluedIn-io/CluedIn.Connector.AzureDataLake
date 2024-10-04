@@ -15,8 +15,11 @@ public class AzureDatabricksConnectorProvider : ConnectorProviderBase<AzureDatab
 
     protected override IEnumerable<string> ProviderNameParts => new[]
     {
-        AzureDatabricksConstants.AccountName,
-        AzureDatabricksConstants.FileSystemName,
-        AzureDatabricksConstants.DirectoryName,
+       AzureDatabricksConstants.WorkspaceName,
+       AzureDatabricksConstants.ItemFolder,
+       AzureDatabricksConstants.ItemType,
+       AzureDatabricksConstants.ItemName,
+       AzureDatabricksConstants.ClientId,
+       AzureDatabricksConstants.TenantId,
     };
 }
