@@ -16,7 +16,7 @@ using ComponentHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace CluedIn.Connector.AzureDataLake
+namespace CluedIn.Connector.AzureDatabricks
 {
     [Component(nameof(AzureDatabricksConnectorComponent), "Providers", ComponentType.Service,
         ServerComponents.ProviderWebApi,
