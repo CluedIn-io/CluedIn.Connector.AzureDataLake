@@ -15,8 +15,11 @@ public class SynapseDataEngineeringConnectorProvider : ConnectorProviderBase<Syn
 
     protected override IEnumerable<string> ProviderNameParts => new[]
     {
-        SynapseDataEngineeringConstants.AccountName,
-        SynapseDataEngineeringConstants.FileSystemName,
-        SynapseDataEngineeringConstants.DirectoryName,
+       SynapseDataEngineeringConstants.WorkspaceName,
+       SynapseDataEngineeringConstants.ItemFolder,
+       SynapseDataEngineeringConstants.ItemType,
+       SynapseDataEngineeringConstants.ItemName,
+       SynapseDataEngineeringConstants.ClientId,
+       SynapseDataEngineeringConstants.TenantId,
     };
 }

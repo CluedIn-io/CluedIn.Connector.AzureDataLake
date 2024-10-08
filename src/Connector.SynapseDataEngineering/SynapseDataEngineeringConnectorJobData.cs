@@ -14,17 +14,25 @@ internal class SynapseDataEngineeringConnectorJobData : DataLakeJobData
     {
     }
 
-    public string AccountName => GetConfigurationValue(SynapseDataEngineeringConstants.AccountName) as string;
-    public string AccountKey => GetConfigurationValue(SynapseDataEngineeringConstants.AccountKey) as string;
-    public string DirectoryName => GetConfigurationValue(SynapseDataEngineeringConstants.DirectoryName) as string;
-    public string FileSystemName => GetConfigurationValue(SynapseDataEngineeringConstants.FileSystemName) as string;
+    public string WorkspaceName => Configurations[SynapseDataEngineeringConstants.WorkspaceName] as string;
+    public string ItemName => Configurations[SynapseDataEngineeringConstants.ItemName] as string;
+    public string ItemType => Configurations[SynapseDataEngineeringConstants.ItemType] as string;
+    public string ItemFolder => Configurations[SynapseDataEngineeringConstants.ItemFolder] as string;
+    public string ClientId => Configurations[SynapseDataEngineeringConstants.ClientId] as string;
+    public string ClientSecret => Configurations[SynapseDataEngineeringConstants.ClientSecret] as string;
+    public string TenantId => Configurations[SynapseDataEngineeringConstants.TenantId] as string;
+    public override bool ShouldWriteGuidAsString => true;
+    public override bool ShouldEscapeVocabularyKeys => true;
 
     protected override void AddToHashCode(HashCode hash)
     {
-        hash.Add(AccountName);
-        hash.Add(AccountKey);
-        hash.Add(FileSystemName);
-        hash.Add(DirectoryName);
+        hash.Add(WorkspaceName);
+        hash.Add(ItemName);
+        hash.Add(ItemType);
+        hash.Add(ItemFolder);
+        hash.Add(ClientId);
+        hash.Add(ClientSecret);
+        hash.Add(TenantId);
 
         base.AddToHashCode(hash);
     }
@@ -37,10 +45,13 @@ internal class SynapseDataEngineeringConnectorJobData : DataLakeJobData
     public bool Equals(SynapseDataEngineeringConnectorJobData other)
     {
         return other != null &&
-            AccountName == other.AccountName &&
-            AccountKey == other.AccountKey &&
-            FileSystemName == other.FileSystemName &&
-            DirectoryName == other.DirectoryName &&
+            WorkspaceName == other.WorkspaceName &&
+            ItemName == other.ItemName &&
+            ItemType == other.ItemType &&
+            ItemFolder == other.ItemFolder &&
+            ClientId == other.ClientId &&
+            ClientSecret == other.ClientSecret &&
+            TenantId == other.TenantId &&
             base.Equals(other);
 
     }

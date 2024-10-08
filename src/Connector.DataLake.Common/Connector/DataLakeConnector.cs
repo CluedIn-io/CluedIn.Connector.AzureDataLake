@@ -13,6 +13,7 @@ using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json;
@@ -28,6 +29,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private const int TableCreationLockTimeoutInMillliseconds = 100;
         private readonly ILogger<DataLakeConnector> _logger;
         private readonly IDataLakeClient _client;
+        private readonly ISystemClock _systemClock;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
@@ -55,11 +57,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             ILogger<DataLakeConnector> logger,
             IDataLakeClient client,
             IDataLakeConstants constants,
-            IDataLakeJobDataFactory dataLakeJobDataFactory)
+            IDataLakeJobDataFactory dataLakeJobDataFactory,
+            ISystemClock systemClock)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
             _client = client;
+            _systemClock = systemClock;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
@@ -115,6 +119,16 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             AddToData("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(code => code.ToString()));
             AddToData("ProviderDefinitionId", providerDefinitionId);
             AddToData("ContainerName", containerName);
+
+            if (!data.ContainsKey("Timestamp"))
+            {
+                AddToData("Timestamp", _systemClock.UtcNow.ToString("O"));
+            }
+
+            if (!data.ContainsKey("Epoch"))
+            {
+                AddToData("Epoch", _systemClock.UtcNow.ToUnixTimeMilliseconds());
+            }
 
             // end match previous version of the connector
             if (streamModel.ExportOutgoingEdges)
@@ -399,6 +413,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             {
                 TypeNameHandling = TypeNameHandling.None,
                 Formatting = formatting,
+                DateParseHandling = DateParseHandling.None,
             };
         }
 
@@ -532,7 +547,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 return;
             }
 
-            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), _immediateOutputSerializerSettings);
+            var content = JsonConvert.SerializeObject(
+                entityData.Select(x => (JObject)JsonConvert.DeserializeObject(x, _immediateOutputSerializerSettings)).ToArray(),
+                _immediateOutputSerializerSettings);
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
