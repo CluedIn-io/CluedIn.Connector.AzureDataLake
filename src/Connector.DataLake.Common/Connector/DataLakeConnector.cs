@@ -13,6 +13,7 @@ using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json;
@@ -28,6 +29,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private const int TableCreationLockTimeoutInMillliseconds = 100;
         private readonly ILogger<DataLakeConnector> _logger;
         private readonly IDataLakeClient _client;
+        private readonly ISystemClock _systemClock;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
@@ -55,11 +57,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             ILogger<DataLakeConnector> logger,
             IDataLakeClient client,
             IDataLakeConstants constants,
-            IDataLakeJobDataFactory dataLakeJobDataFactory)
+            IDataLakeJobDataFactory dataLakeJobDataFactory,
+            ISystemClock systemClock)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
             _client = client;
+            _systemClock = systemClock;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
@@ -114,6 +118,16 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             AddToData("ProviderDefinitionId", providerDefinitionId);
             AddToData("ContainerName", containerName);
 
+            if (!data.ContainsKey("Timestamp"))
+            {
+                AddToData("Timestamp", _systemClock.UtcNow.ToString("O"));
+            }
+
+            if (!data.ContainsKey("Epoch"))
+            {
+                AddToData("Epoch", _systemClock.UtcNow.ToUnixTimeMilliseconds());
+            }
+
             // end match previous version of the connector
             if (streamModel.ExportOutgoingEdges)
             {
@@ -124,13 +138,21 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 AddToData("IncomingEdges", connectorEntityData.IncomingEdges.SafeEnumerate());
             }
 
-            if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+            try
             {
-                return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+                if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+                {
+                    return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+                }
+                else
+                {
+                    return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
+                _logger.LogError(ex, "Exception thrown. Returning SaveResult.ReQueue");
+                return SaveResult.ReQueue;
             }
         }
 
@@ -185,7 +207,8 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             if (streamModel.Mode != StreamMode.Sync)
             {
-                throw new NotSupportedException($"Buffer mode is only supported with '{StreamMode.Sync}' mode.");
+                _logger.LogError($"Buffer mode is only supported with '{StreamMode.Sync}' mode.");
+                return SaveResult.Failed;
             }
 
             var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
@@ -388,6 +411,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             {
                 TypeNameHandling = TypeNameHandling.None,
                 Formatting = formatting,
+                DateParseHandling = DateParseHandling.None,
             };
         }
 
@@ -424,6 +448,21 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                         return new ConnectionVerificationResult(false, $"Only JSON is supported when stream cache is disabled.");
                     }
                 }
+
+                if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
+                {
+                    var supported = string.Join(',', DataLakeConstants.OutputFormats.SupportedFormats);
+                    var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
+                if (!DataLakeConstants.JobScheduleNames.IsValid(jobData.Schedule))
+                {
+                    var supported = string.Join(',', DataLakeConstants.JobScheduleNames.SupportedSchedules);
+                    var errorMessage = $"Format '{jobData.Schedule}' is not supported. Supported schedules are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
                 return new ConnectionVerificationResult(true);
             }
             catch (Exception e)
@@ -506,7 +545,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 return;
             }
 
-            var content = JsonConvert.SerializeObject(entityData.Select(JObject.Parse).ToArray(), _immediateOutputSerializerSettings);
+            var content = JsonConvert.SerializeObject(
+                entityData.Select(x => (JObject)JsonConvert.DeserializeObject(x, _immediateOutputSerializerSettings)).ToArray(),
+                _immediateOutputSerializerSettings);
 
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
