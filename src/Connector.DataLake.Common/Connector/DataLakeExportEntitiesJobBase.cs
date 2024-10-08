@@ -9,7 +9,7 @@ using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Jobs;
 using CluedIn.Core.Streams;
-
+using CluedIn.Core.Streams.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
@@ -109,16 +109,17 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var asOfTime = GetLastOccurence(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
-        var outputFileName = GetOutputFileName(streamModel.ContainerName, asOfTime, outputFormat);
+        var outputFileName = GetOutputFileName(streamModel, asOfTime, outputFormat, configuration);
 
         if (await _dataLakeClient.FileInPathExists(configuration, outputFileName))
         {
             context.Log.LogDebug("Output file '{OutputFileName}' exists using data at {DataTime}. Switching to using current time", outputFileName, asOfTime);
             asOfTime = DateTime.UtcNow;
-            outputFileName = GetOutputFileName(streamModel.ContainerName, asOfTime, outputFormat);
+            outputFileName = GetOutputFileName(streamModel, asOfTime, outputFormat, configuration);
         }
 
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
+        context.Log.LogDebug("[DataLakeExportEntitiesJobBase] {sql}", getDataSql);
         var command = new SqlCommand(getDataSql, connection)
         {
             CommandType = CommandType.Text
@@ -146,13 +147,27 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
 
         await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNames, reader);
+
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
     }
 
-    protected virtual string GetOutputFileName(string containerName, DateTime asOfTime, string outputFormat)
+    protected virtual string GetOutputFileName(StreamModel streamModel, DateTime asOfTime, string outputFormat, IDataLakeJobData configuration)
     {
         var fileExtension = GetFileExtension(outputFormat);
-        var outputFileName = $"{containerName}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
+        var fileName = streamModel.ContainerName;
+
+        //this will be created as Delta Parquet via Azure Synapse for Purview Data Quality
+        if (outputFormat.Trim().Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
+        {
+            //var files = _dataLakeClient.GetFilesInDirectory(configuration, streamModel.ContainerName).GetAwaiter().GetResult();
+
+            //return $"part-{files.Count():000#}-{streamModel.Id}-c000.snappy.parquet";
+
+            return $"{streamModel.ContainerName}.parquet";
+        }
+
+        var outputFileName = $"{fileName}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
+
         return outputFileName;
     }
 

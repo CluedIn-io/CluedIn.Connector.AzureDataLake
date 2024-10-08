@@ -19,6 +19,9 @@ internal class AzureDataLakeConnectorJobData : DataLakeJobData
     public string DirectoryName => GetConfigurationValue(AzureDataLakeConstants.DirectoryName) as string;
     public string FileSystemName => GetConfigurationValue(AzureDataLakeConstants.FileSystemName) as string;
 
+    public override bool ShouldEscapeVocabularyKeys => true;
+    public override bool ShouldWriteGuidAsString => true;
+
     protected override void AddToHashCode(HashCode hash)
     {
         hash.Add(AccountName);

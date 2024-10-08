@@ -89,7 +89,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
 
             // matching output format of previous version of the connector
-            var data = connectorEntityData.Properties.ToDictionary(property => property.Name, property => property.Value);
+            var data = connectorEntityData.Properties.ToDictionary(property =>
+                property.Name,
+                property => property.Value);
             var dataValueTypes = new Dictionary<string, Type>();
             foreach(var property in connectorEntityData.Properties)
             {

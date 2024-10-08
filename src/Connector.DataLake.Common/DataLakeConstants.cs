@@ -65,7 +65,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
 
     internal static readonly Dictionary<string, string> CronSchedules = new(StringComparer.OrdinalIgnoreCase)
     {
-        [JobScheduleNames.Hourly] = "0 0/1 * * *",
+        [JobScheduleNames.Hourly] = "0/5 * * * *",
         [JobScheduleNames.Daily] = "0 0 1-31 * *",
         [JobScheduleNames.Weekly] = "0 0 1-31 * 1",
         [JobScheduleNames.Never] = "0 5 31 2 *",

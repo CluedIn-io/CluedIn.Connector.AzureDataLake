@@ -1,6 +1,7 @@
 ﻿using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 using CluedIn.Core.Connectors;
+using CluedIn.Core.Streams.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,6 +15,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             var fileSystemClient = await GetFileSystemClientAsync(configuration);
             var directory = GetDirectory(configuration);
+
             var directoryClient = fileSystemClient.GetDirectoryClient(directory);
             if (!await directoryClient.ExistsAsync())
             {
@@ -105,7 +107,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return dataLakeFileSystemClient;
         }
 
-        public async Task<IEnumerable<IConnectorContainer>> GetFilesInDirectory(IDataLakeJobData configuration)
+        public async Task<IEnumerable<IConnectorContainer>> GetFilesInDirectory(IDataLakeJobData configuration, string subDirectory = null)
         {
             var serviceClient = GetDataLakeServiceClient(configuration);
             var fileSystemName = GetFileSystemName(configuration);
@@ -117,6 +119,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
 
             var directory = GetDirectory(configuration);
+            if (!string.IsNullOrEmpty(subDirectory))
+                directory = Path.Combine(directory, subDirectory);
+
             var directoryClient = fileSystemClient.GetDirectoryClient(directory);
             if (!await directoryClient.ExistsAsync())
             {
