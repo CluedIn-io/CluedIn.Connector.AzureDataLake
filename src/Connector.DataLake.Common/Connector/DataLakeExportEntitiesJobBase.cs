@@ -110,13 +110,13 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var asOfTime = GetLastOccurence(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
-        var outputFileName = GetOutputFileName(configuration, streamId, asOfTime, outputFormat);
+        var outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
 
         if (await _dataLakeClient.FileInPathExists(configuration, outputFileName))
         {
             context.Log.LogDebug("Output file '{OutputFileName}' exists using data at {DataTime}. Switching to using current time", outputFileName, asOfTime);
             asOfTime = DateTime.UtcNow;
-            outputFileName = GetOutputFileName(configuration, streamId, asOfTime, outputFormat);
+            outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
         }
 
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
@@ -150,11 +150,11 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
     }
 
-    protected virtual string GetOutputFileName(IDataLakeJobData configuration, Guid streamId, DateTime asOfTime, string outputFormat)
+    protected virtual string GetOutputFileName(IDataLakeJobData configuration, Guid streamId, string containerName, DateTime asOfTime, string outputFormat)
     {
         if (!string.IsNullOrWhiteSpace(configuration.FileNamePattern))
         {
-            return GetOutputFileNameUsingPattern(configuration.FileNamePattern, streamId, asOfTime, outputFormat);
+            return GetOutputFileNameUsingPattern(configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
         }
 
         return GetDefaultOutputFileName(streamId, asOfTime, outputFormat);
@@ -167,15 +167,17 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return outputFileName;
     }
 
-    private static string GetOutputFileNameUsingPattern(string outputFileNamePattern, Guid streamId, DateTime asOfTime, string outputFormat)
+    private static string GetOutputFileNameUsingPattern(string outputFileNamePattern, Guid streamId, string containerName, DateTime asOfTime, string outputFormat)
     {
         var timeRegexPattern = @"\{(DataTime)(\:[a-zA-Z0-9\-\._]+)?\}";
         var streamIdRegexPattern = @"\{(StreamId)(\:[a-zA-Z0-9\-\._]+)?\}";
+        var containerNameRegexPattern = @"\{(ContainerName)(\:[a-zA-Z0-9\-\._]+)?\}";
         var outputFormatRegexPattern = @"\{(OutputFormat)(\:[a-zA-Z0-9\-\._]+)?\}";
 
         var timeReplaced = Replace(timeRegexPattern, outputFileNamePattern, (match, format) => asOfTime.ToString(format ?? "o"));
         var streamIdReplaced = Replace(streamIdRegexPattern, timeReplaced, (match, format) => streamId.ToString(format ?? "D"));
-        var outputFormatReplaced = Replace(outputFormatRegexPattern, streamIdReplaced, (match, format) =>
+        var containerNameReplaced = Replace(containerNameRegexPattern, streamIdReplaced, (match, format) => containerName);
+        var outputFormatReplaced = Replace(outputFormatRegexPattern, containerNameReplaced, (match, format) =>
         {
             return format?.ToLowerInvariant() switch
             {
