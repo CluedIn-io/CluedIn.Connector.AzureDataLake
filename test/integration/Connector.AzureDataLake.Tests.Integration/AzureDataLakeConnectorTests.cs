@@ -1060,10 +1060,10 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             ContainerName test
             EntityType /Person
             Epoch 1724192160000
-            IncomingEdges ["EdgeType: /EntityA; From: 低:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; To: 低:/EntityA#Somewhere:1234; Properties: 0"]
+            IncomingEdges ["EdgeType: /EntityA; From: 禮C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; To: 禮C:/EntityA#Somewhere:1234; Properties: 0"]
             Name Jean Luc Picard
             OriginEntityCode /Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0
-            OutgoingEdges ["EdgeType: /EntityB; From: 低:/EntityB#Somewhere:5678; To: 低:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; Properties: 0"]
+            OutgoingEdges ["EdgeType: /EntityB; From: 禮C:/EntityB#Somewhere:5678; To: 禮C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; Properties: 0"]
             PersistHash etypzcezkiehwq8vw4oqog==
             PersistVersion 1
             ProviderDefinitionId c444cda8-d9b5-45cc-a82d-fef28e08d55c
