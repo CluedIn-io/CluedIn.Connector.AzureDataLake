@@ -35,8 +35,8 @@ using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 using Moq;
-
-using ParquetSharp;
+using Newtonsoft.Json;
+using Parquet;
 
 using Xunit;
 using Xunit.Abstractions;
@@ -1036,23 +1036,19 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
         {
             using var memoryStream = new MemoryStream();
             await fileClient.ReadToAsync(memoryStream);
-            using var file = new ParquetFileReader(memoryStream);
-
+            using var parquetReader = await ParquetReader.CreateAsync(memoryStream);
             var sb = new StringBuilder();
-            for (var rowGroup = 0; rowGroup < file.FileMetaData.NumRowGroups; ++rowGroup)
+            for (var rowGroup = 0; rowGroup < parquetReader.RowGroupCount; rowGroup++)
             {
-                using var rowGroupReader = file.RowGroup(rowGroup);
-                var groupNumRows = checked((int)rowGroupReader.MetaData.NumRows);
+                using var rowGroupReader = parquetReader.OpenRowGroupReader(rowGroup);
 
-                var totalColumns = rowGroupReader.MetaData.NumColumns;
-
-                for (var column = 0; column <totalColumns; ++column)
+                foreach (var dataField in parquetReader.Schema!.GetDataFields())
                 {
-                    var columnType = rowGroupReader.MetaData.Schema.Column(column).LogicalType.Type;
-                    var columnReader = rowGroupReader.Column(column);
+                    var dataColumn = await rowGroupReader.ReadColumnAsync(dataField);
+                    var columnType = dataColumn.Field.SchemaType;
 
-                    object value = getValue(groupNumRows, columnType, columnReader);
-                    sb.AppendLine($"{rowGroupReader.MetaData.Schema.Column(column).Name} {value}");
+                    var value = getValue(dataColumn);
+                    sb.AppendLine($"{dataField.Name} {value}");
                 }
             }
 
@@ -1079,23 +1075,35 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             """, sb.ToString());
 
-            object getValue(int groupNumRows, LogicalTypeEnum columnType, ColumnReader columnReader)
+            object getValue(Parquet.Data.DataColumn dataColumn)
             {
-                switch (columnType)
+                if (dataColumn.Field.ClrType == typeof(Guid))
+                    return ((Guid[])dataColumn.Data)[0];
+                else if (dataColumn.Field.ClrType == typeof(int))
                 {
-                    case LogicalTypeEnum.Uuid:
-                        return columnReader.LogicalReader<Guid?>().ReadAll(groupNumRows).Single();
-                    case LogicalTypeEnum.Int:
-                        if (columnReader is ColumnReader<int>)
-                        {
-                            return columnReader.LogicalReader<int?>().ReadAll(groupNumRows).Single();
-                        }
-                        return columnReader.LogicalReader<long?>().ReadAll(groupNumRows).Single();
-                    case LogicalTypeEnum.String:
-                        return columnReader.LogicalReader<string>().ReadAll(groupNumRows).Single();
-                    default:
-                        throw new NotSupportedException($"Type {columnType} not supported.");
+                    if (dataColumn.Field.IsNullable)
+                        return ((int?[])dataColumn.Data)[0];
+
+                    return ((int[])dataColumn.Data)[0];
                 }
+                else if (dataColumn.Field.ClrType == typeof(long))
+                {
+                    if (dataColumn.Field.IsNullable)
+                        return ((long?[])dataColumn.Data)[0];
+
+                    return ((long[])dataColumn.Data)[0];
+                }
+                else if (dataColumn.Field.ClrType == typeof(string))
+                {
+                    var value = ((string[])dataColumn.Data);
+
+                    if (dataColumn.Field.IsArray)
+                        return JsonConvert.SerializeObject(value);
+
+                    return value[0];
+                }
+
+                throw new NotSupportedException($"Type {dataColumn.Field.ClrType} not supported.");
             }
         }
 
