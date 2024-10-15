@@ -142,10 +142,11 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
                         throw new ApplicationException($"Job {jobData.Type} is not of type {typeof(DataLakeJobBase)}.");
                     }
                     var executionContext = ApplicationContext.CreateExecutionContext(jobData.OrganizationId);
-                    await jobInstance.DoRunAsync(executionContext, new JobArgs
+                    await jobInstance.DoRunAsync(executionContext, new DataLakeJobArgs
                     {
                         Message = jobData.StreamId.ToString(),
                         Schedule = jobData.CronSchedule,
+                        IsTriggeredFromJobServer = false,
                     });
                 }
                 catch (Exception ex)
