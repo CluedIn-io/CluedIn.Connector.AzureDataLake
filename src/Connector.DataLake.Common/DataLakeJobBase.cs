@@ -18,10 +18,10 @@ internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob
 
     protected override void DoRun(ExecutionContext context, JobArgs args)
     {
-        DoRunAsync(context, args).GetAwaiter().GetResult();
+        DoRunAsync(context, new DataLakeJobArgs(args, isTriggeredFromJobServer: true)).GetAwaiter().GetResult();
     }
 
-    public abstract Task DoRunAsync(ExecutionContext context, JobArgs args);
+    public abstract Task DoRunAsync(ExecutionContext context, DataLakeJobArgs args);
 
     /// <summary>
     /// Register and schedule current job for recurrent run.
