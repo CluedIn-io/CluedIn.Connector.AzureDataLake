@@ -132,7 +132,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                     outputFileName,
                     asOfTime);
                 asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime().DateTime;
-                outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
+                outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
             }
             else if (HasExportedFileBefore(streamId, asOfTime, filePathProperties?.Metadata))
             {
