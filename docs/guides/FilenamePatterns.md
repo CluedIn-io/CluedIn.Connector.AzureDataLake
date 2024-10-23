@@ -16,7 +16,7 @@ The following filename patterns are supported
     * ToUpperInvariant (equivalent to ToLowerInvariant)
   * When using {OutputFormat} without formatString, no extra formatting is performed. Example values: `csv`, `parquet`, `json`.
 * {ContainerName} and {ContainerName:formatString}
-  * this will use the value in the Storage Name of the Stream.
+  * this will use the value in the Target Name of the Stream.
   * formatString accepts the following:-
     * ToUpperInvariant
     * ToUpper (equivalent to ToUpperInvariant)
