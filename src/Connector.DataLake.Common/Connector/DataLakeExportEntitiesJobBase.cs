@@ -38,7 +38,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         _dataLakeJobDataFactory = dataLakeJobDataFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataFactory));
     }
 
-    public override async Task DoRunAsync(ExecutionContext context, JobArgs args)
+    public override async Task DoRunAsync(ExecutionContext context, DataLakeJobArgs args)
     {
         var typeName = this.GetType().Name;
         using var exportJobLoggingScope = context.Log.BeginScope(new Dictionary<string, object>
@@ -47,7 +47,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             ["Schedule"] = args.Schedule,
             ["ExportJob"] = typeName,
         });
-        context.Log.LogDebug("Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
+        context.Log.LogInformation("Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
 
         var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
 
@@ -59,7 +59,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         if (provider == null)
         {
-            context.Log.LogDebug("Unable to get provider {ProviderDefinitionId}. Skipping export.", providerDefinitionId);
+            context.Log.LogWarning("Unable to get provider {ProviderDefinitionId}. Skipping export.", providerDefinitionId);
             return;
         }
 
@@ -91,7 +91,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         if (streamModel.Status != StreamStatus.Started)
         {
-            context.Log.LogDebug("Stream not started for stream {StreamId}. Skipping export.", streamModel.Id);
+            context.Log.LogInformation("Stream not started for stream {StreamId}. Skipping export.", streamModel.Id);
             return;
         }
 
@@ -111,12 +111,32 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var asOfTime = GetLastOccurence(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
         var outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
+        var isFileExists = await _dataLakeClient.FileInPathExists(configuration, outputFileName);
 
-        if (await _dataLakeClient.FileInPathExists(configuration, outputFileName))
+        if (isFileExists)
         {
             context.Log.LogDebug("Output file '{OutputFileName}' exists using data at {DataTime}. Switching to using current time", outputFileName, asOfTime);
             asOfTime = DateTime.UtcNow;
             outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
+            
+            if (args.IsTriggeredFromJobServer)
+            {
+                context.Log.LogInformation(
+                    "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from job server. Switching to using current time.",
+                    outputFileName,
+                    asOfTime);
+                asOfTime = DateTime.UtcNow;
+                outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
+            }
+            else
+            {
+                context.Log.LogInformation(
+                    "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from {SchedulerType}. Skipping export.",
+                    outputFileName,
+                    asOfTime,
+                    nameof(DataLakeConnectorComponentBase));
+                return;
+            }
         }
 
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
@@ -140,14 +160,14 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var sqlDataWriter = GetSqlDataWriter(outputFormat);
 
-        context.Log.LogDebug("Begin writing to file '{OutputFileName}' using data at {DataTime}.", outputFileName, asOfTime);
+        context.Log.LogInformation("Begin writing to file '{OutputFileName}' using data at {DataTime}.", outputFileName, asOfTime);
         var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
         await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
         using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
 
         await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNames, reader);
-        context.Log.LogDebug("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
+        context.Log.LogInformation("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
     }
 
     protected virtual string GetOutputFileName(IDataLakeJobData configuration, Guid streamId, string containerName, DateTime asOfTime, string outputFormat)
