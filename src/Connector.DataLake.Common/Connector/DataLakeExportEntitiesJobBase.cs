@@ -22,6 +22,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     private readonly IDataLakeClient _dataLakeClient;
     private readonly IDataLakeConstants _dataLakeConstants;
     private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
+    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     private static readonly TimeSpan exportTimeout = TimeSpan.MaxValue;
     private const int ExportEntitiesLockInMilliseconds = 100;
     private const string StreamIdKey = "StreamId";
@@ -32,12 +33,14 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         IStreamRepository streamRepository,
         IDataLakeClient dataLakeClient,
         IDataLakeConstants dataLakeConstants,
-        IDataLakeJobDataFactory dataLakeJobDataFactory) : base(appContext)
+        IDataLakeJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext)
     {
         _streamRepository = streamRepository ?? throw new ArgumentNullException(nameof(streamRepository));
         _dataLakeClient = dataLakeClient ?? throw new ArgumentNullException(nameof(dataLakeClient));
         _dataLakeConstants = dataLakeConstants ?? throw new ArgumentNullException(nameof(dataLakeConstants));
         _dataLakeJobDataFactory = dataLakeJobDataFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataFactory));
+        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
     public override async Task DoRunAsync(ExecutionContext context, DataLakeJobArgs args)
@@ -123,7 +126,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                     "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from job server. Switching to using current time.",
                     outputFileName,
                     asOfTime);
-                asOfTime = DateTime.UtcNow;
+                asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime().DateTime;
                 outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
             }
             else if (HasExportedFileBefore(streamId, asOfTime, filePathProperties?.Metadata))
@@ -157,7 +160,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             ["FileName"] = outputFileName,
             ["Format"] = outputFormat,
-            ["StartTime"] = DateTimeOffset.UtcNow,
+            ["StartTime"] = _dateTimeOffsetProvider.GetCurrentUtcTime(),
             [DataTimeKey] = asOfTime,
         });
 
@@ -229,11 +232,11 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             || args.Schedule == DataLakeConstants.CronSchedules[DataLakeConstants.JobScheduleNames.Never])
         {
             context.Log.LogDebug("Using current time for export.");
-            return DateTime.UtcNow;
+            return _dateTimeOffsetProvider.GetCurrentUtcTime().DateTime;
         }
 
         var cronSchedule = NCrontab.CrontabSchedule.Parse(args.Schedule);
-        var next = cronSchedule.GetNextOccurrence(DateTime.UtcNow.AddMinutes(1));
+        var next = cronSchedule.GetNextOccurrence(_dateTimeOffsetProvider.GetCurrentUtcTime().DateTime.AddMinutes(1));
         var nextNext = cronSchedule.GetNextOccurrence(next.AddMinutes(1));
         var diff = nextNext - next;
         var asOfTime = next - diff;

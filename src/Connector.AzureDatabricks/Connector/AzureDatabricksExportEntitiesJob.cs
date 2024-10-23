@@ -11,8 +11,9 @@ internal class AzureDatabricksExportEntitiesJob : DataLakeExportEntitiesJobBase
         IStreamRepository streamRepository,
         AzureDatabricksClient dataLakeClient,
         IAzureDatabricksConstants dataLakeConstants,
-        AzureDatabricksJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        AzureDatabricksJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 }
