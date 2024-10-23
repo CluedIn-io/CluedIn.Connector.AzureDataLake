@@ -48,7 +48,7 @@ function Run-Setup() {
 	$databaseUser = "sa"
 	$databasePassword = "yourStrong(!)Password"
 	$containerName = (Get-ContainerName)
-	$sqlServerImage = "mcr.microsoft.com/mssql/server:2022-latest"
+	$sqlServerImage = "docker.io/cluedin/mssql-server:2022-latest"
 	
 	Write-Host "##[command]docker run -d -e `"ACCEPT_EULA=Y`" --name $containerName -p `":1433`" -e `"MSSQL_SA_PASSWORD=$($databasePassword)`" $sqlServerImage"
 	docker run -d -e "ACCEPT_EULA=Y" --name $containerName -p ":1433" -e "MSSQL_SA_PASSWORD=$($databasePassword)" $sqlServerImage
@@ -62,8 +62,8 @@ function Run-Setup() {
 	# Wait for additional 5 seconds to make sure it's really ready
 	Start-Sleep 5
 	$createDatabaseCommand = "CREATE DATABASE [$databaseName]"
-	Write-Host "##[command]docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand"
-	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand
+	Write-Host "##[command]docker exec $containerName /opt/mssql-tools/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -Q $createDatabaseCommand"
+	docker exec $containerName /opt/mssql-tools/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -Q $createDatabaseCommand
 }
 
 function Run-TearDown() {
