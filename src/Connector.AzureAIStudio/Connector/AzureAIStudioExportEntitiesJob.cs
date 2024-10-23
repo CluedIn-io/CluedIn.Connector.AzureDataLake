@@ -13,8 +13,9 @@ internal class AzureAIStudioExportEntitiesJob : DataLakeExportEntitiesJobBase
         IStreamRepository streamRepository,
         AzureAIStudioClient dataLakeClient,
         IAzureAIStudioConstants dataLakeConstants,
-        AzureAIStudioJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        AzureAIStudioJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 

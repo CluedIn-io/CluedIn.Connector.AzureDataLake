@@ -13,7 +13,6 @@ using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json;
@@ -29,7 +28,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private const int TableCreationLockTimeoutInMillliseconds = 100;
         private readonly ILogger<DataLakeConnector> _logger;
         private readonly IDataLakeClient _client;
-        private readonly ISystemClock _systemClock;
+        private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
@@ -58,12 +57,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             IDataLakeClient client,
             IDataLakeConstants constants,
             IDataLakeJobDataFactory dataLakeJobDataFactory,
-            ISystemClock systemClock)
+            IDateTimeOffsetProvider dateTimeOffsetProvider)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
             _client = client;
-            _systemClock = systemClock;
+            _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
@@ -120,12 +119,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             if (!data.ContainsKey("Timestamp"))
             {
-                AddToData("Timestamp", _systemClock.UtcNow.ToString("O"));
+                AddToData("Timestamp", _dateTimeOffsetProvider.GetCurrentUtcTime().ToString("O"));
             }
 
             if (!data.ContainsKey("Epoch"))
             {
-                AddToData("Epoch", _systemClock.UtcNow.ToUnixTimeMilliseconds());
+                AddToData("Epoch", _dateTimeOffsetProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds());
             }
 
             // end match previous version of the connector

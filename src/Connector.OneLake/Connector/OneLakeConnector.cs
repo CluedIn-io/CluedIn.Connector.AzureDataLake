@@ -1,6 +1,6 @@
 ﻿using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Core;
 
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
@@ -12,8 +12,8 @@ public class OneLakeConnector : DataLakeConnector
         OneLakeClient client,
         IOneLakeConstants constants,
         OneLakeJobDataFactory dataLakeJobDataFactory,
-        ISystemClock systemClock)
-        : base(logger, client, constants, dataLakeJobDataFactory, systemClock)
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 }
