@@ -1,6 +1,6 @@
 ﻿using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Core;
 
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureDatabricks.Connector;
@@ -12,8 +12,8 @@ public class AzureDatabricksConnector : DataLakeConnector
         AzureDatabricksClient client,
         IAzureDatabricksConstants constants,
         AzureDatabricksJobDataFactory dataLakeJobDataFactory,
-        ISystemClock systemClock)
-        : base(logger, client, constants, dataLakeJobDataFactory, systemClock)
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 }

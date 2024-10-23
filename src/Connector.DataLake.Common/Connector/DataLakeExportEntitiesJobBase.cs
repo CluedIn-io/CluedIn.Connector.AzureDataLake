@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
+
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
@@ -22,20 +23,25 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     private readonly IDataLakeClient _dataLakeClient;
     private readonly IDataLakeConstants _dataLakeConstants;
     private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
+    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     private static readonly TimeSpan exportTimeout = TimeSpan.MaxValue;
     private const int ExportEntitiesLockInMilliseconds = 100;
+    private const string StreamIdKey = "StreamId";
+    private const string DataTimeKey = "DataTime";
 
     protected DataLakeExportEntitiesJobBase(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IDataLakeClient dataLakeClient,
         IDataLakeConstants dataLakeConstants,
-        IDataLakeJobDataFactory dataLakeJobDataFactory) : base(appContext)
+        IDataLakeJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext)
     {
         _streamRepository = streamRepository ?? throw new ArgumentNullException(nameof(streamRepository));
         _dataLakeClient = dataLakeClient ?? throw new ArgumentNullException(nameof(dataLakeClient));
         _dataLakeConstants = dataLakeConstants ?? throw new ArgumentNullException(nameof(dataLakeConstants));
         _dataLakeJobDataFactory = dataLakeJobDataFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataFactory));
+        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
     public override async Task DoRunAsync(ExecutionContext context, DataLakeJobArgs args)
@@ -43,7 +49,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var typeName = this.GetType().Name;
         using var exportJobLoggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {
-            ["StreamId"] = args.Message,
+            [StreamIdKey] = args.Message,
             ["Schedule"] = args.Schedule,
             ["ExportJob"] = typeName,
         });
@@ -111,9 +117,9 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var asOfTime = GetLastOccurence(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
         var outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
-        var isFileExists = await _dataLakeClient.FileInPathExists(configuration, outputFileName);
+        var filePathProperties = await _dataLakeClient.GetFilePathProperties(configuration, outputFileName);
 
-        if (isFileExists)
+        if (filePathProperties != null)
         {
             context.Log.LogDebug("Output file '{OutputFileName}' exists using data at {DataTime}. Switching to using current time", outputFileName, asOfTime);
             asOfTime = DateTime.UtcNow;
@@ -125,10 +131,10 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                     "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from job server. Switching to using current time.",
                     outputFileName,
                     asOfTime);
-                asOfTime = DateTime.UtcNow;
+                asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime().DateTime;
                 outputFileName = GetOutputFileName(streamId, asOfTime, outputFormat);
             }
-            else
+            else if (HasExportedFileBefore(streamId, asOfTime, filePathProperties?.Metadata))
             {
                 context.Log.LogInformation(
                     "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from {SchedulerType}. Skipping export.",
@@ -136,6 +142,11 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                     asOfTime,
                     nameof(DataLakeConnectorComponentBase));
                 return;
+            }
+            else
+            {
+                context.Log.LogInformation(
+                    "Output file '{OutputFileName}' exists and will be overwritten.", outputFileName);
             }
         }
 
@@ -154,20 +165,58 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             ["FileName"] = outputFileName,
             ["Format"] = outputFormat,
-            ["StartTime"] = DateTimeOffset.UtcNow,
-            ["DataTime"] = asOfTime,
+            ["StartTime"] = _dateTimeOffsetProvider.GetCurrentUtcTime(),
+            [DataTimeKey] = asOfTime,
         });
 
-        var sqlDataWriter = GetSqlDataWriter(outputFormat);
 
         context.Log.LogInformation("Begin writing to file '{OutputFileName}' using data at {DataTime}.", outputFileName, asOfTime);
         var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
         var dataLakeFileClient = directoryClient.GetFileClient(outputFileName);
-        await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
-        using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
+        await writeFileContentsAsync();
+        await setFilePropertiesAsync();
+        context.Log.LogInformation("End writing to file '{OutputFileName}' using data at {DataTime}.", outputFileName, asOfTime);
 
-        await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNames, reader);
-        context.Log.LogInformation("End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.", typeName, args.Message, args.Schedule);
+        context.Log.LogInformation(
+            "End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.",
+            typeName,
+            args.Message,
+            args.Schedule);
+
+
+        async Task writeFileContentsAsync()
+        {
+            var sqlDataWriter = GetSqlDataWriter(outputFormat);
+            await using var outputStream = await dataLakeFileClient.OpenWriteAsync(true);
+            using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
+            await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNames, reader);
+        }
+
+        async Task setFilePropertiesAsync()
+        {
+            context.Log.LogDebug(
+                "Setting file properties to file '{OutputFileName}' StreamId {StreamId} and DataTime {DataTime}.",
+                outputFileName,
+                streamId,
+                asOfTime);
+            await dataLakeFileClient.SetMetadataAsync(
+                new Dictionary<string, string>
+                {
+                    [StreamIdKey] = streamId.ToString(),
+                    [DataTimeKey] = asOfTime.ToString("O"),
+                });
+        }
+    }
+
+    private static bool HasExportedFileBefore(Guid streamId, DateTime asOfTime, IDictionary<string, string> metadata)
+    {
+        return metadata != null
+                && metadata.TryGetValue(StreamIdKey, out var fileStreamIdString)
+                && metadata.TryGetValue(DataTimeKey, out var fileDataTimeString)
+                && Guid.TryParse(fileStreamIdString, out var fileStreamId)
+                && DateTimeOffset.TryParse(fileDataTimeString, out var fileDataTime)
+                && fileStreamId == streamId
+                && fileDataTime == asOfTime;
     }
 
     protected virtual string GetOutputFileName(IDataLakeJobData configuration, Guid streamId, string containerName, DateTime asOfTime, string outputFormat)
@@ -245,11 +294,11 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             || args.Schedule == DataLakeConstants.CronSchedules[DataLakeConstants.JobScheduleNames.Never])
         {
             context.Log.LogDebug("Using current time for export.");
-            return DateTime.UtcNow;
+            return _dateTimeOffsetProvider.GetCurrentUtcTime().DateTime;
         }
 
         var cronSchedule = NCrontab.CrontabSchedule.Parse(args.Schedule);
-        var next = cronSchedule.GetNextOccurrence(DateTime.UtcNow.AddMinutes(1));
+        var next = cronSchedule.GetNextOccurrence(_dateTimeOffsetProvider.GetCurrentUtcTime().DateTime.AddMinutes(1));
         var nextNext = cronSchedule.GetNextOccurrence(next.AddMinutes(1));
         var diff = nextNext - next;
         var asOfTime = next - diff;

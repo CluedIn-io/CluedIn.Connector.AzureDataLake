@@ -13,8 +13,9 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
         IStreamRepository streamRepository,
         OneLakeClient dataLakeClient,
         IOneLakeConstants dataLakeConstants,
-        OneLakeJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        OneLakeJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 
