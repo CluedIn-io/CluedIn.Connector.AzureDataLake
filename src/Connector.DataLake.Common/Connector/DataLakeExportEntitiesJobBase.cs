@@ -121,10 +121,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         if (filePathProperties != null)
         {
-            context.Log.LogDebug("Output file '{OutputFileName}' exists using data at {DataTime}. Switching to using current time", outputFileName, asOfTime);
-            asOfTime = DateTime.UtcNow;
-            outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
-            
             if (args.IsTriggeredFromJobServer)
             {
                 context.Log.LogInformation(
@@ -226,10 +222,10 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return GetOutputFileNameUsingPattern(configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
         }
 
-        return GetDefaultOutputFileName(streamId, asOfTime, outputFormat);
+        return GetDefaultOutputFileName(streamId, containerName, asOfTime, outputFormat);
     }
 
-    protected virtual string GetDefaultOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
+    protected virtual string GetDefaultOutputFileName(Guid streamId, string containerName, DateTime asOfTime, string outputFormat)
     {
         var fileExtension = GetFileExtension(outputFormat);
         var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";

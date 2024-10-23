@@ -15,8 +15,13 @@ The following filename patterns are supported
     * ToLower
     * ToUpperInvariant (equivalent to ToLowerInvariant)
   * When using {OutputFormat} without formatString, no extra formatting is performed. Example values: `csv`, `parquet`, `json`.
-* {ContainerName}
+* {ContainerName} and {ContainerName:formatString}
   * this will use the value in the Storage Name of the Stream.
+  * formatString accepts the following:-
+    * ToUpperInvariant
+    * ToUpper (equivalent to ToUpperInvariant)
+    * ToLower
+    * ToUpperInvariant (equivalent to ToLowerInvariant)
 
 ## Example filename patterns
 | Filename Pattern                                         | Example output                                                            |
@@ -29,3 +34,6 @@ The following filename patterns are supported
 Default file names are as follows:
 * AzureDataLakeConnector: {StreamId:D}_{DataTime:yyyyMMddHHmmss}.{OutputFormat}
 * OneLakeConnector: {StreamId:N}_{DataTime:yyyyMMddHHmmss}.{OutputFormat}
+* AzureAIStudioConnector: {StreamId:N}_{DataTime:yyyyMMddHHmmss}.{OutputFormat}
+* AzureDatabricksConnector: {StreamId:N}_{DataTime:yyyyMMddHHmmss}.{OutputFormat}
+* SynapseDataEngineeringConnector: {StreamId:N}_{DataTime:yyyyMMddHHmmss}.{OutputFormat}
