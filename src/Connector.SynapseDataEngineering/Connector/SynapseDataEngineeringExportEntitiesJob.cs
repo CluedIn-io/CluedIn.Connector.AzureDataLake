@@ -1,4 +1,6 @@
-﻿using CluedIn.Connector.DataLake.Common.Connector;
+﻿using System;
+
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
@@ -15,5 +17,11 @@ internal class SynapseDataEngineeringExportEntitiesJob : DataLakeExportEntitiesJ
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
+    }
+
+    protected override string GetDefaultOutputFileName(Guid streamId, string containerName, DateTime asOfTime, string outputFormat)
+    {
+        var fileExtension = GetFileExtension(outputFormat);
+        return $"{streamId:N}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
     }
 }
