@@ -11,8 +11,9 @@ internal class SynapseDataEngineeringExportEntitiesJob : DataLakeExportEntitiesJ
         IStreamRepository streamRepository,
         SynapseDataEngineeringClient dataLakeClient,
         ISynapseDataEngineeringConstants dataLakeConstants,
-        SynapseDataEngineeringJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        SynapseDataEngineeringJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 }
