@@ -48,7 +48,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
             }
         }
 
-            var schema = new ParquetSchema(fields);
+        var schema = new ParquetSchema(fields);
         var parquetTable = new ParquetTable(schema);
         using var parquetWriter = await ParquetWriter.CreateAsync(schema, outputStream);
 
