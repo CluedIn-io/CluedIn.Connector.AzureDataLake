@@ -36,8 +36,8 @@ using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 using Moq;
-
-using ParquetSharp;
+using Newtonsoft.Json;
+using Parquet;
 
 using Xunit;
 using Xunit.Abstractions;
@@ -1270,23 +1270,19 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
         {
             using var memoryStream = new MemoryStream();
             await fileClient.ReadToAsync(memoryStream);
-            using var file = new ParquetFileReader(memoryStream);
-
+            using var parquetReader = await ParquetReader.CreateAsync(memoryStream);
             var sb = new StringBuilder();
-            for (var rowGroup = 0; rowGroup < file.FileMetaData.NumRowGroups; ++rowGroup)
+            for (var rowGroup = 0; rowGroup < parquetReader.RowGroupCount; rowGroup++)
             {
-                using var rowGroupReader = file.RowGroup(rowGroup);
-                var groupNumRows = checked((int)rowGroupReader.MetaData.NumRows);
+                using var rowGroupReader = parquetReader.OpenRowGroupReader(rowGroup);
 
-                var totalColumns = rowGroupReader.MetaData.NumColumns;
-
-                for (var column = 0; column <totalColumns; ++column)
+                foreach (var dataField in parquetReader.Schema!.GetDataFields())
                 {
-                    var columnType = rowGroupReader.MetaData.Schema.Column(column).LogicalType.Type;
-                    var columnReader = rowGroupReader.Column(column);
+                    var dataColumn = await rowGroupReader.ReadColumnAsync(dataField);
+                    var columnType = dataColumn.Field.SchemaType;
 
-                    object value = getValue(groupNumRows, columnType, columnReader);
-                    sb.AppendLine($"{rowGroupReader.MetaData.Schema.Column(column).Name} {value}");
+                    var value = getValue(dataColumn);
+                    sb.AppendLine($"{dataField.Name} {value}");
                 }
             }
 
@@ -1298,38 +1294,50 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             ContainerName test
             EntityType /Person
             Epoch 1724192160000
-            IncomingEdges [{"FromReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"1234","Key":"/EntityA#Somewhere:1234","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityA"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
+            IncomingEdges ["EdgeType: /EntityA; From: §C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; To: §C:/EntityA#Somewhere:1234; Properties: 0"]
             Name Jean Luc Picard
             OriginEntityCode /Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0
-            OutgoingEdges [{"FromReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"5678","Key":"/EntityB#Somewhere:5678","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityB"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
+            OutgoingEdges ["EdgeType: /EntityB; From: §C:/EntityB#Somewhere:5678; To: §C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; Properties: 0"]
             PersistHash etypzcezkiehwq8vw4oqog==
             PersistVersion 1
             ProviderDefinitionId c444cda8-d9b5-45cc-a82d-fef28e08d55c
             Timestamp 2024-08-21T03:16:00.0000000+05:00
-            user.age 123
-            user.dobInDateTime 2000-01-02T03:04:05
-            user.dobInDateTimeOffset 2000-01-02T03:04:05+12:34
-            user.lastName Picard
+            user_age 123
+            user_dobInDateTime 2000-01-02T03:04:05
+            user_dobInDateTimeOffset 2000-01-02T03:04:05+12:34
+            user_lastName Picard
 
             """, sb.ToString());
 
-            object getValue(int groupNumRows, LogicalTypeEnum columnType, ColumnReader columnReader)
+            object getValue(Parquet.Data.DataColumn dataColumn)
             {
-                switch (columnType)
+                if (dataColumn.Field.ClrType == typeof(Guid))
+                    return ((Guid[])dataColumn.Data)[0];
+                else if (dataColumn.Field.ClrType == typeof(int))
                 {
-                    case LogicalTypeEnum.Uuid:
-                        return columnReader.LogicalReader<Guid?>().ReadAll(groupNumRows).Single();
-                    case LogicalTypeEnum.Int:
-                        if (columnReader is ColumnReader<int>)
-                        {
-                            return columnReader.LogicalReader<int?>().ReadAll(groupNumRows).Single();
-                        }
-                        return columnReader.LogicalReader<long?>().ReadAll(groupNumRows).Single();
-                    case LogicalTypeEnum.String:
-                        return columnReader.LogicalReader<string>().ReadAll(groupNumRows).Single();
-                    default:
-                        throw new NotSupportedException($"Type {columnType} not supported.");
+                    if (dataColumn.Field.IsNullable)
+                        return ((int?[])dataColumn.Data)[0];
+
+                    return ((int[])dataColumn.Data)[0];
                 }
+                else if (dataColumn.Field.ClrType == typeof(long))
+                {
+                    if (dataColumn.Field.IsNullable)
+                        return ((long?[])dataColumn.Data)[0];
+
+                    return ((long[])dataColumn.Data)[0];
+                }
+                else if (dataColumn.Field.ClrType == typeof(string))
+                {
+                    var value = ((string[])dataColumn.Data);
+
+                    if (dataColumn.Field.IsArray)
+                        return JsonConvert.SerializeObject(value);
+
+                    return value[0];
+                }
+
+                throw new NotSupportedException($"Type {dataColumn.Field.ClrType} not supported.");
             }
         }
 
