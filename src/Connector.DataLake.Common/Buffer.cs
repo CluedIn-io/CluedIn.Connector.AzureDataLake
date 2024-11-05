@@ -24,6 +24,8 @@ namespace CluedIn.Connector.DataLake.Common
 
         private readonly SemaphoreSlim _addingCompleteSemaphore;
 
+        private readonly SemaphoreSlim _flushSemaphore;
+
         private int _currentCount;
 
         private Exception _bulkException;
@@ -51,6 +53,7 @@ namespace CluedIn.Connector.DataLake.Common
             _addingSemaphore = new SemaphoreSlim(maxSize, maxSize);
             _addingCompleteSemaphore = new SemaphoreSlim(0, maxSize - 1);
             _idleCancellationTokenSource = new CancellationTokenSource();
+            _flushSemaphore = new SemaphoreSlim(1, 1);
 
             for (var i = 0; i < _addingTaskSemaphores.Length; i++)
             {
@@ -164,42 +167,58 @@ namespace CluedIn.Connector.DataLake.Common
 
         private async Task Flush(bool idle)
         {
+            await _flushSemaphore.WaitAsync();
+
+            var count = _currentCount;
             try
             {
-                var flushStartedAt = DateTime.Now;
+                if (count == 0)
+                {
+                    return;
+                }
 
-                _bulkAction(_items.Take(_currentCount).ToArray());
+                try
+                {
+                    var flushStartedAt = DateTime.Now;
 
-                AutoAdjustMaxSize(idle, flushStartedAt);
-            }
-            catch (Exception ex)
-            {
-                _bulkException = ex;
+                    _bulkAction(_items.Take(count).ToArray());
+
+                    AutoAdjustMaxSize(idle, flushStartedAt);
+                }
+                catch (Exception ex)
+                {
+                    _bulkException = ex;
+                }
+                finally
+                {
+                    var releaseCount = idle ? count : count - 1;
+
+                    for (var idx = 0; idx < releaseCount; idx++)
+                    {
+                        _addingTaskSemaphores[idx].Release();
+                    }
+
+                    for (var idx = 0; idx < releaseCount; idx++)
+                    {
+                        await _addingCompleteSemaphore.WaitAsync();
+                    }
+
+                    for (var idx = 0; idx < releaseCount; idx++)
+                    {
+                        await _addingTaskSemaphores[idx].WaitAsync();
+                    }
+
+                    _bulkException = null;
+                    _currentCount = 0;
+                    _addingSemaphore.Release(count);
+                }
             }
             finally
             {
-                var c = idle ? _currentCount : _currentCount - 1;
 
-                for (var idx = 0; idx < c; idx++)
-                {
-                    _addingTaskSemaphores[idx].Release();
-                }
-
-                for (var idx = 0; idx < c; idx++)
-                {
-                    await _addingCompleteSemaphore.WaitAsync();
-                }
-
-                for (var idx = 0; idx < c; idx++)
-                {
-                    await _addingTaskSemaphores[idx].WaitAsync();
-                }
-
-                _bulkException = null;
-                var count = _currentCount;
-                _currentCount = 0;
-                _addingSemaphore.Release(count);
+                _flushSemaphore.Release();
             }
+
         }
 
         /// <summary>
