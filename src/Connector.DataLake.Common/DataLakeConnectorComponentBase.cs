@@ -25,6 +25,7 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
 
     private static readonly NCrontab.CrontabSchedule _schedulerCron = NCrontab.CrontabSchedule.Parse("* * * * *");
     private static readonly TimeSpan _initialSchedulerDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan _delayAfterError = TimeSpan.FromMinutes(1);
 
     protected DataLakeConnectorComponentBase(ComponentInfo componentInfo) : base(componentInfo)
     {
@@ -62,7 +63,8 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
             }
             catch(Exception ex)
             {
-                Log.LogError(ex, "Error occurred when scheduling.");
+                Log.LogError(ex, "Error occurred when scheduling. Waiting {DelayAfterError} before next schedule run.", _delayAfterError);
+                await Task.Delay(_delayAfterError);
             }
         }
     }
