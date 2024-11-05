@@ -17,12 +17,8 @@ trigger:
     - master
     - release/*
 
-pr:
-  branches:
-    include:
-    - develop
-    - master
-    - release/*
+# Perform build for a PR to any branch, as if you run PR, you most likely want CI checks.
+pr: ['*']
 
 resources:
   repositories:
