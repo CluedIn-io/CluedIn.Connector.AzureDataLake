@@ -16,6 +16,7 @@ The following filename patterns are supported
     * ToUpperInvariant (equivalent to ToLowerInvariant)
   * When using {OutputFormat} without formatString, no extra formatting is performed. Example values: `csv`, `parquet`, `json`.
 * {ContainerName} and {ContainerName:formatString}
+  * this will use the value in the Target Name of the Stream.
   * formatString accepts the following:-
     * ToUpperInvariant
     * ToUpper (equivalent to ToUpperInvariant)
@@ -23,10 +24,11 @@ The following filename patterns are supported
     * ToUpperInvariant (equivalent to ToLowerInvariant)
 
 ## Example filename patterns
-| Filename Pattern                                      | Example output                                                            |
-|-------------------------------------------------------|---------------------------------------------------------------------------|
-| {StreamId:N}_{DataTime:yyyyMMddHHmmss}.{OutputFormat} | ba4afc12f6dc4394b9d568f6dacf3b3b_20240705030355.parquet                   |
-| {StreamId}_{DataTime}.{OutputFormat:ToUpper}          | ba4afc12-f6dc-4394-b9d5-68f6dacf3b3b_2024-07-05T03:02:57.2612933Z.PARQUET |
+| Filename Pattern                                         | Example output                                                            |
+|----------------------------------------------------------|---------------------------------------------------------------------------|
+| {StreamId:N}_{DataTime:yyyyMMddHHmmss}.{OutputFormat}    | ba4afc12f6dc4394b9d568f6dacf3b3b_20240705030355.parquet                   |
+| {StreamId}_{DataTime}.{OutputFormat:ToUpper}             | ba4afc12-f6dc-4394-b9d5-68f6dacf3b3b_2024-07-05T03:02:57.2612933Z.PARQUET |
+| {ContainerName}_{DataTime:yyyyMMddHHmmss}.{OutputFormat} | CustomerRecord_20240705030355.parquet                                     |
 
 # Default file names
 Default file names are as follows:

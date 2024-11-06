@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using CluedIn.Core;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Parquet;
 using Parquet.Schema;
 
@@ -36,7 +38,14 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
             var type = reader.GetFieldType(fieldName);
 
             var parquetFieldName = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
-            fields.Add(new DataField(parquetFieldName, GetParquetDataType(type, configuration)));
+            if (fieldName == "Codes" || fieldName == "OutgoingEdges" || fieldName == "IncomingEdges")
+            {
+                fields.Add(new DataField(parquetFieldName, typeof(IEnumerable<string>)));
+            }
+            else
+            {
+                fields.Add(new DataField(parquetFieldName, GetParquetDataType(type, configuration)));
+            }
         }
 
         var schema = new ParquetSchema(fields);
@@ -144,6 +153,31 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
             return (value as DateTimeOffset?).Value.ToString("o", CultureInfo.InvariantCulture);
         }
 
+        if (key == "Codes")
+        {
+            return JsonConvert.DeserializeObject<string[]>(value.ToString());
+        }
+
+        if (key == "OutgoingEdges" || key == "IncomingEdges")
+        {
+            return GetEdgesData(value);
+        }
+
         return value;
+    }
+
+    private static string[] GetEdgesData(object value)
+    {
+        var edges = JsonConvert.DeserializeObject<List<JObject>>(value.ToString());
+
+        var result = edges
+            .Select(s => string.Format("EdgeType: {0}; From: {1}; To: {2}; Properties: {3}",
+                s["EdgeType"]["Code"].ToString(),
+                s["FromReference"]["Name"].ToString() + "§C:" + s["FromReference"]["Code"]["Key"].ToString(),
+                s["ToReference"]["Name"].ToString() + "§C:" + s["ToReference"]["Code"]["Key"].ToString(),
+                s["Properties"]?.Children<JProperty>().Count() ?? 0))
+            .ToArray();
+
+        return result;
     }
 }
