@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace CluedIn.Connector.DataLake.Common;
 
-internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob
+internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob, IDataLakeJob
 {
     protected DataLakeJobBase(ApplicationContext appContext) : base(appContext, JobType.CustomScheduledJob)
     {
@@ -21,7 +21,7 @@ internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob
         DoRunAsync(context, new DataLakeJobArgs(args, isTriggeredFromJobServer: true)).GetAwaiter().GetResult();
     }
 
-    public abstract Task DoRunAsync(ExecutionContext context, DataLakeJobArgs args);
+    public abstract Task DoRunAsync(ExecutionContext context, IDataLakeJobArgs args);
 
     /// <summary>
     /// Register and schedule current job for recurrent run.

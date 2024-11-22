@@ -82,7 +82,8 @@ namespace CluedIn.Connector.DataLake.Common
                 }
             }
 
-            return Task.FromResult(new AccountInformation(string.Empty, displayNameBuilder.ToString()));
+            var accountId = AccountIdHelper.Generate(_configurationConstants.ProviderId, providerDefinitionId);
+            return Task.FromResult(new AccountInformation(accountId, displayNameBuilder.ToString()));
         }
 
         /// <summary>

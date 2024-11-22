@@ -260,7 +260,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string tableName)
         {
             var typeName = this.GetType().Name;
-            return DistributedLockHelper.TryAcquireTableCreationLock(
+            return DistributedLockHelper.TryAcquireExclusiveLock(
                 connection,
                 $"{typeName}_{tableName}",
                 TableCreationLockTimeoutInMillliseconds);
@@ -495,7 +495,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 await using var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync();
 
-                if (!await DistributedLockHelper.TryAcquireTableCreationLock(connection, nameof(VerifyConnection), -1))
+                if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, nameof(VerifyConnection), -1))
                 {
                     throw new ApplicationException("Failed to acquire lock for verifying connection.");
                 }

@@ -44,7 +44,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
-    public override async Task DoRunAsync(ExecutionContext context, DataLakeJobArgs args)
+    public override async Task DoRunAsync(ExecutionContext context, IDataLakeJobArgs args)
     {
         var typeName = this.GetType().Name;
         using var exportJobLoggingScope = context.Log.BeginScope(new Dictionary<string, object>
@@ -108,7 +108,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             TransactionScopeAsyncFlowOption.Enabled);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
-        if (!await DistributedLockHelper.TryAcquireTableCreationLock(connection, $"{typeName}_{streamModel.Id}", ExportEntitiesLockInMilliseconds))
+        if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"{typeName}_{streamModel.Id}", ExportEntitiesLockInMilliseconds))
         {
             context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamModel.Id);
             return;
@@ -284,7 +284,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return outputFormat;
     }
 
-    private DateTime GetLastOccurence(ExecutionContext context, JobArgs args, IDataLakeJobData jobData)
+    private DateTime GetLastOccurence(ExecutionContext context, IJobArgs args, IDataLakeJobData jobData)
     {
         if (jobData.UseCurrentTimeForExport
             || args.Schedule == DataLakeConstants.CronSchedules[DataLakeConstants.JobScheduleNames.Never])

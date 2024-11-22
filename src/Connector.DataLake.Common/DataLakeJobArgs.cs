@@ -2,7 +2,7 @@
 
 namespace CluedIn.Connector.DataLake.Common;
 
-internal class DataLakeJobArgs : JobArgs
+internal class DataLakeJobArgs : JobArgs, IDataLakeJobArgs
 {
     public DataLakeJobArgs() : base()
     {
