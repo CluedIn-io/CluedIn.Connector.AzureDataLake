@@ -259,7 +259,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         private Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string tableName)
         {
-            var typeName = this.GetType().Name;
+            var typeName = GetType().Name;
             return DistributedLockHelper.TryAcquireExclusiveLock(
                 connection,
                 $"{typeName}_{tableName}",
@@ -455,10 +455,18 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     return new ConnectionVerificationResult(false, errorMessage);
                 }
 
-                if (!DataLakeConstants.JobScheduleNames.IsValid(jobData.Schedule))
+                var supportCustomCron = true;
+                if (!supportCustomCron && !CronSchedules.IsSupportedScheduleName(jobData.Schedule))
                 {
-                    var supported = string.Join(',', DataLakeConstants.JobScheduleNames.SupportedSchedules);
+                    var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
                     var errorMessage = $"Format '{jobData.Schedule}' is not supported. Supported schedules are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
+                if (!CronSchedules.TryGetCronSchedule(jobData.Schedule, out _))
+                {
+                    var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
+                    var errorMessage = $"Cron '{jobData.Schedule}' is not supported. Supported schedules are {supported} and valid cron.";
                     return new ConnectionVerificationResult(false, errorMessage);
                 }
 
@@ -509,7 +517,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Changed });
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Removed });
                 await RenameCacheTableIfExists(connection, testTableName);
-
             }
             catch (Exception ex)
             {
@@ -553,7 +560,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             _client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
         }
-        
+
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
             await Task.CompletedTask;
