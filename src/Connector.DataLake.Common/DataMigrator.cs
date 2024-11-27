@@ -182,7 +182,7 @@ internal class DataMigrator : IDataMigrator
         string migrationName,
         Func<string, Task> migrateTask)
     {
-        var componentMigrationName = $"{_componentName}:{migrationName}";
+        var componentMigrationName = $"{_componentName}:Migration:{migrationName}";
         try
         {
             var hasMigrationPerformed = await IsMigrationPerformedAsync(Guid.Empty, componentMigrationName);
