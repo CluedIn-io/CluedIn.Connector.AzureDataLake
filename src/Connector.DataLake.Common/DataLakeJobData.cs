@@ -19,6 +19,7 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
     public string FileNamePattern => GetConfigurationValue(DataLakeConstants.FileNamePattern) as string;
     public virtual bool ShouldWriteGuidAsString => GetConfigurationValue(DataLakeConstants.ShouldWriteGuidAsString) as bool? ?? false;
     public virtual bool ShouldEscapeVocabularyKeys => GetConfigurationValue(DataLakeConstants.ShouldEscapeVocabularyKeys) as bool? ?? false;
+    public virtual bool IncludeDataParts => GetConfigurationValue(DataLakeConstants.IncludeDataParts) as bool? ?? false;
 
     public override int GetHashCode()
     {
@@ -38,6 +39,7 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
         hash.Add(FileNamePattern);
         hash.Add(ShouldWriteGuidAsString);
         hash.Add(ShouldEscapeVocabularyKeys);
+        hash.Add(IncludeDataParts);
     }
 
     public override bool Equals(object obj)
@@ -56,7 +58,8 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
             UseCurrentTimeForExport == other.UseCurrentTimeForExport &&
             FileNamePattern == other.FileNamePattern &&
             ShouldWriteGuidAsString == other.ShouldWriteGuidAsString &&
-            ShouldEscapeVocabularyKeys == other.ShouldEscapeVocabularyKeys;
+            ShouldEscapeVocabularyKeys == other.ShouldEscapeVocabularyKeys &&
+            IncludeDataParts == other.IncludeDataParts;
     }
 
     protected object GetConfigurationValue(string key)

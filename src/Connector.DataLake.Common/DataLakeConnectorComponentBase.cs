@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CluedIn.Connector.DataLake.Common.EventHandlers;
@@ -14,6 +15,7 @@ using CluedIn.Core.Streams.Models;
 using ComponentHost;
 
 using Microsoft.Extensions.Logging;
+using CluedIn.Core.Settings;
 
 namespace CluedIn.Connector.DataLake.Common;
 
@@ -29,6 +31,7 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
 
     protected DataLakeConnectorComponentBase(ComponentInfo componentInfo) : base(componentInfo)
     {
+        Container.Register(Castle.MicroKernel.Registration.Component.For<IHasOrganizationSettings>().ImplementedBy<DataLakeCommonSettings>());
     }
 
     protected void SubscribeToEvents(IDataLakeConstants constants, Type exportEntitiesJobType)

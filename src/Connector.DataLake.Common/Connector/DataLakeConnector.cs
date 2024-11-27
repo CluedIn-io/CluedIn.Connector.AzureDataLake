@@ -139,9 +139,66 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             try
             {
+                var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
+
                 if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
                 {
-                    return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
+                    if (jobData.IncludeDataParts)
+                    {
+                        // if change type remove then we need to remove all datapart rows
+                        
+                        // else upsert all data part rows - in the case of a entity merge we may insert,delete & update parts
+
+                        // - to upsert we need to insert all the data parts into a temp table on the connection and then run a merge statement at the end
+                        // -  this avoids the need to delete all rows and reinsert as well as catering for entities with a huge amount of data parts
+
+                        var entityRepository = executionContext.Organization.DataStores.BlobDataStore;
+                        var entity = await entityRepository.GetByIdAsync(executionContext, connectorEntityData.EntityId);   // TODO update the core to add the entity to the connectorEntityData (assuming that this isn't read from a queue)
+
+                        using var t = new TransactionScope(asyncFlowOption: TransactionScopeAsyncFlowOption.Enabled);
+
+                        var results = new List<SaveResult>();
+
+                        results.Add(await WriteToCacheTable(streamModel, syncItem, jobData, data, dataValueTypes));
+
+                        // need to add the type as we will add InputSource later
+                        dataValueTypes.TryAdd("InputSource", typeof(string));
+                        dataValueTypes.TryAdd("PartId", typeof(long));
+
+                        foreach (var part in entity.Details.DataEntries)
+                        {
+                            // limiting partData to the same keys as the golden record. does key mapping effect this? Do we need to send all properties for data parts?
+                            var partData = data.ToDictionary(x => x.Key, x => ReadProperty(part.ProcessedEntityData, x.Key));
+
+                            partData.Add("InputSource", part.InputSource);
+                            partData.Add("PartId", part.PartId);
+
+                            // we need to make a unique guid for the data part across all entities, so let's add the datapartid (long) to the entityid (guid)
+                            var uniqueDataPartId = AddLongToGuid(connectorEntityData.EntityId, part.PartId);
+
+                            syncItem = new SyncItem(streamModel.Id, uniqueDataPartId, connectorEntityData.ChangeType, data, dataValueTypes);
+
+                            foreach (var dataValueType in dataValueTypes)
+                            {
+                                partData.TryAdd(dataValueType.Key, null);
+                            }
+
+                            results.Add(await WriteToCacheTable(streamModel, syncItem, jobData, partData, dataValueTypes, true));
+                        }
+
+                        if (results.Any(x => x != SaveResult.Success))
+                        {
+                            throw new ApplicationException();
+                        }
+
+                        t.Complete();
+
+                        return SaveResult.Success;
+                    }
+                    else
+                    {
+                        return await WriteToCacheTable(streamModel, syncItem, jobData, data, dataValueTypes);
+                    }
                 }
                 else
                 {
@@ -153,6 +210,24 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 _logger.LogError(ex, "Exception thrown. Returning SaveResult.ReQueue");
                 return SaveResult.ReQueue;
             }
+        }
+
+        private Guid AddLongToGuid(Guid g, long l)
+        {
+            var entityIdArray = g.ToByteArray();
+            var offsetUpper = BitConverter.GetBytes(BitConverter.ToInt64(entityIdArray.Take(8).ToArray()) + l);   // TODO potential overflow exception
+            return new Guid(offsetUpper.Concat(entityIdArray.Skip(8)).ToArray());
+        }
+
+        public static object ReadProperty(IEntityMetadataPart entityMetadataPart, string fieldName)
+        {
+            var sourceFieldProperty = typeof(IEntityMetadata).GetProperty(fieldName);
+            if (sourceFieldProperty != null)
+            {
+                return sourceFieldProperty.GetValue(entityMetadataPart);
+            }
+
+            return entityMetadataPart.Properties.TryGetValue(fieldName, out var result) ? result : null;
         }
 
         private static Type RemoveNullableType(Type type)
@@ -199,10 +274,11 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         private async Task<SaveResult> WriteToCacheTable(
             IReadOnlyStreamModel streamModel,
-            IReadOnlyConnectorEntityData connectorEntityData,
+            SyncItem syncItem,
             IDataLakeJobData configurations,
             Dictionary<string, object> data,
-            Dictionary<string, Type> dataValueTypes)
+            Dictionary<string, Type> dataValueTypes,
+            bool dataPart = false)
         {
             if (streamModel.Mode != StreamMode.Sync)
             {
@@ -210,12 +286,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 return SaveResult.Failed;
             }
 
-            var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
-            var tableName = GetCacheTableName(syncItem.StreamId);
+            var tableName = GetCacheTableName(syncItem.StreamId, false, dataPart);
+
+            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
 
             try
             {
-                using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
                 await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
                 await connection.OpenAsync();
                 await WriteToCacheTable(connection, syncItem, tableName);
@@ -226,7 +302,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 try
                 {
                     _logger.LogDebug("Table {TableName} does not exist. Trying to create and retry.", tableName);
-                    using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
                     await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
                     await connection.OpenAsync();
 
@@ -334,14 +409,21 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return ex.Number == 208;
         }
 
-        private static string GetCacheTableName(Guid streamId, bool isTestTable = false)
+        private static string GetCacheTableName(Guid streamId, bool isTestTable, bool dataPart)
         {
             if (isTestTable)
             {
                 return $"testConnection_{streamId}";
             }
 
-            return CacheTableHelper.GetCacheTableName(streamId);
+            var name = CacheTableHelper.GetCacheTableName(streamId);
+
+            if (dataPart)
+            {
+                return name + "_data_parts";
+            }
+
+            return name;
         }
 
         private static object GetDatabaseValue(SyncItem syncItem, string key)
@@ -474,7 +556,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private async Task VerifyTableOperations(string connectionString)
         {
             var testStreamId = Guid.NewGuid();
-            var testTableName = GetCacheTableName(testStreamId, true);
+            var testTableName = GetCacheTableName(testStreamId, true, false);
 
             var entityId = Guid.NewGuid();
             var data = new Dictionary<string, object>
@@ -622,20 +704,26 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 return;
             }
 
-            var tableName = GetCacheTableName(streamModel.Id);
+            async Task rename(string tableName)
+            {
+                try
+                {
+                    await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
+                    await connection.OpenAsync();
+                    await RenameCacheTableIfExists(connection, tableName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to delete table.");
+                }
+            }
 
-            try
-            {
-                using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
-                await using var connection = new SqlConnection(jobData.StreamCacheConnectionString);
-                await connection.OpenAsync();
-                await RenameCacheTableIfExists(connection, tableName);
-                transactionScope.Complete();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to delete table.");
-            }
+            using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+
+            await rename(GetCacheTableName(streamModel.Id, false, false));
+            await rename(GetCacheTableName(streamModel.Id, false, true));
+
+            transactionScope.Complete();
         }
 
         private static async Task RenameCacheTableIfExists(SqlConnection connection, string tableName)

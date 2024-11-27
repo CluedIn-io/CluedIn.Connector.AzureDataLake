@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using CluedIn.Core;
+using CluedIn.Core.Configuration;
 using CluedIn.Core.Providers;
 // ReSharper disable ArgumentsStyleStringLiteral
 
@@ -21,6 +22,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     public const string IdKey = "Id";
     public const string StreamCacheConnectionStringKey = "StreamCache";
 
+    public const string IncludeDataParts = nameof(IncludeDataParts);
 
     internal static class OutputFormats
     {
@@ -136,6 +138,16 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                 isRequired = true,
             },
         };
+
+        // TODO check environment variable and conditionally add
+
+        controls.Add(new()
+        {
+            name = IncludeDataParts,
+            displayName = "Include Data Parts",
+            type = "checkbox",
+            isRequired = false,
+        });
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
