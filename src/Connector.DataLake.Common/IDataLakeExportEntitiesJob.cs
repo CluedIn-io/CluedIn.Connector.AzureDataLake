@@ -2,10 +2,9 @@
 
 using CluedIn.Core;
 
-namespace CluedIn.Connector.DataLake.Common
+namespace CluedIn.Connector.DataLake.Common;
+
+public interface IDataLakeJob
 {
-    public interface IDataLakeJob
-    {
-        Task DoRunAsync(ExecutionContext context, IDataLakeJobArgs args);
-    }
+    Task DoRunAsync(ExecutionContext context, IDataLakeJobArgs args);
 }

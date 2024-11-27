@@ -1,9 +1,8 @@
 ﻿using CluedIn.Core.Jobs;
 
-namespace CluedIn.Connector.DataLake.Common
+namespace CluedIn.Connector.DataLake.Common;
+
+public interface IDataLakeJobArgs : IJobArgs
 {
-    public interface IDataLakeJobArgs : IJobArgs
-    {
-        bool IsTriggeredFromJobServer { get; set; }
-    }
+    bool IsTriggeredFromJobServer { get; set; }
 }

@@ -4,11 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.EventHandlers;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
-using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities;
 using CluedIn.Core.Server;
 using CluedIn.Core.Streams;
@@ -16,7 +14,6 @@ using CluedIn.Core.Streams.Models;
 
 using ComponentHost;
 
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +21,6 @@ namespace CluedIn.Connector.DataLake.Common;
 
 public abstract class DataLakeConnectorComponentBase : ServiceApplicationComponent<IServer>
 {
-    private const string MigrationLockConnectionString = "Locking";
     private UpdateExportTargetEventHandler _updateExportTargetHandler;
     private ChangeStreamStateEventHandler _changeStreamStateEvent;
     private UpdateStreamEventHandler _updateStreamEvent;
@@ -32,10 +28,6 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
     private static readonly NCrontab.CrontabSchedule _schedulerCron = NCrontab.CrontabSchedule.Parse("* * * * *");
     private static readonly TimeSpan _initialSchedulerDelay = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan _schedulerErrorDelay = TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan _migrationRetryDelay = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan _migrationLockTimeout = TimeSpan.FromMilliseconds(10);
-    private static readonly TimeSpan _migrationRetryTimeout = TimeSpan.FromMinutes(10);
-    private static readonly int _migrationMaxRetries = 3;
 
     protected DataLakeConnectorComponentBase(ComponentInfo componentInfo) : base(componentInfo)
     {
@@ -50,7 +42,10 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
     {
         var dataLakeConstants = Container.Resolve<TDataLakeConstants>();
         var jobDataFactory = Container.Resolve<TDataLakeJobFactory>();
-        _ = Task.Run(() => RunMigrationsWithLock(dataLakeConstants));
+
+        var migrator = GetDataMigrator(dataLakeConstants, jobDataFactory);
+        _ = Task.Run(migrator.MigrateAsync);
+
         var exportEntitiesJobType = typeof(TDataLakeExportJob);
         SubscribeToEvents(dataLakeConstants, exportEntitiesJobType);
         _ = Task.Run(() => RunScheduler(dataLakeConstants, jobDataFactory, exportEntitiesJobType));
@@ -77,186 +72,9 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
         _updateStreamEvent = new(ApplicationContext, constants, exportEntitiesJobType);
     }
 
-    protected virtual async Task RunMigrationsWithLock(IDataLakeConstants constants)
+    private protected virtual IDataMigrator GetDataMigrator(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory)
     {
-        var migrationErrorCount = 0;
-
-        var migrationStart = DateTimeOffset.UtcNow;
-        var shouldRetry = true;
-
-        if (!ApplicationContext.System.ConnectionStrings.ConnectionStringExists(MigrationLockConnectionString))
-        {
-            throw new InvalidOperationException($"Connection string {MigrationLockConnectionString} is not found.");
-        }
-
-        var connectionString = ApplicationContext.System.ConnectionStrings.GetConnectionString(MigrationLockConnectionString);
-        while (true)
-        {
-            try
-            {
-                using var connection = new SqlConnection(connectionString);
-                await connection.OpenAsync();
-                var transaction = connection.BeginTransaction();
-                Log.LogDebug("Try to acquire lock for '{ConnectorComponentName}' migration.", ConnectorComponentName);
-                var hasAcquiredLock = await DistributedLockHelper.TryAcquireExclusiveLock(
-                    transaction,
-                    $"{ConnectorComponentName}-Migration",
-                    (int)_migrationLockTimeout.TotalMilliseconds);
-                if (hasAcquiredLock)
-                {
-                    Log.LogDebug("Acquired lock for '{ConnectorComponentName}' migration.", ConnectorComponentName);
-                    await tryRunMigrations();
-                    if (!shouldRetry)
-                    {
-                        return;
-                    }
-                }
-                else
-                {
-                    Log.LogDebug("Failed to acquire lock for '{ConnectorComponentName}' migration.", ConnectorComponentName);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.LogWarning(ex, "Error occurred while trying to acquire lock for '{ConnectorComponentName}' migration.", ConnectorComponentName);
-            }
-
-            var elapsed = DateTimeOffset.UtcNow - migrationStart;
-            if (elapsed > _migrationRetryTimeout)
-            {
-                Log.LogError("Timeout while trying to perform '{ConnectorComponentName}' migration.", ConnectorComponentName);
-                return;
-            }
-
-            Log.LogDebug("Retry '{ConnectorComponentName}' migration in {DelayBetweenMigrationRetries}.", ConnectorComponentName, _migrationRetryDelay);
-            await Task.Delay(_migrationRetryDelay);
-        }
-
-        async Task tryRunMigrations()
-        {
-            try
-            {
-                Log.LogDebug("Begin '{ConnectorComponentName}' migration.", ConnectorComponentName);
-                await RunMigrations(constants);
-                Log.LogDebug("End '{ConnectorComponentName}' migration.", ConnectorComponentName);
-                shouldRetry = false;
-            }
-            catch (Exception ex)
-            {
-                migrationErrorCount++;
-
-                if (migrationErrorCount > _migrationMaxRetries)
-                {
-                    Log.LogWarning(ex, "Failed to perform '{ConnectorComponentName}' migration after {TotalAttempts} attempts. Giving up.", ConnectorComponentName, migrationErrorCount);
-                    shouldRetry = false;
-                }
-
-                Log.LogWarning(ex, "Error occurred while trying to perform '{ConnectorComponentName}' migration.", ConnectorComponentName);
-            }
-        }
-    }
-
-    protected virtual async Task RunMigrations(IDataLakeConstants constants)
-    {
-        await MigrateAccountId(constants);
-    }
-
-    protected async Task MigrateAccountId(IDataLakeConstants constants)
-    {
-        await MigrateForOrganizations("EmptyAccountId", constants, migrateAccountIdForProviderDefinition);
-        async Task migrateAccountIdForProviderDefinition(ExecutionContext context, string componentMigrationName, IDataLakeConstants constants)
-        {
-            var organizationId = context.Organization.Id;
-            var store = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
-            var definitions = await store.SelectAsync(
-                context,
-                definition => definition.OrganizationId == context.Organization.Id
-                                && definition.ProviderId == constants.ProviderId);
-            foreach (var definition in definitions)
-            {
-                if (definition.AccountId != string.Empty)
-                {
-                    Log.LogDebug("Skipping provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
-                        componentMigrationName,
-                        organizationId,
-                        definition.Id);
-                    continue;
-                }
-
-                Log.LogInformation("Begin provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
-                    componentMigrationName,
-                    organizationId,
-                    definition.Id);
-                definition.AccountId = AccountIdHelper.Generate(constants.ProviderId, definition.Id);
-                await store.UpdateAsync(context, definition);
-                Log.LogInformation("End provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
-                    componentMigrationName,
-                    organizationId,
-                    definition.Id);
-            }
-        }
-    }
-
-    protected async Task MigrateForOrganizations(
-        string migrationName,
-        IDataLakeConstants constants,
-        Func<ExecutionContext, string, IDataLakeConstants, Task> migrateTask)
-    {
-        await Migrate(migrationName, constants, migrateProviderDefinition);
-        async Task migrateProviderDefinition(string componentMigrationName, IDataLakeConstants constants)
-        {
-            var orgDataStore = ApplicationContext.System.Organization.DataStores.GetDataStore<OrganizationProfile>();
-            var organizationProfiles = await orgDataStore.SelectAsync(ApplicationContext.System.CreateExecutionContext(), _ => true);
-            foreach (var organizationProfile in organizationProfiles)
-            {
-                var organizationId = organizationProfile.Id;
-                Log.LogInformation("Begin organization migration: '{MigrationName}' for organization '{OrganizationId}'.", componentMigrationName, organizationId);
-                var organization = new Organization(ApplicationContext, organizationId);
-                var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
-                await migrateTask(executionContext, componentMigrationName, constants);
-                Log.LogInformation("End organization migration: '{MigrationName}' for organization '{OrganizationId}'.", componentMigrationName, organizationId);
-            }
-        }
-    }
-
-    protected async Task Migrate(
-        string migrationName,
-        IDataLakeConstants constants,
-        Func<string, IDataLakeConstants, Task> migrateTask)
-    {
-        var componentMigrationName = $"{ConnectorComponentName}:{migrationName}";
-        try
-        {
-            var dbContext = new CluedInEntities(Container.Resolve<DbContextOptions<CluedInEntities>>());
-            var migrationSetting = dbContext.Settings
-                    .FirstOrDefault(setting => setting.OrganizationId == Guid.Empty
-                                    && setting.Key == componentMigrationName);
-
-            if (migrationSetting != null)
-            {
-                Log.LogDebug("Skipping migration: '{MigrationName}' because it has already been performed.", componentMigrationName);
-                return;
-            }
-
-            Log.LogInformation("Begin migration: '{MigrationName}'.", componentMigrationName);
-
-            await migrateTask(componentMigrationName, constants);
-
-            dbContext.Settings.Add(new Setting
-            {
-                Id = Guid.NewGuid(),
-                OrganizationId = Guid.Empty,
-                UserId = Guid.Empty,
-                Key = componentMigrationName,
-                Data = "Complete",
-            });
-            await dbContext.SaveChangesAsync();
-            Log.LogInformation("End migration: '{MigrationName}'.", componentMigrationName);
-        }
-        catch (Exception ex)
-        {
-            Log.LogError(ex, "Error trying to perform migration: '{MigrationName}'.", componentMigrationName);
-        }
+        return new DataLakeDataMigrator(Log, ApplicationContext, Container.Resolve<DbContextOptions<CluedInEntities>>(), ConnectorComponentName, constants, jobDataFactory);
     }
 
     protected async Task RunScheduler(IDataLakeConstants dataLakeConstants, IDataLakeJobDataFactory dataLakeJobDataFactory, Type jobType)
