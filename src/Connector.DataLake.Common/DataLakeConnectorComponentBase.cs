@@ -77,42 +77,6 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
         _updateStreamEvent = new(ApplicationContext, constants, exportEntitiesJobType);
     }
 
-    protected async Task MigrateAccountId(IDataLakeConstants constants)
-    {
-        await MigrateForOrganizations("EmptyAccountId", constants, migrateAccountIdForProviderDefinition);
-        async Task migrateAccountIdForProviderDefinition(ExecutionContext context, string componentMigrationName, IDataLakeConstants constants)
-        {
-            var organizationId = context.Organization.Id;
-            var store = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
-            var definitions = await store.SelectAsync(
-                context,
-                definition => definition.OrganizationId == context.Organization.Id
-                                && definition.ProviderId == constants.ProviderId);
-            foreach (var definition in definitions)
-            {
-                if (definition.AccountId != string.Empty)
-                {
-                    Log.LogDebug("Skipping provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
-                        componentMigrationName,
-                        organizationId,
-                        definition.Id);
-                    continue;
-                }
-
-                Log.LogInformation("Begin provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
-                    componentMigrationName,
-                    organizationId,
-                    definition.Id);
-                definition.AccountId = AccountIdHelper.Generate(constants.ProviderId, definition.Id);
-                await store.UpdateAsync(context, definition);
-                Log.LogInformation("End provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
-                    componentMigrationName,
-                    organizationId,
-                    definition.Id);
-            }
-        }
-    }
-
     protected virtual async Task RunMigrationsWithLock(IDataLakeConstants constants)
     {
         var migrationErrorCount = 0;
@@ -197,42 +161,39 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
         await MigrateAccountId(constants);
     }
 
-    protected async Task Migrate(
-        string migrationName,
-        IDataLakeConstants constants,
-        Func<string, IDataLakeConstants, Task> migrateTask)
+    protected async Task MigrateAccountId(IDataLakeConstants constants)
     {
-        var componentMigrationName = $"{ConnectorComponentName}:{migrationName}";
-        try
+        await MigrateForOrganizations("EmptyAccountId", constants, migrateAccountIdForProviderDefinition);
+        async Task migrateAccountIdForProviderDefinition(ExecutionContext context, string componentMigrationName, IDataLakeConstants constants)
         {
-            var dbContext = new CluedInEntities(Container.Resolve<DbContextOptions<CluedInEntities>>());
-            var migrationSetting = dbContext.Settings
-                    .FirstOrDefault(setting => setting.OrganizationId == Guid.Empty
-                                    && setting.Key == componentMigrationName);
-
-            if (migrationSetting != null)
+            var organizationId = context.Organization.Id;
+            var store = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
+            var definitions = await store.SelectAsync(
+                context,
+                definition => definition.OrganizationId == context.Organization.Id
+                                && definition.ProviderId == constants.ProviderId);
+            foreach (var definition in definitions)
             {
-                return;
+                if (definition.AccountId != string.Empty)
+                {
+                    Log.LogDebug("Skipping provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
+                        componentMigrationName,
+                        organizationId,
+                        definition.Id);
+                    continue;
+                }
+
+                Log.LogInformation("Begin provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
+                    componentMigrationName,
+                    organizationId,
+                    definition.Id);
+                definition.AccountId = AccountIdHelper.Generate(constants.ProviderId, definition.Id);
+                await store.UpdateAsync(context, definition);
+                Log.LogInformation("End provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
+                    componentMigrationName,
+                    organizationId,
+                    definition.Id);
             }
-
-            Log.LogInformation("Begin migration: '{MigrationName}'.", componentMigrationName);
-
-            await migrateTask(componentMigrationName, constants);
-
-            dbContext.Settings.Add(new Setting
-            {
-                Id = Guid.NewGuid(),
-                OrganizationId = Guid.Empty,
-                UserId = Guid.Empty,
-                Key = componentMigrationName,
-                Data = "Complete",
-            });
-            await dbContext.SaveChangesAsync();
-            Log.LogInformation("End migration: '{MigrationName}'.", componentMigrationName);
-        }
-        catch (Exception ex)
-        {
-            Log.LogError(ex, "Error trying to perform migration: '{MigrationName}'.", componentMigrationName);
         }
     }
 
@@ -255,6 +216,46 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
                 await migrateTask(executionContext, componentMigrationName, constants);
                 Log.LogInformation("End organization migration: '{MigrationName}' for organization '{OrganizationId}'.", componentMigrationName, organizationId);
             }
+        }
+    }
+
+    protected async Task Migrate(
+        string migrationName,
+        IDataLakeConstants constants,
+        Func<string, IDataLakeConstants, Task> migrateTask)
+    {
+        var componentMigrationName = $"{ConnectorComponentName}:{migrationName}";
+        try
+        {
+            var dbContext = new CluedInEntities(Container.Resolve<DbContextOptions<CluedInEntities>>());
+            var migrationSetting = dbContext.Settings
+                    .FirstOrDefault(setting => setting.OrganizationId == Guid.Empty
+                                    && setting.Key == componentMigrationName);
+
+            if (migrationSetting != null)
+            {
+                Log.LogDebug("Skipping migration: '{MigrationName}' because it has already been performed.", componentMigrationName);
+                return;
+            }
+
+            Log.LogInformation("Begin migration: '{MigrationName}'.", componentMigrationName);
+
+            await migrateTask(componentMigrationName, constants);
+
+            dbContext.Settings.Add(new Setting
+            {
+                Id = Guid.NewGuid(),
+                OrganizationId = Guid.Empty,
+                UserId = Guid.Empty,
+                Key = componentMigrationName,
+                Data = "Complete",
+            });
+            await dbContext.SaveChangesAsync();
+            Log.LogInformation("End migration: '{MigrationName}'.", componentMigrationName);
+        }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "Error trying to perform migration: '{MigrationName}'.", componentMigrationName);
         }
     }
 
