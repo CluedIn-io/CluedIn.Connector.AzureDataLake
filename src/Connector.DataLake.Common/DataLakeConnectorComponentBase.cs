@@ -3,16 +3,18 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
 using CluedIn.Connector.DataLake.Common.EventHandlers;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
-using CluedIn.Core.Jobs;
+using CluedIn.Core.DataStore.Entities;
 using CluedIn.Core.Server;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
 using ComponentHost;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.DataLake.Common;
@@ -31,11 +33,48 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
     {
     }
 
+    protected abstract string ConnectorComponentName { get; }
+
+    protected virtual void DefaultStartInternal<TDataLakeConstants, TDataLakeJobFactory, TDataLakeExportJob>()
+        where TDataLakeConstants : IDataLakeConstants
+        where TDataLakeJobFactory : IDataLakeJobDataFactory
+        where TDataLakeExportJob : IDataLakeJob
+    {
+        var dataLakeConstants = Container.Resolve<TDataLakeConstants>();
+        var jobDataFactory = Container.Resolve<TDataLakeJobFactory>();
+
+        var migrator = GetDataMigrator(dataLakeConstants, jobDataFactory);
+        _ = Task.Run(migrator.MigrateAsync);
+
+        var exportEntitiesJobType = typeof(TDataLakeExportJob);
+        SubscribeToEvents(dataLakeConstants, exportEntitiesJobType);
+        _ = Task.Run(() => RunScheduler(dataLakeConstants, jobDataFactory, exportEntitiesJobType));
+
+        Log.LogInformation($"{ConnectorComponentName} Registered");
+        State = ServiceState.Started;
+    }
+
+    /// <summary>Stops this instance.</summary>
+    public override void Stop()
+    {
+        if (State == ServiceState.Stopped)
+        {
+            return;
+        }
+
+        State = ServiceState.Stopped;
+    }
+
     protected void SubscribeToEvents(IDataLakeConstants constants, Type exportEntitiesJobType)
     {
         _updateExportTargetHandler = new(ApplicationContext, constants, exportEntitiesJobType);
         _changeStreamStateEvent = new(ApplicationContext, constants, exportEntitiesJobType);
         _updateStreamEvent = new(ApplicationContext, constants, exportEntitiesJobType);
+    }
+
+    private protected virtual IDataMigrator GetDataMigrator(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory)
+    {
+        return new DataLakeDataMigrator(Log, ApplicationContext, Container.Resolve<DbContextOptions<CluedInEntities>>(), ConnectorComponentName, constants, jobDataFactory);
     }
 
     protected async Task RunScheduler(IDataLakeConstants dataLakeConstants, IDataLakeJobDataFactory dataLakeJobDataFactory, Type jobType)
