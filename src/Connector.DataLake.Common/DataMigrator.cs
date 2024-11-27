@@ -155,7 +155,7 @@ internal class DataMigrator : IDataMigrator
 
     public async Task<bool> IsMigrationPerformedAsync(Guid organizationId, string key)
     {
-        var dbContext = new CluedInEntities();
+        var dbContext = new CluedInEntities(_cluedInEntitiesDbContextOptions);
         var migrationSetting = await dbContext.Settings
                 .FirstOrDefaultAsync(setting => setting.OrganizationId == Guid.Empty
                                 && setting.Key == key);
@@ -165,7 +165,7 @@ internal class DataMigrator : IDataMigrator
 
     public async Task SetMigrationPerformedAsync(Guid organizationId, string key)
     {
-        var dbContext = new CluedInEntities();
+        var dbContext = new CluedInEntities(_cluedInEntitiesDbContextOptions);
         dbContext.Settings.Add(new Setting
         {
             Id = Guid.NewGuid(),
