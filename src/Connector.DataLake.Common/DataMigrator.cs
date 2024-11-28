@@ -11,6 +11,8 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using Newtonsoft.Json;
+
 namespace CluedIn.Connector.DataLake.Common;
 
 internal class DataMigrator : IDataMigrator
@@ -172,7 +174,12 @@ internal class DataMigrator : IDataMigrator
             OrganizationId = Guid.Empty,
             UserId = Guid.Empty,
             Key = key,
-            Data = $"Complete_{start:o}_{end:o}",
+            Data = JsonConvert.SerializeObject(new
+            {
+                status = "Complete",
+                start,
+                end,
+            }),
         });
 
         await dbContext.SaveChangesAsync();
