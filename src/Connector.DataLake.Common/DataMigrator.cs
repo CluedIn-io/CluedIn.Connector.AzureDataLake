@@ -163,7 +163,7 @@ internal class DataMigrator : IDataMigrator
         return migrationSetting != null;
     }
 
-    public async Task SetMigrationPerformedAsync(Guid organizationId, string key)
+    public async Task SetMigrationPerformedAsync(Guid organizationId, string key, DateTimeOffset start, DateTimeOffset end)
     {
         var dbContext = new CluedInEntities(_cluedInEntitiesDbContextOptions);
         dbContext.Settings.Add(new Setting
@@ -172,7 +172,7 @@ internal class DataMigrator : IDataMigrator
             OrganizationId = Guid.Empty,
             UserId = Guid.Empty,
             Key = key,
-            Data = "Complete",
+            Data = $"Complete_{start:o}_{end:o}",
         });
 
         await dbContext.SaveChangesAsync();
@@ -185,6 +185,7 @@ internal class DataMigrator : IDataMigrator
         var componentMigrationName = $"{_componentName}:Migrate:{migrationName}";
         try
         {
+            var start = DateTimeOffset.UtcNow;
             var hasMigrationPerformed = await IsMigrationPerformedAsync(Guid.Empty, componentMigrationName);
             if (hasMigrationPerformed)
             {
@@ -196,7 +197,8 @@ internal class DataMigrator : IDataMigrator
 
             await migrateTask(componentMigrationName);
 
-            await SetMigrationPerformedAsync(Guid.Empty, componentMigrationName);
+            var end = DateTimeOffset.UtcNow;
+            await SetMigrationPerformedAsync(Guid.Empty, componentMigrationName, start, end);
             _logger.LogInformation("End migration: '{MigrationName}'.", componentMigrationName);
         }
         catch (Exception ex)
