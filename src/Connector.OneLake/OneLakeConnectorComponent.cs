@@ -25,4 +25,6 @@ public sealed class OneLakeConnectorComponent : DataLakeConnectorComponentBase
     public const string ComponentName = "OneLake";
 
     protected override string ConnectorComponentName => ComponentName;
+
+    protected override string ShortConnectorComponentName => ComponentName;
 }

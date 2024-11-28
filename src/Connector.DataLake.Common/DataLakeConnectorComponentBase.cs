@@ -34,6 +34,7 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
     }
 
     protected abstract string ConnectorComponentName { get; }
+    protected abstract string ShortConnectorComponentName { get; }
 
     protected virtual void DefaultStartInternal<TDataLakeConstants, TDataLakeJobFactory, TDataLakeExportJob>()
         where TDataLakeConstants : IDataLakeConstants
@@ -74,7 +75,7 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
 
     private protected virtual IDataMigrator GetDataMigrator(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory)
     {
-        return new DataLakeDataMigrator(Log, ApplicationContext, Container.Resolve<DbContextOptions<CluedInEntities>>(), ConnectorComponentName, constants, jobDataFactory);
+        return new DataLakeDataMigrator(Log, ApplicationContext, Container.Resolve<DbContextOptions<CluedInEntities>>(), ShortConnectorComponentName, constants, jobDataFactory);
     }
 
     protected async Task RunScheduler(IDataLakeConstants dataLakeConstants, IDataLakeJobDataFactory dataLakeJobDataFactory, Type jobType)
