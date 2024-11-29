@@ -25,4 +25,6 @@ public sealed class AzureAIStudioConnectorComponent : DataLakeConnectorComponent
     public const string ComponentName = "Azure AI Studio";
 
     protected override string ConnectorComponentName => ComponentName;
+
+    protected override string ShortConnectorComponentName => "AIStudio";
 }

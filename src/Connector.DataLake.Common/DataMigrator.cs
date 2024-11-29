@@ -11,6 +11,8 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using Newtonsoft.Json;
+
 namespace CluedIn.Connector.DataLake.Common;
 
 internal class DataMigrator : IDataMigrator
@@ -163,7 +165,7 @@ internal class DataMigrator : IDataMigrator
         return migrationSetting != null;
     }
 
-    public async Task SetMigrationPerformedAsync(Guid organizationId, string key)
+    public async Task SetMigrationPerformedAsync(Guid organizationId, string key, DateTimeOffset start, DateTimeOffset end)
     {
         var dbContext = new CluedInEntities(_cluedInEntitiesDbContextOptions);
         dbContext.Settings.Add(new Setting
@@ -172,7 +174,12 @@ internal class DataMigrator : IDataMigrator
             OrganizationId = Guid.Empty,
             UserId = Guid.Empty,
             Key = key,
-            Data = "Complete",
+            Data = JsonConvert.SerializeObject(new
+            {
+                status = "Complete",
+                start,
+                end,
+            }),
         });
 
         await dbContext.SaveChangesAsync();
@@ -182,9 +189,10 @@ internal class DataMigrator : IDataMigrator
         string migrationName,
         Func<string, Task> migrateTask)
     {
-        var componentMigrationName = $"{_componentName}:Migration:{migrationName}";
+        var componentMigrationName = $"{_componentName}:Migrate:{migrationName}";
         try
         {
+            var start = DateTimeOffset.UtcNow;
             var hasMigrationPerformed = await IsMigrationPerformedAsync(Guid.Empty, componentMigrationName);
             if (hasMigrationPerformed)
             {
@@ -196,7 +204,8 @@ internal class DataMigrator : IDataMigrator
 
             await migrateTask(componentMigrationName);
 
-            await SetMigrationPerformedAsync(Guid.Empty, componentMigrationName);
+            var end = DateTimeOffset.UtcNow;
+            await SetMigrationPerformedAsync(Guid.Empty, componentMigrationName, start, end);
             _logger.LogInformation("End migration: '{MigrationName}'.", componentMigrationName);
         }
         catch (Exception ex)

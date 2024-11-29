@@ -26,5 +26,7 @@ namespace CluedIn.Connector.AzureDatabricks
         public const string ComponentName = "Azure Databricks";
 
         protected override string ConnectorComponentName => ComponentName;
+
+        protected override string ShortConnectorComponentName => "Databricks";
     }
 }

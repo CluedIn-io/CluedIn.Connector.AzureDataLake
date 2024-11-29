@@ -30,7 +30,7 @@ namespace CluedIn.Connector.AzureDataLake
                 Log,
                 ApplicationContext,
                 Container.Resolve<DbContextOptions<CluedInEntities>>(),
-                ConnectorComponentName,
+                ShortConnectorComponentName,
                 constants,
                 jobDataFactory);
         }
@@ -38,5 +38,7 @@ namespace CluedIn.Connector.AzureDataLake
         public const string ComponentName = "Azure Data Lake Storage Gen2";
 
         protected override string ConnectorComponentName => ComponentName;
+
+        protected override string ShortConnectorComponentName => "ADLS";
     }
 }

@@ -26,5 +26,7 @@ namespace CluedIn.Connector.SynapseDataEngineering
         public const string ComponentName = "Synapse Data Engineering";
 
         protected override string ConnectorComponentName => ComponentName;
+
+        protected override string ShortConnectorComponentName => "SyDataEng";
     }
 }
