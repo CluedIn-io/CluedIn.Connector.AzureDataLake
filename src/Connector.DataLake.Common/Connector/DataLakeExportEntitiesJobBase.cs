@@ -626,12 +626,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
                 CREATE TABLE [{tableName}] (
                     StreamId UNIQUEIDENTIFIER NOT NULL,
-                    DataTime DATETIME2 NOT NULL,
+                    DataTime DATETIMEOFFSET NOT NULL,
                     TriggerSource NVARCHAR(255) NOT NULL,
                     CronSchedule NVARCHAR(255) NOT NULL,
                     FilePath NVARCHAR(255) NOT NULL,
-                    StartTime DATETIME2 NOT NULL,
-                    EndTime DATETIME2 NULL,
+                    StartTime DATETIMEOFFSET NOT NULL,
+                    EndTime DATETIMEOFFSET NULL,
                     TotalRows INT NULL,
                     Status NVARCHAR(255) NULL,
                     ExporterHostName NVARCHAR(255) NULL,

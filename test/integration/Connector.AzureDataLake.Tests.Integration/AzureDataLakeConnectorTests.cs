@@ -83,11 +83,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var context = new ExecutionContext(applicationContext, organization, logger);
 
-            var azureDataLakeConstantsMock = new Mock<IAzureDataLakeConstants>();
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
+            var azureDataLakeConstantsMock = CreateConstantsMock();
 
             var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
@@ -115,7 +111,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 mockDateTimeOffsetProvider.Object
             );
 
-            jobDataFactory.Setup(x => x.GetConfiguration(context, providerDefinitionId, It.IsAny<string>()  ))
+            jobDataFactory.Setup(x => x.GetConfiguration(context, providerDefinitionId, It.IsAny<string>()))
                 .ReturnsAsync(new AzureDataLakeConnectorJobData(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
             connectorMock.CallBase = true;
 
@@ -334,6 +330,19 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             }
         }
 
+        private static Mock<IAzureDataLakeConstants> CreateConstantsMock()
+        {
+            var azureDataLakeConstantsMock = new Mock<IAzureDataLakeConstants>();
+            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
+            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
+            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
+            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
+            azureDataLakeConstantsMock.Setup(x => x.EnableCustomCronKeyName).Returns("abc");
+            azureDataLakeConstantsMock.Setup(x => x.EnableCustomCronDefaultValue).Returns(false);
+            azureDataLakeConstantsMock.Setup(x => x.ProviderId).Returns(AzureDataLakeConstants.DataLakeProviderId);
+            return azureDataLakeConstantsMock;
+        }
+
         [Fact]
         public async void VerifyStoreData_Sync_WithoutStreamCache()
         {
@@ -359,11 +368,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var context = new ExecutionContext(applicationContext, organization, logger);
 
-            var azureDataLakeConstantsMock = new Mock<IAzureDataLakeConstants>();
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
+            var azureDataLakeConstantsMock = CreateConstantsMock();
 
             var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
@@ -699,7 +704,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                         executeExportArg.FileSystemName,
                         executeExportArg.DirectoryName,
                     executeExportArg.Client);
-                    
+
                     var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                     await executeExportArg.ExportJob.DoRunAsync(
                         executeExportArg.ExecutionContext,
@@ -872,12 +877,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var context = new ExecutionContext(applicationContext, organization, logger);
 
-            var azureDataLakeConstantsMock = new Mock<IAzureDataLakeConstants>();
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
-            azureDataLakeConstantsMock.Setup(x => x.ProviderId).Returns(AzureDataLakeConstants.DataLakeProviderId);
+            var azureDataLakeConstantsMock = CreateConstantsMock();
 
             var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
@@ -1341,7 +1341,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             }
         }
 
-        
+
 
         private static async Task WaitForFileToBeDeleted(string fileSystemName, string directoryName, DataLakeServiceClient client, PathItem path)
         {
