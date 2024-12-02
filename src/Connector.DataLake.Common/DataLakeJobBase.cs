@@ -4,8 +4,6 @@ using System.Threading.Tasks;
 using CluedIn.Core;
 using CluedIn.Core.Jobs;
 
-using Parquet.Rows;
-
 namespace CluedIn.Connector.DataLake.Common;
 
 internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob, IDataLakeJob
