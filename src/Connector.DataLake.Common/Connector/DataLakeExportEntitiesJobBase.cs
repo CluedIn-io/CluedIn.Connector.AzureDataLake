@@ -111,15 +111,16 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
-            asOfTime,
-            args.IsTriggeredFromJobServer ? "JobServer" : "InternalScheduler",
-            args.Schedule,
-            outputFileName,
-            startExportTime,
-            _dateTimeOffsetProvider.GetCurrentUtcTime(),
-            0,
-            "Starting",
-            Dns.GetHostName());
+            DataTime: asOfTime,
+            TriggerSource: GetTriggerSource(args),
+            CronSchedule: args.Schedule,
+            FilePath: outputFileName,
+            FileFormat: outputFormat,
+            StartTime: startExportTime,
+            EndTime: null,
+            TotalRows: null,
+            Status: "Starting",
+            ExporterHostName: Dns.GetHostName());
 
         await InsertHistory(context, connection, exportHistory);
 
@@ -178,7 +179,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             args.Message,
             args.Schedule);
 
-
         async Task<long> writeFileContentsAsync()
         {
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
@@ -229,6 +229,11 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             var targetFileClient = directoryClient.GetFileClient(outputFileName);
             await targetFileClient.DeleteIfExistsAsync();
         }
+    }
+
+    private static string GetTriggerSource(IDataLakeJobArgs args)
+    {
+        return args.IsTriggeredFromJobServer ? "JobServer" : "InternalScheduler";
     }
 
     private async Task<ExportJobData> GetJobDataAsync(ExecutionContext context, IDataLakeJobArgs args, string taskName)
@@ -286,6 +291,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             context.Log.LogInformation($"Stream not started for stream {{StreamId}}. Skipping {taskName}.", streamModel.Id);
             return null;
         }
+
         var asOfTime = GetAsOfTime(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
         var outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
@@ -345,7 +351,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
-        var hasMissed = !await HasExported(context, connection, streamId, asOfTime, "InternalScheduler");
+        var hasMissed = !await HasExported(context, connection, streamId, asOfTime, GetTriggerSource(args), args.Schedule);
         context.Log.LogInformation(
             "End checking export entities job '{ExportJob}' for '{StreamId}' using {Schedule} at {InstanceTime}, HasMissed {HasMissed}.",
             typeName,
@@ -507,6 +513,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                             TriggerSource,
                             CronSchedule,
                             FilePath,
+                            FileFormat,
                             StartTime,
                             EndTime,
                             TotalRows,
@@ -519,6 +526,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                             @TriggerSource,
                             @CronSchedule,
                             @FilePath,
+                            @FileFormat,
                             @StartTime,
                             @EndTime,
                             @TotalRows,
@@ -535,9 +543,10 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             command.Parameters.Add(new SqlParameter($"@TriggerSource", exportHistory.TriggerSource));
             command.Parameters.Add(new SqlParameter($"@CronSchedule", exportHistory.CronSchedule));
             command.Parameters.Add(new SqlParameter($"@FilePath", exportHistory.FilePath));
+            command.Parameters.Add(new SqlParameter($"@FileFormat", exportHistory.FileFormat));
             command.Parameters.Add(new SqlParameter($"@StartTime", exportHistory.StartTime));
-            command.Parameters.Add(new SqlParameter($"@EndTime", exportHistory.EndTime));
-            command.Parameters.Add(new SqlParameter($"@TotalRows", exportHistory.TotalRows));
+            command.Parameters.Add(new SqlParameter($"@EndTime", (object)exportHistory.EndTime ?? DBNull.Value));
+            command.Parameters.Add(new SqlParameter($"@TotalRows", (object)exportHistory.TotalRows ?? DBNull.Value));
             command.Parameters.Add(new SqlParameter($"@Status", exportHistory.Status));
             command.Parameters.Add(new SqlParameter($"@ExporterHostName", exportHistory.ExporterHostName));
 
@@ -561,14 +570,17 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                         StreamId = @StreamId
                         AND DataTime = @DataTime
                         AND TriggerSource = @TriggerSource
+                        AND CronSchedule = @CronSchedule
                     """;
         var command = new SqlCommand(insertSql, connection)
         {
             CommandType = CommandType.Text
         };
+
         command.Parameters.Add(new SqlParameter($"@StreamId", exportHistory.StreamId));
         command.Parameters.Add(new SqlParameter($"@DataTime", exportHistory.DataTime));
         command.Parameters.Add(new SqlParameter($"@TriggerSource", exportHistory.TriggerSource));
+        command.Parameters.Add(new SqlParameter($"@CronSchedule", exportHistory.CronSchedule));
         command.Parameters.Add(new SqlParameter($"@EndTime", exportHistory.EndTime));
         command.Parameters.Add(new SqlParameter($"@TotalRows", exportHistory.TotalRows));
         command.Parameters.Add(new SqlParameter($"@Status", exportHistory.Status));
@@ -580,7 +592,13 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
     }
 
-    private async Task<bool> HasExported(ExecutionContext context, SqlConnection connection, Guid streamId, DateTimeOffset dataTime, string triggerSource)
+    private async Task<bool> HasExported(
+        ExecutionContext context,
+        SqlConnection connection,
+        Guid streamId,
+        DateTimeOffset dataTime,
+        string triggerSource,
+        string cronSchedule)
     {
         try
         {
@@ -613,7 +631,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             command.Parameters.Add(new SqlParameter($"@DataTime", dataTime));
             command.Parameters.Add(new SqlParameter($"@TriggerSource", triggerSource));
 
-
             var count = (int)await command.ExecuteScalarAsync();
             return count > 0;
         }
@@ -630,12 +647,13 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                     TriggerSource NVARCHAR(255) NOT NULL,
                     CronSchedule NVARCHAR(255) NOT NULL,
                     FilePath NVARCHAR(255) NOT NULL,
+                    FileFormat NVARCHAR(255) NOT NULL,
                     StartTime DATETIMEOFFSET NOT NULL,
                     EndTime DATETIMEOFFSET NULL,
                     TotalRows INT NULL,
                     Status NVARCHAR(255) NULL,
                     ExporterHostName NVARCHAR(255) NULL,
-                    CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED (StreamId,DataTime,TriggerSource)
+                    CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED (StreamId,DataTime,TriggerSource,CronSchedule)
                 );
                 """;
         var command = new SqlCommand(createTableSql, connection)
@@ -668,9 +686,10 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         string TriggerSource,
         string CronSchedule,
         string FilePath,
+        string FileFormat,
         DateTimeOffset StartTime,
         DateTimeOffset? EndTime,
-        long TotalRows,
+        long? TotalRows,
         string Status,
         string ExporterHostName);
 }
