@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -16,8 +17,6 @@ using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-
-using Parquet.Meta;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
@@ -109,6 +108,21 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             }
         }
 
+        var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var exportHistory = new ExportHistory(
+            streamId,
+            asOfTime,
+            args.IsTriggeredFromJobServer ? "JobServer" : "InternalScheduler",
+            args.Schedule,
+            outputFileName,
+            startExportTime,
+            _dateTimeOffsetProvider.GetCurrentUtcTime(),
+            0,
+            "Starting",
+            Dns.GetHostName());
+
+        await InsertHistory(context, connection, exportHistory);
+
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
         var command = new SqlCommand(getDataSql, connection)
         {
@@ -138,7 +152,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             temporaryOutputFileName);
         var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
         var temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
-        await writeFileContentsAsync();
+        var totalRows = await writeFileContentsAsync();
         await setFilePropertiesAsync();
         await deleteTargetFileIfExistsAsync();
         await renameToTargetFileAsync();
@@ -148,6 +162,16 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             asOfTime,
             temporaryOutputFileName);
 
+        await reader.CloseAsync();
+
+        var updatedHistory = exportHistory with
+        {
+            TotalRows = totalRows,
+            EndTime = _dateTimeOffsetProvider.GetCurrentUtcTime(),
+            Status = "Complete"
+        };
+        await UpdateHistory(context, connection, updatedHistory);
+        transactionScope.Complete();
         context.Log.LogInformation(
             "End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.",
             typeName,
@@ -155,12 +179,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             args.Schedule);
 
 
-        async Task writeFileContentsAsync()
+        async Task<long> writeFileContentsAsync()
         {
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
             await using var outputStream = await temporaryFileClient.OpenWriteAsync(true);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
-            await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNames, reader);
+            return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNames, reader);
         }
 
         async Task setFilePropertiesAsync()
@@ -309,11 +333,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
 
         var (streamId, streamModel, provider, configuration, asOfTime, outputFormat, outputFileName, filePathProperties) = exportJobData;
-        if (filePathProperties == null)
-        {
-            context.Log.LogDebug("File {File} is not present. Returning job missed.", outputFileName);
-            return true;
-        }
 
         if (args.IsTriggeredFromJobServer)
         {
@@ -323,45 +342,18 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 asOfTime);
             return false;
         }
-        else if (TryGetMetadata(filePathProperties?.Metadata, out var fileMetadata)
-            && fileMetadata.StreamId == exportJobData.StreamId)
-        {
-            if (HasCustomFileNamePattern(configuration))
-            {
-                if (fileMetadata.DataTime > asOfTime)
-                {
-                    context.Log.LogInformation(
-                        "Output file '{OutputFileName}' exists using data at {DataTime} greater than {AsOfTime} and job is triggered from {SchedulerType}. Job not missed.",
-                        outputFileName,
-                        fileMetadata.DataTime,
-                        asOfTime,
-                        nameof(DataLakeConnectorComponentBase));
-                    return false;
-                }
-                else if (fileMetadata.DataTime == asOfTime)
-                {
-                    LogJobNotMissedSameTime(context, asOfTime, outputFileName);
-                    return false;
-                }
-            }
-            else if (fileMetadata.DataTime == asOfTime)
-            {
-                LogJobNotMissedSameTime(context, asOfTime, outputFileName);
-                return false;
-            }
-        }
 
-        context.Log.LogDebug("File {File} is present but has mismatched properties {FileMetadata}. Returning job missed.", outputFileName, filePathProperties?.Metadata);
-        return true;
-
-        static void LogJobNotMissedSameTime(ExecutionContext context, DateTimeOffset asOfTime, string outputFileName)
-        {
-            context.Log.LogInformation(
-                                    "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from {SchedulerType}. Job not missed.",
-                                    outputFileName,
-                                    asOfTime,
-                                    nameof(DataLakeConnectorComponentBase));
-        }
+        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
+        await connection.OpenAsync();
+        var hasMissed = !await HasExported(context, connection, streamId, asOfTime, "InternalScheduler");
+        context.Log.LogInformation(
+            "End checking export entities job '{ExportJob}' for '{StreamId}' using {Schedule} at {InstanceTime}, HasMissed {HasMissed}.",
+            typeName,
+            args.Message,
+            args.Schedule,
+            args.InstanceTime,
+            hasMissed);
+        return hasMissed;
     }
 
     private static bool TryGetMetadata(IDictionary<string, string> metadata, out FileMetadata fileMetadata)
@@ -491,6 +483,173 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         throw new NotSupportedException($"Format '{outputFormat}' is not supported.");
     }
 
+    private async Task InsertHistory(ExecutionContext context, SqlConnection connection, ExportHistory exportHistory)
+    {
+        try
+        {
+            await insert(connection, exportHistory);
+        }
+        catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
+        {
+            var tableName = GetExportHistoryTableName(exportHistory.StreamId);
+            context.Log.LogDebug("Table {TableName} does not exist. Creating it now.", tableName);
+            await EnsureHistoryTableExists(connection, exportHistory.StreamId);
+            await insert(connection, exportHistory);
+        }
+
+        static async Task insert(SqlConnection connection, ExportHistory exportHistory)
+        {
+            var tableName = GetExportHistoryTableName(exportHistory.StreamId);
+            var insertSql = $"""
+                        INSERT INTO [{tableName}] (
+                            StreamId,
+                            DataTime,
+                            TriggerSource,
+                            CronSchedule,
+                            FilePath,
+                            StartTime,
+                            EndTime,
+                            TotalRows,
+                            Status,
+                            ExporterHostName
+                        )
+                        VALUES(
+                            @StreamId,
+                            @DataTime,
+                            @TriggerSource,
+                            @CronSchedule,
+                            @FilePath,
+                            @StartTime,
+                            @EndTime,
+                            @TotalRows,
+                            @Status,
+                            @ExporterHostName
+                        )
+                        """;
+            var command = new SqlCommand(insertSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
+            command.Parameters.Add(new SqlParameter($"@StreamId", exportHistory.StreamId));
+            command.Parameters.Add(new SqlParameter($"@DataTime", exportHistory.DataTime));
+            command.Parameters.Add(new SqlParameter($"@TriggerSource", exportHistory.TriggerSource));
+            command.Parameters.Add(new SqlParameter($"@CronSchedule", exportHistory.CronSchedule));
+            command.Parameters.Add(new SqlParameter($"@FilePath", exportHistory.FilePath));
+            command.Parameters.Add(new SqlParameter($"@StartTime", exportHistory.StartTime));
+            command.Parameters.Add(new SqlParameter($"@EndTime", exportHistory.EndTime));
+            command.Parameters.Add(new SqlParameter($"@TotalRows", exportHistory.TotalRows));
+            command.Parameters.Add(new SqlParameter($"@Status", exportHistory.Status));
+            command.Parameters.Add(new SqlParameter($"@ExporterHostName", exportHistory.ExporterHostName));
+
+            var rowsAffected = await command.ExecuteNonQueryAsync();
+            if (rowsAffected != 1)
+            {
+                throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
+            }
+        }
+    }
+
+    private async Task UpdateHistory(ExecutionContext context, SqlConnection connection, ExportHistory exportHistory)
+    {
+        var tableName = GetExportHistoryTableName(exportHistory.StreamId);
+        var insertSql = $"""
+                    UPDATE [{tableName}] SET
+                        EndTime = @EndTime,
+                        TotalRows = @TotalRows,
+                        Status = @Status
+                    WHERE
+                        StreamId = @StreamId
+                        AND DataTime = @DataTime
+                        AND TriggerSource = @TriggerSource
+                    """;
+        var command = new SqlCommand(insertSql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.Add(new SqlParameter($"@StreamId", exportHistory.StreamId));
+        command.Parameters.Add(new SqlParameter($"@DataTime", exportHistory.DataTime));
+        command.Parameters.Add(new SqlParameter($"@TriggerSource", exportHistory.TriggerSource));
+        command.Parameters.Add(new SqlParameter($"@EndTime", exportHistory.EndTime));
+        command.Parameters.Add(new SqlParameter($"@TotalRows", exportHistory.TotalRows));
+        command.Parameters.Add(new SqlParameter($"@Status", exportHistory.Status));
+
+        var rowsAffected = await command.ExecuteNonQueryAsync();
+        if (rowsAffected != 1)
+        {
+            throw new ApplicationException($"Rows affected for update of is not 1, it is {rowsAffected}.");
+        }
+    }
+
+    private async Task<bool> HasExported(ExecutionContext context, SqlConnection connection, Guid streamId, DateTimeOffset dataTime, string triggerSource)
+    {
+        try
+        {
+            return await hasExported(connection, streamId, dataTime, triggerSource);
+        }
+        catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
+        {
+            var tableName = GetExportHistoryTableName(streamId);
+            context.Log.LogDebug("Table {TableName} does not exist. Returning has exported false.", tableName);
+            return false;
+        }
+
+        static async Task<bool> hasExported(SqlConnection connection, Guid streamId, DateTimeOffset dataTime, string triggerSource)
+        {
+            var tableName = GetExportHistoryTableName(streamId);
+            var insertSql = $"""
+                        SELECT COUNT(1)
+                        FROM
+                            [{tableName}]
+                        WHERE
+                            StreamId = @StreamId
+                            AND DataTime = @DataTime
+                            AND TriggerSource = @TriggerSource
+                        """;
+            var command = new SqlCommand(insertSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
+            command.Parameters.Add(new SqlParameter($"@StreamId", streamId));
+            command.Parameters.Add(new SqlParameter($"@DataTime", dataTime));
+            command.Parameters.Add(new SqlParameter($"@TriggerSource", triggerSource));
+
+
+            var count = (int)await command.ExecuteScalarAsync();
+            return count > 0;
+        }
+    }
+
+    private async Task EnsureHistoryTableExists(SqlConnection connection, Guid streamId)
+    {
+        var tableName = GetExportHistoryTableName(streamId);
+        var createTableSql = $"""
+                IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
+                CREATE TABLE [{tableName}] (
+                    StreamId UNIQUEIDENTIFIER NOT NULL,
+                    DataTime DATETIME2 NOT NULL,
+                    TriggerSource NVARCHAR(255) NOT NULL,
+                    CronSchedule NVARCHAR(255) NOT NULL,
+                    FilePath NVARCHAR(255) NOT NULL,
+                    StartTime DATETIME2 NOT NULL,
+                    EndTime DATETIME2 NULL,
+                    TotalRows INT NULL,
+                    Status NVARCHAR(255) NULL,
+                    ExporterHostName NVARCHAR(255) NULL,
+                    CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED (StreamId,DataTime,TriggerSource)
+                );
+                """;
+        var command = new SqlCommand(createTableSql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        _ = await command.ExecuteNonQueryAsync();
+    }
+
+    private static string GetExportHistoryTableName(Guid streamId)
+    {
+        return CacheTableHelper.GetCacheTableName(streamId) + "_ExportHistory";
+    }
+
     private record FileMetadata(Guid StreamId, DateTimeOffset DataTime);
 
     private record ExportJobData(
@@ -502,4 +661,16 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         string OutputFormat,
         string OutputFileName,
         PathProperties PathProperties);
+
+    private record ExportHistory(
+        Guid StreamId,
+        DateTimeOffset DataTime,
+        string TriggerSource,
+        string CronSchedule,
+        string FilePath,
+        DateTimeOffset StartTime,
+        DateTimeOffset? EndTime,
+        long TotalRows,
+        string Status,
+        string ExporterHostName);
 }

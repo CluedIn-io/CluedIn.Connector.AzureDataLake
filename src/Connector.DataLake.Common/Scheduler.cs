@@ -211,8 +211,6 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
                 _logger.LogWarning("Scheduler {SchedulerName} failed to update job next run time for job with key {JobKey}.", _schedulerName, jobData.Key);
             }
         }
-
-
     }
 
     private async Task RunJobWithTimeAsync(ExecutionContext executionContext, SchedulerQueuedJob job, DateTimeOffset time)
