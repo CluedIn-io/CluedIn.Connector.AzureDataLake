@@ -80,6 +80,10 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     /// </summary>
     public int CacheRecordsThresholdDefaultValue => 50;
 
+    public string EnableCustomCronKeyName => $"Streams.{CacheKeyword}.Scheduling.CustomCron.Enabled";
+
+    public bool EnableCustomCronDefaultValue => false;
+
     protected abstract string CacheKeyword { get; }
 
     protected static IEnumerable<Control> GetAuthMethods(ApplicationContext applicationContext)

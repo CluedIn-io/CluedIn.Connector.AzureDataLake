@@ -22,5 +22,9 @@ namespace CluedIn.Connector.DataLake.Common
         /// Default value for Cache records threshold
         /// </summary>
         int CacheRecordsThresholdDefaultValue { get; }
+
+        string EnableCustomCronKeyName { get; }
+
+        bool EnableCustomCronDefaultValue { get; }
     }
 }

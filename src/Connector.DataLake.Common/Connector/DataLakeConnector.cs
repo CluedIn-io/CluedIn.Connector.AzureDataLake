@@ -30,6 +30,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private readonly IDataLakeClient _client;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
+        private readonly bool _enableCustomCron;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
@@ -65,6 +66,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
+            _enableCustomCron = ConfigurationManagerEx.AppSettings.GetValue(constants.EnableCustomCronKeyName, constants.EnableCustomCronDefaultValue);
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
 
@@ -450,8 +452,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     return new ConnectionVerificationResult(false, errorMessage);
                 }
 
-                var supportCustomCron = true;
-                if (!supportCustomCron && !CronSchedules.IsSupportedScheduleName(jobData.Schedule))
+                if (!_enableCustomCron && !CronSchedules.IsSupportedScheduleName(jobData.Schedule))
                 {
                     var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
                     var errorMessage = $"Format '{jobData.Schedule}' is not supported. Supported schedules are {supported}.";
