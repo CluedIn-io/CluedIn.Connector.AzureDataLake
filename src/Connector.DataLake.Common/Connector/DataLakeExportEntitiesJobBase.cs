@@ -66,7 +66,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return;
         }
 
-        var (streamId, streamModel, provider, configuration, asOfTime, outputFormat, outputFileName, filePathProperties) = exportJobData;
+        var (streamId, streamModel, provider, configuration, asOfTime, outputFormat, outputFileName) = exportJobData;
 
         var tableName = CacheTableHelper.GetCacheTableName(streamId);
         using var transactionScope = new TransactionScope(
@@ -81,6 +81,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return;
         }
 
+        var filePathProperties = await _dataLakeClient.GetFilePathProperties(configuration, outputFileName);
         if (filePathProperties != null)
         {
             if (args.IsTriggeredFromJobServer)
@@ -295,7 +296,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var asOfTime = GetAsOfTime(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
         var outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
-        var filePathProperties = await _dataLakeClient.GetFilePathProperties(configuration, outputFileName);
 
         return new ExportJobData(
             streamId,
@@ -304,8 +304,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             configuration,
             asOfTime,
             OutputFormat: outputFormat,
-            OutputFileName: outputFileName,
-            filePathProperties);
+            OutputFileName: outputFileName);
     }
 
     private Dictionary<string, object> CreateLoggingScope(IDataLakeJobArgs args)
@@ -338,7 +337,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return false;
         }
 
-        var (streamId, streamModel, provider, configuration, asOfTime, outputFormat, outputFileName, filePathProperties) = exportJobData;
+        var (streamId, streamModel, provider, configuration, asOfTime, outputFormat, outputFileName) = exportJobData;
 
         if (args.IsTriggeredFromJobServer)
         {
@@ -679,8 +678,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         IDataLakeJobData DataLakeJobData,
         DateTimeOffset AsOfTime,
         string OutputFormat,
-        string OutputFileName,
-        PathProperties PathProperties);
+        string OutputFileName);
 
     private record ExportHistory(
         Guid StreamId,
