@@ -602,7 +602,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     {
         try
         {
-            return await hasExported(connection, streamId, dataTime, triggerSource);
+            return await hasExported(connection, streamId, dataTime, triggerSource, cronSchedule);
         }
         catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
         {
@@ -611,7 +611,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return false;
         }
 
-        static async Task<bool> hasExported(SqlConnection connection, Guid streamId, DateTimeOffset dataTime, string triggerSource)
+        static async Task<bool> hasExported(SqlConnection connection, Guid streamId, DateTimeOffset dataTime, string triggerSource, string cronSchedule)
         {
             var tableName = GetExportHistoryTableName(streamId);
             var insertSql = $"""
@@ -622,6 +622,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                             StreamId = @StreamId
                             AND DataTime = @DataTime
                             AND TriggerSource = @TriggerSource
+                            AND CronSchedule = @CronSchedule
                         """;
             var command = new SqlCommand(insertSql, connection)
             {
@@ -630,6 +631,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             command.Parameters.Add(new SqlParameter($"@StreamId", streamId));
             command.Parameters.Add(new SqlParameter($"@DataTime", dataTime));
             command.Parameters.Add(new SqlParameter($"@TriggerSource", triggerSource));
+            command.Parameters.Add(new SqlParameter($"@CronSchedule", cronSchedule));
 
             var count = (int)await command.ExecuteScalarAsync();
             return count > 0;
