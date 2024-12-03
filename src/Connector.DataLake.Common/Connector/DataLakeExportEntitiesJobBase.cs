@@ -7,8 +7,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
 
-using Azure.Storage.Files.DataLake.Models;
-
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
@@ -27,7 +25,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     private readonly IDataLakeConstants _dataLakeConstants;
     private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
-    private static readonly TimeSpan exportTimeout = TimeSpan.MaxValue;
+    private static readonly TimeSpan _exportTimeout = TimeSpan.MaxValue;
     private const int ExportEntitiesLockInMilliseconds = 100;
     private const string StreamIdKey = "StreamId";
     private const string DataTimeKey = "DataTime";
@@ -51,7 +49,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
     public override async Task DoRunAsync(ExecutionContext context, IDataLakeJobArgs args)
     {
-        var typeName = this.GetType().Name;
+        var typeName = GetType().Name;
         using var exportJobLoggingScope = context.Log.BeginScope(CreateLoggingScope(args));
         context.Log.LogInformation(
             "Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule} at {InstanceTime}.",
@@ -71,7 +69,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var tableName = CacheTableHelper.GetCacheTableName(streamId);
         using var transactionScope = new TransactionScope(
             TransactionScopeOption.Required,
-            exportTimeout,
+            _exportTimeout,
             TransactionScopeAsyncFlowOption.Enabled);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
@@ -248,7 +246,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         if (streamModel == null)
         {
-            context.Log.LogWarning($"Unable to get stream with Id {{StreamId}}. Skipping {taskName}.", streamId);
+            context.Log.LogWarning("Unable to get stream with Id {StreamId}. Skipping {TaskName}.", streamId, taskName);
             return null;
         }
 
@@ -257,22 +255,23 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         if (provider == null)
         {
-            context.Log.LogWarning($"Unable to get provider {{ProviderDefinitionId}}. Skipping {taskName}.", providerDefinitionId);
+            context.Log.LogWarning("Unable to get provider {ProviderDefinitionId}. Skipping {TaskName}.", providerDefinitionId, taskName);
             return null;
         }
 
         if (provider.ProviderId != _dataLakeConstants.ProviderId)
         {
             context.Log.LogDebug(
-                $"Unable to get provider {{ProviderDefinitionId}}. Skipping {{DataLakeProviderId}}. Skipping {taskName}.",
+                "Unable to get provider {ProviderDefinitionId}. Skipping {DataLakeProviderId}. Skipping {TaskName}.",
                 provider.ProviderId,
-                _dataLakeConstants.ProviderId);
+                _dataLakeConstants.ProviderId,
+                taskName);
             return null;
         }
 
         if (!provider.IsEnabled)
         {
-            context.Log.LogDebug($"Provider {{ProviderDefinitionId}} is not enabled. Skipping {taskName}.", providerDefinitionId);
+            context.Log.LogDebug("Provider {ProviderDefinitionId} is not enabled. Skipping {TaskName}.", providerDefinitionId, taskName);
             return null;
         }
 
@@ -283,13 +282,13 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         if (!configuration.IsStreamCacheEnabled)
         {
-            context.Log.LogDebug($"Stream cache is not enabled for stream {{StreamId}}. Skipping {taskName}.", streamModel.Id);
+            context.Log.LogDebug("Stream cache is not enabled for stream {StreamId}. Skipping {TaskName}.", streamModel.Id, taskName);
             return null;
         }
 
         if (streamModel.Status != StreamStatus.Started)
         {
-            context.Log.LogInformation($"Stream not started for stream {{StreamId}}. Skipping {taskName}.", streamModel.Id);
+            context.Log.LogInformation("Stream not started for stream {StreamId}. Skipping {TaskName}.", streamModel.Id, taskName);
             return null;
         }
 
@@ -488,7 +487,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         throw new NotSupportedException($"Format '{outputFormat}' is not supported.");
     }
 
-    private async Task InsertHistory(ExecutionContext context, SqlConnection connection, ExportHistory exportHistory)
+    private static async Task InsertHistory(ExecutionContext context, SqlConnection connection, ExportHistory exportHistory)
     {
         try
         {
@@ -557,7 +556,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
     }
 
-    private async Task UpdateHistory(ExecutionContext context, SqlConnection connection, ExportHistory exportHistory)
+    private static async Task UpdateHistory(ExecutionContext context, SqlConnection connection, ExportHistory exportHistory)
     {
         var tableName = GetExportHistoryTableName(exportHistory.StreamId);
         var insertSql = $"""
@@ -591,7 +590,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
     }
 
-    private async Task<bool> HasExported(
+    private static async Task<bool> HasExported(
         ExecutionContext context,
         SqlConnection connection,
         Guid streamId,
@@ -637,7 +636,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
     }
 
-    private async Task EnsureHistoryTableExists(SqlConnection connection, Guid streamId)
+    private static async Task EnsureHistoryTableExists(SqlConnection connection, Guid streamId)
     {
         var tableName = GetExportHistoryTableName(streamId);
         var createTableSql = $"""
