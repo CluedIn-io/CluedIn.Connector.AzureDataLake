@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
-using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
 using Microsoft.Extensions.Logging;
@@ -53,17 +52,18 @@ internal class DataLakeScheduler : Scheduler
                 return;
             }
 
-            var jobCronSchedule = await GetCronScheduleAsync(executionContext, stream);
-            if (IsExportJobDisabled(jobCronSchedule))
+            var jobSchedule = await _dataLakeJobDataFactory.GetScheduleAsync(executionContext, stream);
+            if (IsExportJobDisabled(jobSchedule))
             {
                 _logger.LogDebug("Stream {StreamId} is disabled. Removing it from scheduler '{SchedulerName}'.", stream.Id, _schedulerName);
                 removeExportJob(jobKey);
                 return;
             }
 
+            _logger.LogDebug("Enable export for stream {StreamId} using schedule '{Schedule}'.", stream.Id, jobSchedule.CronSchedule);
             var streamStartFrom = stream.ModifiedAt ?? stream.CreatedAt;
             var startFrom = definition.CreatedDate.HasValue && definition.CreatedDate > streamStartFrom ? definition.CreatedDate.Value : streamStartFrom;
-            var job = new QueuedJob(jobKey, stream.OrganizationId, _exportEntitiesJobType, jobCronSchedule, startFrom);
+            var job = new QueuedJob(jobKey, stream.OrganizationId, _exportEntitiesJobType, jobSchedule, startFrom);
             jobQueue.AddOrUpdateJob(job);
         }
 
@@ -94,28 +94,8 @@ internal class DataLakeScheduler : Scheduler
         }
     }
 
-    private static bool IsExportJobDisabled(string jobCronSchedule)
+    private static bool IsExportJobDisabled(Schedule schedule)
     {
-        return jobCronSchedule == CronSchedules.NeverCron;
-    }
-
-    private async Task<string> GetCronScheduleAsync(ExecutionContext context, StreamModel stream)
-    {
-        var configurations = await _dataLakeJobDataFactory.GetConfiguration(
-            context,
-            stream.ConnectorProviderDefinitionId.Value,
-            stream.ContainerName);
-
-        if (configurations.IsStreamCacheEnabled
-            && stream.Status == StreamStatus.Started
-            && CronSchedules.TryGetCronSchedule(configurations.Schedule, out var retrievedSchedule))
-        {
-            context.Log.LogDebug("Enable export for stream {StreamId} using schedule '{Schedule}'.", stream.Id, retrievedSchedule);
-            return retrievedSchedule;
-        }
-
-        context.Log.LogDebug("Disable export for stream {StreamId} that has schedule '{Schedule}'.", stream.Id, configurations.Schedule);
-
-        return CronSchedules.NeverCron;
+        return schedule.IsNeverCron;
     }
 }
