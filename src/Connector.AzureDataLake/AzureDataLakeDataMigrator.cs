@@ -1,9 +1,6 @@
 ﻿using System;
-using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
-
-using Castle.Core;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Core;

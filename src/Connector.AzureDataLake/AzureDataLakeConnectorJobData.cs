@@ -46,7 +46,6 @@ internal class AzureDataLakeConnectorJobData : DataLakeJobData
             FileSystemName == other.FileSystemName &&
             DirectoryName == other.DirectoryName &&
             base.Equals(other);
-            
     }
 
     public override int GetHashCode()
