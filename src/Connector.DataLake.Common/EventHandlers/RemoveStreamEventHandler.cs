@@ -2,16 +2,19 @@
 using System.Threading.Tasks;
 
 using CluedIn.Core;
+using CluedIn.Core.Events;
 using CluedIn.Core.Events.Types;
+
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.DataLake.Common.EventHandlers;
 
-internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDisposable
+internal class RemoveStreamEventHandler : UpdateStreamScheduleBase, IDisposable
 {
     private readonly IDisposable _subscription;
     private bool _disposedValue;
 
-    public ChangeStreamStateEventHandler(
+    public RemoveStreamEventHandler(
         ApplicationContext applicationContext,
         IDataLakeConstants constants,
         IDataLakeJobDataFactory jobDataFactory,
@@ -26,7 +29,7 @@ internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDispos
             exportEntitiesJobType,
             jobQueue)
     {
-        _subscription = ApplicationContext.System.Events.Local.Subscribe<ChangeStreamStateEvent>(ProcessEvent);
+        _subscription = ApplicationContext.System.Events.Local.Subscribe<RemoveStreamEvent>(ProcessEvent);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -42,14 +45,22 @@ internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDispos
         }
     }
 
-    private void ProcessEvent(ChangeStreamStateEvent eventData)
+    private void ProcessEvent(RemoveStreamEvent eventData)
     {
-        ProcessEventAsync(eventData).GetAwaiter().GetResult();
-    }
+        if (!TryGetResourceInfo(eventData, "AccountId", "StreamId", out var organizationId, out var streamId))
+        {
+            return;
+        }
 
-    private async Task ProcessEventAsync(ChangeStreamStateEvent eventData)
-    {
-        await UpdateStreamScheduleFromStreamEvent(eventData);
+        var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
+        if (JobQueue.TryRemove(streamId.ToString(), out _))
+        {
+            executionContext.Log.LogWarning("Removed job {StreamId} from queue.", streamId);
+        }
+        else
+        {
+            executionContext.Log.LogWarning("Failed to remove job {StreamId} from queue.", streamId);
+        }
     }
 
     public void Dispose()

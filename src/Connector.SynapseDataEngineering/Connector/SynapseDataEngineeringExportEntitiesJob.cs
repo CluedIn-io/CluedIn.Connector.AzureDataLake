@@ -19,7 +19,7 @@ internal class SynapseDataEngineeringExportEntitiesJob : DataLakeExportEntitiesJ
     {
     }
 
-    protected override string GetDefaultOutputFileName(Guid streamId, string containerName, DateTime asOfTime, string outputFormat)
+    protected override string GetDefaultOutputFileName(Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
     {
         var fileExtension = GetFileExtension(outputFormat);
         return $"{streamId:N}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";

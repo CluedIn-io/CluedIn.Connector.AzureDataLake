@@ -8,7 +8,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 
 internal interface ISqlDataWriter
 {
-    Task WriteAsync(
+    Task<long> WriteAsync(
         ExecutionContext context,
         IDataLakeJobData configuration,
         Stream outputStream,
