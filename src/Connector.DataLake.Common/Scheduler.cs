@@ -96,15 +96,20 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
             null);
         _ = _jobMap.AddOrUpdate(job.Key, schedulerJob, (_, existingJob) =>
         {
+            var latestStartFromTime = getLatestStartFromTime(schedulerJob, existingJob);
             if (existingJob.CronSchedule == schedulerJob.CronSchedule)
             {
                 _logger.LogDebug("Job {JobKey} of scheduler '{SchedulerName}' is has same cron schedule, not updating next run time.", job.Key, _schedulerName);
-                var latestStartFromTime = job.StartFromTime > existingJob.StartFromTime ? job.StartFromTime : existingJob.StartFromTime;
                 return existingJob with { StartFromTime = latestStartFromTime };
             }
 
             _logger.LogDebug("Job {JobKey} of scheduler '{SchedulerName}' is has different cron schedule, updating next run time.", job.Key, _schedulerName);
-            return schedulerJob;
+            return schedulerJob with { StartFromTime = latestStartFromTime };
+
+            static DateTimeOffset getLatestStartFromTime(SchedulerQueuedJob schedulerJob, SchedulerQueuedJob existingJob)
+            {
+                return schedulerJob.StartFromTime > existingJob.StartFromTime ? schedulerJob.StartFromTime : existingJob.StartFromTime;
+            }
         });
     }
 
