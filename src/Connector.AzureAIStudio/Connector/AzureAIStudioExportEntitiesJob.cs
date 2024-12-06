@@ -18,10 +18,4 @@ internal class AzureAIStudioExportEntitiesJob : DataLakeExportEntitiesJobBase
         : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
-
-    protected override string GetDefaultOutputFileName(Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
-    {
-        var fileExtension = GetFileExtension(outputFormat);
-        return $"{streamId:N}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
-    }
 }

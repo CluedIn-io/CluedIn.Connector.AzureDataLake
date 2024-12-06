@@ -337,8 +337,6 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
             azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
             azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
-            azureDataLakeConstantsMock.Setup(x => x.EnableCustomCronKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.EnableCustomCronDefaultValue).Returns(false);
             azureDataLakeConstantsMock.Setup(x => x.ProviderId).Returns(AzureDataLakeConstants.DataLakeProviderId);
             return azureDataLakeConstantsMock;
         }

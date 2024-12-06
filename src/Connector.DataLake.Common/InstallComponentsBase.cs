@@ -3,6 +3,7 @@ using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 
 using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Core.Providers.ExtendedConfiguration;
 
 
 namespace CluedIn.Connector.DataLake.Common;
@@ -22,5 +23,6 @@ internal abstract class InstallComponentsBase : IWindsorInstaller
         container.Register(Component.For<TClient>().ImplementedBy<TClient>().OnlyNewServices());
         container.Register(Component.For<TIConstants>().ImplementedBy<TConstants>().LifestyleSingleton());
         container.Register(Component.For<TJobDataFactory>().ImplementedBy<TJobDataFactory>().LifestyleSingleton());
+        container.Register(Component.For<IExtendedConfigurationProvider>().ImplementedBy<DataLakeExtendedConfigurationProvider>().LifestyleSingleton().OnlyNewServices());
     }
 }

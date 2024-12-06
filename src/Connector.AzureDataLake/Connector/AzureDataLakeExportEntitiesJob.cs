@@ -16,4 +16,6 @@ internal class AzureDataLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
         : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
+
+    protected override string StreamIdDefaultStringFormat => "D";
 }

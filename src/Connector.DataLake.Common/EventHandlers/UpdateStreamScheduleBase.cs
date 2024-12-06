@@ -1,16 +1,14 @@
 ﻿using System;
-using System.IO;
 using System.Threading.Tasks;
+
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
-using CluedIn.Core.Accounts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Events;
 using CluedIn.Core.Jobs;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json.Linq;
@@ -106,15 +104,17 @@ internal abstract class UpdateStreamScheduleBase
 
         UpdateJobServerClientSchedule(stream);
 
-        var cronSchedule = await GetCronScheduleAsync(executionContext, stream);
+        var schedule = await JobDataFactory.GetScheduleAsync(executionContext, stream);
         var jobKey = stream.Id.ToString();
-        if (cronSchedule == CronSchedules.NeverCron)
+        if (schedule.IsNeverCron)
         {
+            executionContext.Log.LogDebug("Disable export for stream {StreamId} that has schedule '{Schedule}'.", stream.Id, schedule.CronSchedule);
             _ = JobQueue.TryRemove(jobKey, out var _);
         }
         else
         {
-            var queuedJob = new QueuedJob(jobKey, executionContext.Organization.Id, ExportEntitiesJobType, cronSchedule, DateTimeOffsetProvider.GetCurrentUtcTime());
+            executionContext.Log.LogDebug("Enable export for stream {StreamId} using schedule '{Schedule}'.", stream.Id, schedule.CronSchedule);
+            var queuedJob = new QueuedJob(jobKey, executionContext.Organization.Id, ExportEntitiesJobType, schedule, DateTimeOffsetProvider.GetCurrentUtcTime());
             JobQueue.AddOrUpdateJob(queuedJob);
         }
     }
@@ -142,23 +142,5 @@ internal abstract class UpdateStreamScheduleBase
         }
 
         return provider.ProviderId == Constants.ProviderId;
-    }
-
-    private async Task<string> GetCronScheduleAsync(ExecutionContext context, StreamModel stream)
-    {
-        var containerName = stream.ContainerName;
-        var providerDefinitionId = stream.ConnectorProviderDefinitionId.Value;
-        var configurations = await JobDataFactory.GetConfiguration(context, providerDefinitionId, containerName);
-        if (configurations.IsStreamCacheEnabled
-            && stream.Status == StreamStatus.Started
-            && CronSchedules.TryGetCronSchedule(configurations.Schedule, out var retrievedSchedule))
-        {
-            context.Log.LogDebug("Enable export for stream {StreamId} using schedule '{Schedule}'.", stream.Id, retrievedSchedule);
-            return retrievedSchedule;
-        }
-
-        context.Log.LogDebug("Disable export for stream {StreamId} that has schedule '{Schedule}'.", stream.Id, configurations.Schedule);
-
-        return CronSchedules.NeverCron;
     }
 }

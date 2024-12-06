@@ -10,7 +10,10 @@ internal class DataLakeJobArgs : JobArgs, IDataLakeJobArgs
     {
     }
 
-    public DataLakeJobArgs(JobArgs jobArgs, bool isTriggeredFromJobServer, DateTimeOffset instanceTime)
+    public DataLakeJobArgs(
+        JobArgs jobArgs,
+        bool isTriggeredFromJobServer,
+        DateTimeOffset instanceTime)
         : base(jobArgs)
     {
         IsTriggeredFromJobServer = isTriggeredFromJobServer;

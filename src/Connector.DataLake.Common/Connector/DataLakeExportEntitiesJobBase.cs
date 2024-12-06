@@ -47,6 +47,8 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
+    protected virtual string StreamIdDefaultStringFormat => "N";
+
     public override async Task DoRunAsync(ExecutionContext context, IDataLakeJobArgs args)
     {
         var typeName = GetType().Name;
@@ -390,7 +392,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return GetOutputFileNameUsingPattern(configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
         }
 
-        return GetDefaultOutputFileName(streamId, containerName, asOfTime, outputFormat);
+        return GetDefaultOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
     }
 
     private static bool HasCustomFileNamePattern(IDataLakeJobData configuration)
@@ -398,11 +400,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return !string.IsNullOrWhiteSpace(configuration.FileNamePattern);
     }
 
-    protected virtual string GetDefaultOutputFileName(Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    protected virtual string GetDefaultOutputFileName(IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
     {
         var fileExtension = GetFileExtension(outputFormat);
-        var outputFileName = $"{streamId}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
-        return outputFileName;
+        var streamIdFormatted = streamId.ToString(StreamIdDefaultStringFormat);
+
+        return $"{streamIdFormatted}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
     }
 
     private static string GetOutputFileNameUsingPattern(string outputFileNamePattern, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
