@@ -1,19 +1,15 @@
-﻿using Castle.MicroKernel.Registration;
-using Castle.MicroKernel.SubSystems.Configuration;
+﻿using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 
 using CluedIn.Connector.AzureAIStudio.Connector;
+using CluedIn.Connector.DataLake.Common;
 
-namespace CluedIn.Connector.AzureAIStudio
+namespace CluedIn.Connector.AzureAIStudio;
+
+internal class InstallComponents : InstallComponentsBase
 {
-    internal class InstallComponents : IWindsorInstaller
+    public override void Install(IWindsorContainer container, IConfigurationStore store)
     {
-        public void Install(IWindsorContainer container, IConfigurationStore store)
-        {
-            container.Register(Component.For<AzureAIStudioExportEntitiesJob>().ImplementedBy<AzureAIStudioExportEntitiesJob>().OnlyNewServices());
-            container.Register(Component.For<AzureAIStudioClient>().ImplementedBy<AzureAIStudioClient>().OnlyNewServices());
-            container.Register(Component.For<IAzureAIStudioConstants>().ImplementedBy<AzureAIStudioConstants>().LifestyleSingleton());
-            container.Register(Component.For<AzureAIStudioJobDataFactory>().ImplementedBy<AzureAIStudioJobDataFactory>().LifestyleSingleton());
-        }
+        DefaultInstall<AzureAIStudioExportEntitiesJob, AzureAIStudioClient, IAzureAIStudioConstants, AzureAIStudioConstants, AzureAIStudioJobDataFactory>(container, store);
     }
 }
