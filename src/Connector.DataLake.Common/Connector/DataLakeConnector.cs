@@ -30,6 +30,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private readonly IDataLakeClient _client;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
+        private readonly bool _enableCustomCron;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
@@ -65,6 +66,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
+            _enableCustomCron = ConfigurationManagerEx.AppSettings.GetValue(constants.EnableCustomCronKeyName, constants.EnableCustomCronDefaultValue);
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
 
@@ -221,7 +223,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 await WriteToCacheTable(connection, syncItem, tableName);
                 transactionScope.Complete();
             }
-            catch (SqlException writeDataException) when (GetIsTableNotFoundException(writeDataException))
+            catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
             {
                 try
                 {
@@ -259,7 +261,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         private Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string tableName)
         {
-            var typeName = this.GetType().Name;
+            var typeName = GetType().Name;
             return DistributedLockHelper.TryAcquireExclusiveLock(
                 connection,
                 $"{typeName}_{tableName}",
@@ -291,15 +293,15 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 var insertOrUpdateSql = $"""
                         IF EXISTS (
                             SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
-                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})  
-                        BEGIN  
-                            UPDATE [{tableName}]   
+                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})
+                        BEGIN
+                            UPDATE [{tableName}]
                             SET
-                                {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}  
-                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};  
-                        END  
-                        ELSE  
-                        BEGIN  
+                                {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}
+                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};
+                        END
+                        ELSE
+                        BEGIN
                             INSERT INTO [{tableName}] ({DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
                             VALUES(@{DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
                         END
@@ -327,11 +329,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private static List<string> GetPropertyKeysWithoutId(SyncItem syncItem)
         {
             return syncItem.Data.Keys.Except(new[] { DataLakeConstants.IdKey }).OrderBy(key => key).ToList();
-        }
-
-        private static bool GetIsTableNotFoundException(SqlException ex)
-        {
-            return ex.Number == 208;
         }
 
         private static string GetCacheTableName(Guid streamId, bool isTestTable = false)
@@ -455,10 +452,17 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     return new ConnectionVerificationResult(false, errorMessage);
                 }
 
-                if (!DataLakeConstants.JobScheduleNames.IsValid(jobData.Schedule))
+                if (!_enableCustomCron && !CronSchedules.IsSupportedScheduleName(jobData.Schedule))
                 {
-                    var supported = string.Join(',', DataLakeConstants.JobScheduleNames.SupportedSchedules);
+                    var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
                     var errorMessage = $"Format '{jobData.Schedule}' is not supported. Supported schedules are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
+                if (!CronSchedules.TryGetCronSchedule(jobData.Schedule, out _))
+                {
+                    var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
+                    var errorMessage = $"Cron '{jobData.Schedule}' is not supported. Supported schedules are {supported} and valid cron.";
                     return new ConnectionVerificationResult(false, errorMessage);
                 }
 
@@ -509,7 +513,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Changed });
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Removed });
                 await RenameCacheTableIfExists(connection, testTableName);
-
             }
             catch (Exception ex)
             {
@@ -553,7 +556,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             _client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
         }
-        
+
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
             await Task.CompletedTask;
@@ -657,19 +660,19 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 END
 
                 WHILE EXISTS(
-                    SELECT [CONSTRAINT_NAME] 
-                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
-                    WHERE 
-                        [TABLE_NAME] = @NewTableName 
-                        AND 
+                    SELECT [CONSTRAINT_NAME]
+                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                    WHERE
+                        [TABLE_NAME] = @NewTableName
+                        AND
                         NOT [CONSTRAINT_NAME] LIKE '%' + @ArchiveSuffix)
                 BEGIN
                     DECLARE @ConstraintName SYSNAME;
-                    SELECT TOP 1 @ConstraintName = [CONSTRAINT_NAME] 
-                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
-                    WHERE 
+                    SELECT TOP 1 @ConstraintName = [CONSTRAINT_NAME]
+                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                    WHERE
                         [TABLE_NAME] = @NewTableName
-                        AND 
+                        AND
                         NOT [CONSTRAINT_NAME] LIKE '%' + @ArchiveSuffix;
 
                     DECLARE @FullConstraintName SYSNAME = @Schema + '.' + @ConstraintName;

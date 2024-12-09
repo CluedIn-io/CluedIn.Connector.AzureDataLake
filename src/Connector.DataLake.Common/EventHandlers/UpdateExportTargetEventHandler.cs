@@ -1,22 +1,35 @@
 ﻿using System;
 using System.Threading.Tasks;
+
 using CluedIn.Core;
+using CluedIn.Core.Events;
 using CluedIn.Core.Events.Types;
 using CluedIn.Core.Streams;
+
 using Newtonsoft.Json.Linq;
 
 namespace CluedIn.Connector.DataLake.Common.EventHandlers;
 
 internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDisposable
 {
+    private const int StreamsPerPage = 100;
     private readonly IDisposable _subscription;
     private bool _disposedValue;
 
     public UpdateExportTargetEventHandler(
         ApplicationContext applicationContext,
         IDataLakeConstants constants,
-        Type exportEntitiesJobType)
-        : base(applicationContext, constants, exportEntitiesJobType)
+        IDataLakeJobDataFactory jobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider,
+        Type exportEntitiesJobType,
+        IScheduledJobQueue jobQueue)
+        : base(
+            applicationContext,
+            constants,
+            jobDataFactory,
+            dateTimeOffsetProvider,
+            exportEntitiesJobType,
+            jobQueue)
     {
         _subscription = ApplicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
     }
@@ -29,31 +42,14 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
 
     private async Task ProcessEventAsync(UpdateExportTargetEvent eventData)
     {
-        if (!(eventData.EventData?.StartsWith("{") ?? false))
+        if (!TryGetResourceInfo(eventData, "AccountId", "Id", out var organizationId, out var providerDefinitionId))
         {
             return;
         }
 
-        var eventObject = JsonUtility.Deserialize<JObject>(eventData.EventData);
-        if (!eventObject.TryGetValue("AccountId", out var accountIdToken))
-        {
-            return;
-        }
-
-        if (!eventObject.TryGetValue("Id", out var idToken))
-        {
-            return;
-        }
-
-        var accountId = accountIdToken.Value<string>();
-        var providerDefinitionIdString = idToken.Value<string>();
-        var providerDefinitionId = new Guid(providerDefinitionIdString);
-
-        var organizationId = new Guid(accountId);
         var streamRepository = ApplicationContext.Container.Resolve<IStreamRepository>();
-
         var streamsCount = await streamRepository.GetOrganizationStreamsCount(organizationId);
-        var streamsPerPage = 100;
+        var streamsPerPage = StreamsPerPage;
         var totalPages = (streamsCount + streamsPerPage - 1) / streamsPerPage;
 
         var executionContext = ApplicationContext.CreateExecutionContext(organizationId);

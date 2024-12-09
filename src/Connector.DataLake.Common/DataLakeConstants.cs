@@ -24,7 +24,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
 
     internal static class OutputFormats
     {
-        private static readonly HashSet<string> _SupportedFormats = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> _supportedFormats = new(StringComparer.OrdinalIgnoreCase)
         {
             Csv,
             Json,
@@ -35,42 +35,12 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
         public const string Json = "json";
         public const string Parquet = "parquet";
 
-        public static ICollection<string> SupportedFormats => _SupportedFormats;
+        public static ICollection<string> SupportedFormats => _supportedFormats;
         public static bool IsValid(string format)
         {
-            return _SupportedFormats.Contains(format);
+            return _supportedFormats.Contains(format);
         }
     }
-
-    internal static class JobScheduleNames
-    {
-        private static readonly HashSet<string> _SupportedSchedules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            Hourly,
-            Daily,
-            Weekly,
-        };
-
-        public const string Hourly = "Hourly";
-        public const string Daily = "Daily";
-        public const string Weekly = "Weekly";
-        public const string Never = "Never";
-
-        public static ICollection<string> SupportedSchedules => _SupportedSchedules;
-
-        public static bool IsValid(string schedule)
-        {
-            return _SupportedSchedules.Contains(schedule);
-        }
-    }
-
-    internal static readonly Dictionary<string, string> CronSchedules = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [JobScheduleNames.Hourly] = "0 0/1 * * *",
-        [JobScheduleNames.Daily] = "0 0 1-31 * *",
-        [JobScheduleNames.Weekly] = "0 0 1-31 * 1",
-        [JobScheduleNames.Never] = "0 5 31 2 *",
-    };
 
     protected DataLakeConstants(
         Guid providerId,
@@ -109,6 +79,10 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     /// Default value for Cache records threshold
     /// </summary>
     public int CacheRecordsThresholdDefaultValue => 50;
+
+    public string EnableCustomCronKeyName => $"Streams.{CacheKeyword}.Scheduling.CustomCron.Enabled";
+
+    public bool EnableCustomCronDefaultValue => false;
 
     protected abstract string CacheKeyword { get; }
 
