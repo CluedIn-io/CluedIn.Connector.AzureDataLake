@@ -11,4 +11,5 @@ public interface IDataLakeJobData
     string Schedule { get; }
     bool ShouldWriteGuidAsString { get; }
     bool ShouldEscapeVocabularyKeys { get; }
+    string CustomCron { get; }
 }

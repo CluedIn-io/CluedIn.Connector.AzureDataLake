@@ -6,5 +6,11 @@ internal record QueuedJob(
     string Key,
     Guid OrganizationId,
     Type Type,
-    string CronSchedule,
+    Schedule Schedule,
     DateTimeOffset StartFromTime);
+
+
+internal record Schedule(string CronSchedule)
+{
+    public bool IsNeverCron => CronSchedule == CronSchedules.NeverCron;
+}

@@ -21,11 +21,12 @@ internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob, IDataLak
 
     protected override void DoRun(ExecutionContext context, JobArgs args)
     {
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var asOfTime = args.Schedule == CronSchedules.NeverCron || !CronSchedules.TryGetCronSchedule(args.Schedule, out _)
-            ? _dateTimeOffsetProvider.GetCurrentUtcTime()
-            : CronSchedules.GetPreviousOccurrence(args.Schedule, _dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(1));
+            ? now
+            : CronSchedules.GetPreviousOccurrence(args.Schedule, now.AddSeconds(-1));
 
-        DoRunAsync(context, new DataLakeJobArgs(args, isTriggeredFromJobServer: true, asOfTime)).GetAwaiter().GetResult();
+        DoRunAsync(context, new DataLakeJobArgs(args, isTriggeredFromJobServer: true, asOfTime ?? now)).GetAwaiter().GetResult();
     }
 
     public abstract Task DoRunAsync(ExecutionContext context, IDataLakeJobArgs args);

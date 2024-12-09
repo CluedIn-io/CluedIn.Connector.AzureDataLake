@@ -30,7 +30,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private readonly IDataLakeClient _client;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
-        private readonly bool _enableCustomCron;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
@@ -66,7 +65,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
-            _enableCustomCron = ConfigurationManagerEx.AppSettings.GetValue(constants.EnableCustomCronKeyName, constants.EnableCustomCronDefaultValue);
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
 
@@ -452,17 +450,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     return new ConnectionVerificationResult(false, errorMessage);
                 }
 
-                if (!_enableCustomCron && !CronSchedules.IsSupportedScheduleName(jobData.Schedule))
+                if (!CronSchedules.TryGetCronSchedule(jobData.GetCronOrScheduleName(), out _))
                 {
                     var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
-                    var errorMessage = $"Format '{jobData.Schedule}' is not supported. Supported schedules are {supported}.";
-                    return new ConnectionVerificationResult(false, errorMessage);
-                }
-
-                if (!CronSchedules.TryGetCronSchedule(jobData.Schedule, out _))
-                {
-                    var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
-                    var errorMessage = $"Cron '{jobData.Schedule}' is not supported. Supported schedules are {supported} and valid cron.";
+                    var errorMessage = $"Schedule '{jobData.Schedule}' with cron '{jobData.CustomCron}' is not supported. Supported schedules are {supported} and valid cron expression.";
                     return new ConnectionVerificationResult(false, errorMessage);
                 }
 

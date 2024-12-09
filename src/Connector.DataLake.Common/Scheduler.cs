@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
+using CluedIn.Core.Jobs;
 
 using Microsoft.Extensions.Logging;
 
@@ -85,19 +86,20 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
 
     void IScheduledJobQueue.AddOrUpdateJob(QueuedJob job)
     {
-        var jobNextRunTime = CronSchedules.GetNextOccurrence(job.CronSchedule, _iterationTime.AddSeconds(1));
+        var jobNextRunTime = CronSchedules.GetNextOccurrence(job.Schedule.CronSchedule, _iterationTime.AddSeconds(1));
         var schedulerJob = new SchedulerQueuedJob(
             job.Key,
             job.OrganizationId,
             job.Type,
-            job.CronSchedule,
+            job.Schedule,
             job.StartFromTime,
             jobNextRunTime,
             null);
+
         _ = _jobMap.AddOrUpdate(job.Key, schedulerJob, (_, existingJob) =>
         {
             var latestStartFromTime = getLatestStartFromTime(schedulerJob, existingJob);
-            if (existingJob.CronSchedule == schedulerJob.CronSchedule)
+            if (existingJob.Schedule == schedulerJob.Schedule)
             {
                 _logger.LogDebug("Job {JobKey} of scheduler '{SchedulerName}' is has same cron schedule, not updating next run time.", job.Key, _schedulerName);
                 return existingJob with { StartFromTime = latestStartFromTime };
@@ -144,21 +146,21 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
         foreach (var jobDataKvp in _jobMap)
         {
             var jobData = jobDataKvp.Value;
-            var previousRunTime = CronSchedules.GetPreviousOccurrence(jobData.CronSchedule, jobData.NextRunTime.AddSeconds(-1));
+            var previousRunTime = CronSchedules.GetPreviousOccurrence(jobData.Schedule.CronSchedule, jobData.NextRunTime.AddSeconds(-1));
 
             var executionContext = _applicationContext.CreateExecutionContext(jobData.OrganizationId);
             var jobInstance = CreateJobInstance(jobData.Type);
 
-            var previousRunTimeArg = CreateDataLakeJobArgs(jobData, previousRunTime);
+            var previousRunTimeArg = previousRunTime == null ? null : CreateDataLakeJobArgs(jobData, previousRunTime.Value);
 
             // LastSuccessfulRunTime is only saved when HasMissed = false
-            var shouldRerun = jobData.LastSuccessfulRunTime != previousRunTime && jobData.StartFromTime < previousRunTime
+            var shouldRerun = previousRunTime != null && jobData.LastSuccessfulRunTime != previousRunTime && jobData.StartFromTime < previousRunTime
                 ? await jobInstance.HasMissed(executionContext, previousRunTimeArg)
                 : false;
 
             if (!shouldRerun)
             {
-                saveLastSuccessfulRunTime(jobData, previousRunTime);
+                saveLastSuccessfulRunTime(jobData, previousRunTime ?? _dateTimeOffsetProvider.GetCurrentUtcTime());
             }
 
             var nextRunTimeReached = jobData.NextRunTime <= _iterationTime;
@@ -169,7 +171,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
                     jobData.Key,
                     _schedulerName,
                     jobData.NextRunTime,
-                    jobData.CronSchedule);
+                    jobData.Schedule.CronSchedule);
                 continue;
             }
 
@@ -186,7 +188,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
                             jobData.Key,
                             _schedulerName,
                             previousRunTime,
-                            jobData.CronSchedule);
+                            jobData.Schedule.CronSchedule);
                         await jobInstance.DoRunAsync(executionContext, previousRunTimeArg);
                     }
 
@@ -230,7 +232,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
         return new DataLakeJobArgs
         {
             Message = jobData.Key,
-            Schedule = jobData.CronSchedule,
+            Schedule = jobData.Schedule.CronSchedule,
             IsTriggeredFromJobServer = false,
             InstanceTime = previousRunTime,
         };
@@ -250,7 +252,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
     {
         foreach (var jobData in executedJobData)
         {
-            var nextJobTime = CronSchedules.GetNextOccurrence(jobData.CronSchedule, _iterationTime.AddSeconds(1));
+            var nextJobTime = CronSchedules.GetNextOccurrence(jobData.Schedule.CronSchedule, _iterationTime.AddSeconds(1));
 
             var newJobData = jobData with { NextRunTime = nextJobTime };
             var result = _jobMap.AddOrUpdate(newJobData.Key, newJobData, (_, _) => newJobData);
@@ -266,7 +268,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
         string Key,
         Guid OrganizationId,
         Type Type,
-        string CronSchedule,
+        Schedule Schedule,
         DateTimeOffset StartFromTime,
         DateTimeOffset NextRunTime,
         DateTimeOffset? LastSuccessfulRunTime)
@@ -274,6 +276,6 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
             Key,
             OrganizationId,
             Type,
-            CronSchedule,
+            Schedule,
             StartFromTime);
 }
