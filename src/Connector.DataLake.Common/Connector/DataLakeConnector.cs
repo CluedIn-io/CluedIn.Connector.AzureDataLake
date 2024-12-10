@@ -434,27 +434,34 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     }
 
                     await VerifyTableOperations(jobData.StreamCacheConnectionString);
-                }
-                else
-                {
-                    if (!DataLakeConstants.OutputFormats.Json.Equals(jobData.OutputFormat, StringComparison.OrdinalIgnoreCase))
+
+                    if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
                     {
-                        return new ConnectionVerificationResult(false, $"Only JSON is supported when stream cache is disabled.");
+                        var supported = string.Join(',', DataLakeConstants.OutputFormats.SupportedFormats);
+                        var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
+                        return new ConnectionVerificationResult(false, errorMessage);
                     }
-                }
 
-                if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
-                {
-                    var supported = string.Join(',', DataLakeConstants.OutputFormats.SupportedFormats);
-                    var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
-                    return new ConnectionVerificationResult(false, errorMessage);
-                }
+                    if (!CronSchedules.TryGetCronSchedule(jobData.GetCronOrScheduleName(), out _))
+                    {
+                        var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
+                        var errorMessage = $"Schedule '{jobData.Schedule}' with cron '{jobData.CustomCron}' is not supported. Supported schedules are {supported} and valid cron expression.";
+                        return new ConnectionVerificationResult(false, errorMessage);
+                    }
 
-                if (!CronSchedules.TryGetCronSchedule(jobData.GetCronOrScheduleName(), out _))
-                {
-                    var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
-                    var errorMessage = $"Schedule '{jobData.Schedule}' with cron '{jobData.CustomCron}' is not supported. Supported schedules are {supported} and valid cron expression.";
-                    return new ConnectionVerificationResult(false, errorMessage);
+                    if (!string.IsNullOrWhiteSpace(jobData.FileNamePattern))
+                    {
+                        var trimmed = jobData.FileNamePattern.Trim();
+                        var  invalidCharacters = new[] { '/', '\\', '?', '%' };
+                        if (trimmed.StartsWith("."))
+                        {
+                            return new ConnectionVerificationResult(false, "File name pattern cannot start with a period.");
+                        }
+                        else if (trimmed.IndexOfAny(invalidCharacters) != -1)
+                        {
+                            return new ConnectionVerificationResult(false, "File name contains invalid characters.");
+                        }
+                    }
                 }
 
                 return new ConnectionVerificationResult(true);
