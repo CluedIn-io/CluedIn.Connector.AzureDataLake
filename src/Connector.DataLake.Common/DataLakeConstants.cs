@@ -164,7 +164,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                 DisplayName = "Custom Cron",
                 Type = "input",
                 Help = utcExportHelpText,
-                IsRequired = true,
+                IsRequired = false,
                 DataDependencies = new[]
                 {
                     new ControlDataDependency
