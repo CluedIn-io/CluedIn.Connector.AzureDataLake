@@ -90,6 +90,33 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return await dataLakeFileClient.ExistsAsync();
         }
 
+        public async Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName)
+        {
+            var serviceClient = GetDataLakeServiceClient(configuration);
+            var fileSystemName = GetFileSystemName(configuration);
+            var fileSystemClient = serviceClient.GetFileSystemClient(fileSystemName);
+
+            if (!await fileSystemClient.ExistsAsync())
+            {
+                return null;
+            }
+
+            var directory = GetDirectory(configuration);
+            var directoryClient = fileSystemClient.GetDirectoryClient(directory);
+            if (!await directoryClient.ExistsAsync())
+            {
+                return null;
+            }
+
+            var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+            if (!await dataLakeFileClient.ExistsAsync())
+            {
+                return null;
+            }
+
+            return await dataLakeFileClient.GetPropertiesAsync();
+        }
+
         private async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(
             IDataLakeJobData configuration)
         {

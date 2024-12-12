@@ -14,62 +14,34 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     public const string StreamCacheConnectionString = nameof(StreamCacheConnectionString);
     public const string Schedule = nameof(Schedule);
     public const string UseCurrentTimeForExport = nameof(UseCurrentTimeForExport);
+    public const string FileNamePattern = nameof(FileNamePattern);
     public const string ShouldWriteGuidAsString = nameof(ShouldWriteGuidAsString);
     public const string ShouldEscapeVocabularyKeys = nameof(ShouldEscapeVocabularyKeys);
+    public const string CustomCron = nameof(CustomCron);
 
     public const string IdKey = "Id";
     public const string StreamCacheConnectionStringKey = "StreamCache";
-
+    public const string CustomCronScheduleName = "CustomCron";
 
     internal static class OutputFormats
     {
-        private static readonly HashSet<string> _SupportedFormats = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> _supportedFormats = new(StringComparer.OrdinalIgnoreCase)
         {
             Csv,
             Json,
             Parquet,
         };
 
-        public const string Csv = "csv";
-        public const string Json = "json";
-        public const string Parquet = "parquet";
+        public const string Csv = "CSV";
+        public const string Json = "JSON";
+        public const string Parquet = "Parquet";
 
-        public static ICollection<string> SupportedFormats => _SupportedFormats;
+        public static ICollection<string> SupportedFormats => _supportedFormats;
         public static bool IsValid(string format)
         {
-            return _SupportedFormats.Contains(format);
+            return _supportedFormats.Contains(format);
         }
     }
-
-    internal static class JobScheduleNames
-    {
-        private static readonly HashSet<string> _SupportedSchedules = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            Hourly,
-            Daily,
-            Weekly,
-        };
-
-        public const string Hourly = "Hourly";
-        public const string Daily = "Daily";
-        public const string Weekly = "Weekly";
-        public const string Never = "Never";
-
-        public static ICollection<string> SupportedSchedules => _SupportedSchedules;
-
-        public static bool IsValid(string schedule)
-        {
-            return _SupportedSchedules.Contains(schedule);
-        }
-    }
-
-    internal static readonly Dictionary<string, string> CronSchedules = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [JobScheduleNames.Hourly] = "0 0/1 * * *",
-        [JobScheduleNames.Daily] = "0 0 1-31 * *",
-        [JobScheduleNames.Weekly] = "0 0 1-31 * 1",
-        [JobScheduleNames.Never] = "0 5 31 2 *",
-    };
 
     protected DataLakeConstants(
         Guid providerId,
@@ -109,6 +81,10 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     /// </summary>
     public int CacheRecordsThresholdDefaultValue => 50;
 
+    public string EnableCustomCronKeyName => $"Streams.{CacheKeyword}.Scheduling.CustomCron.Enabled";
+
+    public bool EnableCustomCronDefaultValue => false;
+
     protected abstract string CacheKeyword { get; }
 
     protected static IEnumerable<Control> GetAuthMethods(ApplicationContext applicationContext)
@@ -118,21 +94,34 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
         {
             connectionString = applicationContext.System.ConnectionStrings.GetConnectionString(StreamCacheConnectionStringKey);
         }
+
+        var utcExportHelpText = $"Files will be exported using {TimeZoneInfo.Utc.Id} time zone (offset {TimeZoneInfo.Utc.BaseUtcOffset:hh\\:mm})";
         var controls = new List<Control>
         {
             new ()
             {
-                name = IsStreamCacheEnabled,
-                displayName = "Enable Stream Cache (Sync mode only)",
-                type = "checkbox",
-                isRequired = false,
+                Name = IsStreamCacheEnabled,
+                DisplayName = "Enable Stream Cache (Sync mode only)",
+                Type = "checkbox",
+                IsRequired = false,
             },
             new ()
             {
-                name = OutputFormat,
-                displayName = "Output Format. JSON/Parquet/CSV (Parquet & CSV only when stream cache is enabled)",
-                type = "input",
-                isRequired = true,
+                Name = OutputFormat,
+                DisplayName = "Output Format",
+                Type = "option",
+                IsRequired = true,
+                SourceType = ControlSourceType.Dynamic,
+                Source = DataLakeExtendedConfigurationProvider.SourceName,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
             },
         };
 
@@ -141,21 +130,88 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
             controls.Add(
                 new ()
                 {
-                    name = StreamCacheConnectionString,
-                    displayName = "Stream Cache Connection String (SQL Server)",
-                    type = "password",
-                    isRequired = false,
+                    Name = StreamCacheConnectionString,
+                    DisplayName = "Stream Cache Connection String (SQL Server)",
+                    Type = "password",
+                    IsRequired = false,
                 });
         }
 
         controls.Add(
             new ()
             {
-                name = Schedule,
-                displayName = $"Schedule (Hourly/Daily/Weekly)",
-                type = "input",
-                isRequired = true,
+                Name = Schedule,
+                DisplayName = "Export Schedule",
+                Type = "option",
+                Help = utcExportHelpText,
+                IsRequired = true,
+                SourceType = ControlSourceType.Dynamic,
+                Source = DataLakeExtendedConfigurationProvider.SourceName,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
             });
+        controls.Add(
+            new()
+            {
+                Name = CustomCron,
+                DisplayName = "Custom Cron",
+                Type = "input",
+                Help = utcExportHelpText,
+                IsRequired = true,
+                DataDependencies = new[]
+                {
+                    new ControlDataDependency
+                    {
+                        Name = Schedule,
+                    },
+                },
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                    new ControlDisplayDependency
+                    {
+                        Name = Schedule,
+                        Operator = ControlDependencyOperator.Equals,
+                        Value = CustomCronScheduleName,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
+            });
+        controls.Add(
+            new()
+            {
+                Name = FileNamePattern,
+                DisplayName = "File Name Pattern",
+                Type = "input",
+                Help = """
+                       Specify a file name pattern for the export file, e.g. {StreamId}_{DataTime}.{OutputFormat}.
+                       Available variables are {StreamId}, {DataTime}, {OutputFormat} and {ContainerName}.
+                       Variables can also be formatted using formatString modifier. For more information, please refer to the documentation.
+                       """,
+                IsRequired = false,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
+            });
+
         return controls;
     }
 }

@@ -1,12 +1,8 @@
-using System.Threading.Tasks;
-
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.OneLake.Connector;
 using CluedIn.Core;
 
 using ComponentHost;
-
-using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake;
 
@@ -23,26 +19,12 @@ public sealed class OneLakeConnectorComponent : DataLakeConnectorComponentBase
     /// <summary>Starts this instance.</summary>
     public override void Start()
     {
-        var dataLakeConstants = Container.Resolve<IOneLakeConstants>();
-        var jobDataFactory = Container.Resolve<OneLakeJobDataFactory>();
-        var exportEntitiesJobType = typeof(OneLakeExportEntitiesJob);
-        SubscribeToEvents(dataLakeConstants, exportEntitiesJobType);
-        _ = Task.Run(() => RunScheduler(dataLakeConstants, jobDataFactory, exportEntitiesJobType));
-
-        Log.LogInformation($"{ComponentName} Registered");
-        State = ServiceState.Started;
-    }
-
-    /// <summary>Stops this instance.</summary>
-    public override void Stop()
-    {
-        if (State == ServiceState.Stopped)
-        {
-            return;
-        }
-
-        State = ServiceState.Stopped;
+        DefaultStartInternal<IOneLakeConstants, OneLakeJobDataFactory, OneLakeExportEntitiesJob>();
     }
 
     public const string ComponentName = "OneLake";
+
+    protected override string ConnectorComponentName => ComponentName;
+
+    protected override string ShortConnectorComponentName => ComponentName;
 }

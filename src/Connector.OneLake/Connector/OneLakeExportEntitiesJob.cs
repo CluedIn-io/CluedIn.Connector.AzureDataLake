@@ -13,14 +13,9 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
         IStreamRepository streamRepository,
         OneLakeClient dataLakeClient,
         IOneLakeConstants dataLakeConstants,
-        OneLakeJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        OneLakeJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
-    }
-
-    protected override string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
-    {
-        var fileExtension = GetFileExtension(outputFormat);
-        return $"{streamId:N}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
     }
 }

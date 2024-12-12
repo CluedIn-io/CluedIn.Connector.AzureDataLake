@@ -7,9 +7,20 @@ namespace CluedIn.Connector.DataLake.Common.Connector;
 
 internal class DistributedLockHelper
 {
-    internal static async Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string resourceName, int timeOutInMilliseconds)
+    internal static async Task<bool> TryAcquireExclusiveLock(SqlConnection connection, string resourceName, int timeOutInMilliseconds)
     {
         using var lockCommand = new SqlCommand("sp_getapplock", connection);
+        return await TryAcquireExclusiveLock(lockCommand, resourceName, timeOutInMilliseconds);
+    }
+
+    internal static async Task<bool> TryAcquireExclusiveLock(SqlTransaction transaction, string resourceName, int timeOutInMilliseconds)
+    {
+        using var lockCommand = new SqlCommand("sp_getapplock", transaction.Connection, transaction);
+        return await TryAcquireExclusiveLock(lockCommand, resourceName, timeOutInMilliseconds);
+    }
+
+    private static async Task<bool> TryAcquireExclusiveLock(SqlCommand lockCommand, string resourceName, int timeOutInMilliseconds)
+    {
         lockCommand.CommandType = CommandType.StoredProcedure;
         lockCommand.Parameters.Add(new SqlParameter("@Resource", SqlDbType.NVarChar, 255) { Value = resourceName });
         lockCommand.Parameters.Add(new SqlParameter("@LockMode", SqlDbType.NVarChar, 32) { Value = "Exclusive" });

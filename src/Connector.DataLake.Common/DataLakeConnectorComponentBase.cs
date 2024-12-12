@@ -1,196 +1,83 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
+
 using CluedIn.Connector.DataLake.Common.EventHandlers;
 using CluedIn.Core;
-using CluedIn.Core.Accounts;
-using CluedIn.Core.Jobs;
+using CluedIn.Core.DataStore.Entities;
 using CluedIn.Core.Server;
-using CluedIn.Core.Streams;
-using CluedIn.Core.Streams.Models;
 
 using ComponentHost;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.DataLake.Common;
 
 public abstract class DataLakeConnectorComponentBase : ServiceApplicationComponent<IServer>
 {
-    private UpdateExportTargetEventHandler _updateExportTargetHandler;
-    private ChangeStreamStateEventHandler _changeStreamStateEvent;
-    private UpdateStreamEventHandler _updateStreamEvent;
-
-    private static readonly NCrontab.CrontabSchedule _schedulerCron = NCrontab.CrontabSchedule.Parse("* * * * *");
-    private static readonly TimeSpan _initialSchedulerDelay = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan _delayAfterError = TimeSpan.FromMinutes(1);
+    private UpdateExportTargetEventHandler _updateExportTargetEventHandler;
+    private ChangeStreamStateEventHandler _changeStreamStateEventHandler;
+    private UpdateStreamEventHandler _updateStreamEventHandler;
+    private RemoveStreamEventHandler _removeStreamEventHandler;
 
     protected DataLakeConnectorComponentBase(ComponentInfo componentInfo) : base(componentInfo)
     {
     }
 
-    protected void SubscribeToEvents(IDataLakeConstants constants, Type exportEntitiesJobType)
+    protected abstract string ConnectorComponentName { get; }
+    protected abstract string ShortConnectorComponentName { get; }
+    protected Type ExportEntitiesJobType { get; set; }
+
+    protected virtual void DefaultStartInternal<TDataLakeConstants, TDataLakeJobFactory, TDataLakeExportJob>()
+        where TDataLakeConstants : IDataLakeConstants
+        where TDataLakeJobFactory : IDataLakeJobDataFactory
+        where TDataLakeExportJob : IDataLakeJob
     {
-        _updateExportTargetHandler = new(ApplicationContext, constants, exportEntitiesJobType);
-        _changeStreamStateEvent = new(ApplicationContext, constants, exportEntitiesJobType);
-        _updateStreamEvent = new(ApplicationContext, constants, exportEntitiesJobType);
+        ExportEntitiesJobType = typeof(TDataLakeExportJob);
+
+        var dataLakeConstants = Container.Resolve<TDataLakeConstants>();
+        var jobDataFactory = Container.Resolve<TDataLakeJobFactory>();
+        var dateTimeOffsetProvider = Container.Resolve<IDateTimeOffsetProvider>();
+
+        var migrator = GetDataMigrator(dataLakeConstants, jobDataFactory);
+        _ = Task.Run(migrator.MigrateAsync);
+
+        var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, dateTimeOffsetProvider);
+        _ = Task.Run(scheduler.RunAsync);
+
+        SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
+
+        Log.LogInformation($"{ConnectorComponentName} Registered");
+        State = ServiceState.Started;
     }
 
-    protected async Task RunScheduler(IDataLakeConstants dataLakeConstants, IDataLakeJobDataFactory dataLakeJobDataFactory, Type jobType)
+    /// <summary>Stops this instance.</summary>
+    public override void Stop()
     {
-        Log.LogDebug("Waiting for {InitialDelay} before starting scheduler.", _initialSchedulerDelay);
-        await Task.Delay(_initialSchedulerDelay);
-
-        var next = DateTime.UtcNow;
-
-        var jobMap = new ConcurrentDictionary<Guid, JobData>();
-        while (true)
+        if (State == ServiceState.Stopped)
         {
-            Log.LogDebug($"Scheduler begin scheduling.");
-
-            try
-            {
-                await Schedule(next, jobMap, dataLakeConstants, dataLakeJobDataFactory, jobType);
-                next = _schedulerCron.GetNextOccurrence(DateTime.UtcNow.AddSeconds(1));
-                Log.LogDebug("Scheduler completed scheduling. Next run at {NextRunTime}.", next);
-                var delayToNextSchedule = next - DateTime.UtcNow;
-                if (delayToNextSchedule.TotalSeconds > 0)
-                {
-                    await Task.Delay(delayToNextSchedule);
-                }
-            }
-            catch(Exception ex)
-            {
-                Log.LogError(ex, "Error occurred when scheduling. Waiting {DelayAfterError} before next schedule run.", _delayAfterError);
-                await Task.Delay(_delayAfterError);
-            }
+            return;
         }
+
+        State = ServiceState.Stopped;
     }
 
-    protected async Task Schedule(DateTime next, ConcurrentDictionary<Guid, JobData> jobMap, IDataLakeConstants dataLakeConstants, IDataLakeJobDataFactory dataLakeJobDataFactory, Type jobType)
+    private protected void SubscribeToEvents(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory, IScheduledJobQueue jobQueue)
     {
-        var streamRepository = Container.Resolve<IStreamRepository>();
-        var streams = streamRepository.GetAllStreams().ToList();
-
-        var organizationIds = streams.Select(s => s.OrganizationId).Distinct().ToArray();
-
-        foreach (var orgId in organizationIds)
-        {
-            var org = new Organization(ApplicationContext, orgId);
-            var executionContext = ApplicationContext.CreateExecutionContext(orgId);
-
-            foreach (var provider in org.Providers.AllProviderDefinitions.Where(x =>
-                         x.ProviderId == dataLakeConstants.ProviderId))
-            {
-                foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))
-                {
-                    if (stream.Mode != StreamMode.Sync)
-                    {
-                        Log.LogDebug("Stream {StreamId} is not in {Mode} mode. Skipping", stream.Id, StreamMode.Sync);
-                        continue;
-                    }
-
-                    var jobCronSchedule = await GetCronSchedule(executionContext, stream, dataLakeJobDataFactory);
-                    if (jobCronSchedule == DataLakeConstants.CronSchedules[DataLakeConstants.JobScheduleNames.Never])
-                    {
-                        Log.LogDebug("Stream export for stream {StreamId} is disabled.", stream.Id);
-                        _ = jobMap.TryRemove(stream.Id, out _);
-                        continue;
-                    }
-
-                    var jobSchedule = NCrontab.CrontabSchedule.Parse(jobCronSchedule);
-                    var nextJobTime = jobSchedule.GetNextOccurrence(next.AddSeconds(1));
-                    var job = new JobData(jobType, stream.OrganizationId, stream.Id, jobCronSchedule, nextJobTime);
-                    jobMap.AddOrUpdate(stream.Id, job, (_, existingJob) =>
-                    {
-                        if (existingJob.CronSchedule == job.CronSchedule)
-                        {
-                            Log.LogDebug("Stream {StreamId} is has same cron schedule, not updating next run time", stream.Id);
-                            return existingJob;
-                        }
-
-                        Log.LogDebug("Stream {StreamId} is has different cron schedule, updating next run time", stream.Id);
-                        return job;
-                    });
-                }
-            }
-        }
-
-        Log.LogDebug("Scheduler found {TotalJobs} jobs.", jobMap.Count);
-
-        var executedJobData = new List<JobData>();
-        foreach (var jobDataKvp in jobMap)
-        {
-            var jobData = jobDataKvp.Value;
-            if (jobData.NextRunTime > next)
-            {
-                Log.LogDebug("Job '{JobType}' for Stream {StreamId} is not supposed to run now. Next run time at {JobNextRunTime} based on {CronSchedule} cron.",
-                    jobData.Type,
-                    jobData.StreamId,
-                    jobData.NextRunTime,
-                    jobData.CronSchedule);
-                continue;
-            }
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var jobInstance = Container.Resolve(jobData.Type) as DataLakeJobBase;
-                    if (jobInstance == null)
-                    {
-                        throw new ApplicationException($"Job {jobData.Type} is not of type {typeof(DataLakeJobBase)}.");
-                    }
-                    var executionContext = ApplicationContext.CreateExecutionContext(jobData.OrganizationId);
-                    await jobInstance.DoRunAsync(executionContext, new DataLakeJobArgs
-                    {
-                        Message = jobData.StreamId.ToString(),
-                        Schedule = jobData.CronSchedule,
-                        IsTriggeredFromJobServer = false,
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Log.LogError(ex, "Error when executing job.");
-                }
-            });
-            executedJobData.Add(jobData);
-        }
-
-        foreach (var jobData in executedJobData)
-        {
-            var jobCronSchedule = NCrontab.CrontabSchedule.Parse(jobData.CronSchedule);
-            var nextJobTime = jobCronSchedule.GetNextOccurrence(next.AddSeconds(1));
-
-            var newJobData = jobData with { NextRunTime = nextJobTime };
-            var result = jobMap.AddOrUpdate(newJobData.StreamId, newJobData, (_, _) => newJobData);
-
-            if (result != newJobData)
-            {
-                Log.LogWarning("Scheduler failed to update job next run time for stream {StreamId}.", jobData.StreamId);
-            }
-        }
+        var dateTimeProvider = Container.Resolve<IDateTimeOffsetProvider>();
+        _updateExportTargetEventHandler = new(ApplicationContext, constants, jobDataFactory, dateTimeProvider, ExportEntitiesJobType, jobQueue);
+        _changeStreamStateEventHandler = new(ApplicationContext, constants, jobDataFactory, dateTimeProvider, ExportEntitiesJobType, jobQueue);
+        _updateStreamEventHandler = new(ApplicationContext, constants, jobDataFactory, dateTimeProvider, ExportEntitiesJobType, jobQueue);
+        _removeStreamEventHandler = new(ApplicationContext, constants, jobDataFactory, dateTimeProvider, ExportEntitiesJobType, jobQueue);
     }
 
-    private static async Task<string> GetCronSchedule(ExecutionContext context, StreamModel stream, IDataLakeJobDataFactory dataLakeJobDataFactory)
+    private protected virtual IDataMigrator GetDataMigrator(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory)
     {
-        var containerName = stream.ContainerName;
-        var providerDefinitionId = stream.ConnectorProviderDefinitionId.Value;
-        var configurations = await dataLakeJobDataFactory.GetConfiguration(context, providerDefinitionId, containerName);
-        if (configurations.IsStreamCacheEnabled
-            && stream.Status == StreamStatus.Started
-            && DataLakeConstants.CronSchedules.TryGetValue(configurations.Schedule, out var retrievedSchedule))
-        {
-            context.Log.LogDebug("Enable export for stream {StreamId} using schedule '{Schedule}'.", stream.Id, retrievedSchedule);
-            return retrievedSchedule;
-        }
-
-        context.Log.LogDebug("Disable export for stream {StreamId} that has schedule '{Schedule}'.", stream.Id, configurations.Schedule);
-
-        return DataLakeConstants.CronSchedules[DataLakeConstants.JobScheduleNames.Never];
+        return new DataLakeDataMigrator(Log, ApplicationContext, Container.Resolve<DbContextOptions<CluedInEntities>>(), ShortConnectorComponentName, constants, jobDataFactory);
     }
 
-    protected record JobData(Type Type, Guid OrganizationId, Guid StreamId, string CronSchedule, DateTime NextRunTime);
+    private protected virtual IScheduler GetScheduler(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory, IDateTimeOffsetProvider dateTimeOffsetProvider)
+    {
+        return new DataLakeScheduler(Log, ShortConnectorComponentName, ApplicationContext, dateTimeOffsetProvider, constants, jobDataFactory, ExportEntitiesJobType);
+    }
 }

@@ -1,14 +1,17 @@
-﻿using CluedIn.Core;
-using CluedIn.Core.Jobs;
-
+﻿using System;
 using System.Threading.Tasks;
+
+using CluedIn.Core;
+using CluedIn.Core.Jobs;
 
 namespace CluedIn.Connector.DataLake.Common;
 
-internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob
+internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob, IDataLakeJob
 {
-    protected DataLakeJobBase(ApplicationContext appContext) : base(appContext, JobType.CustomScheduledJob)
+    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    protected DataLakeJobBase(ApplicationContext appContext, IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext, JobType.CustomScheduledJob)
     {
+        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
     protected override ExecutionContext CreateExecutionContext(ExecutionContext systemContext, JobArgs args)
@@ -18,10 +21,17 @@ internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob
 
     protected override void DoRun(ExecutionContext context, JobArgs args)
     {
-        DoRunAsync(context, new DataLakeJobArgs(args, isTriggeredFromJobServer: true)).GetAwaiter().GetResult();
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var asOfTime = args.Schedule == CronSchedules.NeverCron || !CronSchedules.TryGetCronSchedule(args.Schedule, out _)
+            ? now
+            : CronSchedules.GetPreviousOccurrence(args.Schedule, now.AddSeconds(-1));
+
+        DoRunAsync(context, new DataLakeJobArgs(args, isTriggeredFromJobServer: true, asOfTime ?? now)).GetAwaiter().GetResult();
     }
 
-    public abstract Task DoRunAsync(ExecutionContext context, DataLakeJobArgs args);
+    public abstract Task DoRunAsync(ExecutionContext context, IDataLakeJobArgs args);
+
+    public abstract Task<bool> HasMissed(ExecutionContext context, IDataLakeJobArgs args);
 
     /// <summary>
     /// Register and schedule current job for recurrent run.

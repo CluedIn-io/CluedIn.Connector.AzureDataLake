@@ -1,4 +1,6 @@
-﻿using CluedIn.Connector.DataLake.Common.Connector;
+﻿using System;
+
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
@@ -11,8 +13,9 @@ internal class SynapseDataEngineeringExportEntitiesJob : DataLakeExportEntitiesJ
         IStreamRepository streamRepository,
         SynapseDataEngineeringClient dataLakeClient,
         ISynapseDataEngineeringConstants dataLakeConstants,
-        SynapseDataEngineeringJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        SynapseDataEngineeringJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 }

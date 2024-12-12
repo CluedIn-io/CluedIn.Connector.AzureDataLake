@@ -1,5 +1,5 @@
 ﻿using System;
-
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
@@ -13,14 +13,9 @@ internal class AzureAIStudioExportEntitiesJob : DataLakeExportEntitiesJobBase
         IStreamRepository streamRepository,
         AzureAIStudioClient dataLakeClient,
         IAzureAIStudioConstants dataLakeConstants,
-        AzureAIStudioJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        AzureAIStudioJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
-    }
-
-    protected override string GetOutputFileName(Guid streamId, DateTime asOfTime, string outputFormat)
-    {
-        var fileExtension = GetFileExtension(outputFormat);
-        return $"{streamId:N}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
     }
 }

@@ -1,6 +1,6 @@
 ﻿using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Core;
 
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureAIStudio.Connector;
@@ -12,8 +12,8 @@ public class AzureAIStudioConnector : DataLakeConnector
         AzureAIStudioClient client,
         IAzureAIStudioConstants constants,
         AzureAIStudioJobDataFactory dataLakeJobDataFactory,
-        ISystemClock systemClock)
-        : base(logger, client, constants, dataLakeJobDataFactory, systemClock)
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 }

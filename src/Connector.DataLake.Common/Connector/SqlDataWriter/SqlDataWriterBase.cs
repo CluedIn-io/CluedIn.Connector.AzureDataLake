@@ -24,7 +24,7 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
         return value;
     }
 
-    public async Task WriteAsync(
+    public async Task<long> WriteAsync(
         ExecutionContext context,
         IDataLakeJobData configuration,
         Stream outputStream,
@@ -35,7 +35,9 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
 
         var totalProcessed = await WriteOutputAsync(context, configuration, outputStream, fieldNames, reader);
         context.Log.LogInformation("End writing output. Total processed: {TotalProcessed}.", totalProcessed);
+        return totalProcessed;
     }
+
     public abstract Task<long> WriteOutputAsync(
         ExecutionContext context,
         IDataLakeJobData configuration,

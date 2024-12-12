@@ -13,7 +13,6 @@ using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json;
@@ -29,7 +28,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private const int TableCreationLockTimeoutInMillliseconds = 100;
         private readonly ILogger<DataLakeConnector> _logger;
         private readonly IDataLakeClient _client;
-        private readonly ISystemClock _systemClock;
+        private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
@@ -58,12 +57,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             IDataLakeClient client,
             IDataLakeConstants constants,
             IDataLakeJobDataFactory dataLakeJobDataFactory,
-            ISystemClock systemClock)
+            IDateTimeOffsetProvider dateTimeOffsetProvider)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
             _client = client;
-            _systemClock = systemClock;
+            _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
@@ -120,12 +119,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             if (!data.ContainsKey("Timestamp"))
             {
-                AddToData("Timestamp", _systemClock.UtcNow.ToString("O"));
+                AddToData("Timestamp", _dateTimeOffsetProvider.GetCurrentUtcTime().ToString("O"));
             }
 
             if (!data.ContainsKey("Epoch"))
             {
-                AddToData("Epoch", _systemClock.UtcNow.ToUnixTimeMilliseconds());
+                AddToData("Epoch", _dateTimeOffsetProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds());
             }
 
             // end match previous version of the connector
@@ -222,7 +221,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 await WriteToCacheTable(connection, syncItem, tableName);
                 transactionScope.Complete();
             }
-            catch (SqlException writeDataException) when (GetIsTableNotFoundException(writeDataException))
+            catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
             {
                 try
                 {
@@ -260,8 +259,8 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         private Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string tableName)
         {
-            var typeName = this.GetType().Name;
-            return DistributedLockHelper.TryAcquireTableCreationLock(
+            var typeName = GetType().Name;
+            return DistributedLockHelper.TryAcquireExclusiveLock(
                 connection,
                 $"{typeName}_{tableName}",
                 TableCreationLockTimeoutInMillliseconds);
@@ -292,15 +291,15 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 var insertOrUpdateSql = $"""
                         IF EXISTS (
                             SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
-                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})  
-                        BEGIN  
-                            UPDATE [{tableName}]   
+                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})
+                        BEGIN
+                            UPDATE [{tableName}]
                             SET
-                                {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}  
-                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};  
-                        END  
-                        ELSE  
-                        BEGIN  
+                                {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}
+                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};
+                        END
+                        ELSE
+                        BEGIN
                             INSERT INTO [{tableName}] ({DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
                             VALUES(@{DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
                         END
@@ -328,11 +327,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private static List<string> GetPropertyKeysWithoutId(SyncItem syncItem)
         {
             return syncItem.Data.Keys.Except(new[] { DataLakeConstants.IdKey }).OrderBy(key => key).ToList();
-        }
-
-        private static bool GetIsTableNotFoundException(SqlException ex)
-        {
-            return ex.Number == 208;
         }
 
         private static string GetCacheTableName(Guid streamId, bool isTestTable = false)
@@ -440,27 +434,34 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     }
 
                     await VerifyTableOperations(jobData.StreamCacheConnectionString);
-                }
-                else
-                {
-                    if (!DataLakeConstants.OutputFormats.Json.Equals(jobData.OutputFormat, StringComparison.OrdinalIgnoreCase))
+
+                    if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
                     {
-                        return new ConnectionVerificationResult(false, $"Only JSON is supported when stream cache is disabled.");
+                        var supported = string.Join(',', DataLakeConstants.OutputFormats.SupportedFormats);
+                        var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
+                        return new ConnectionVerificationResult(false, errorMessage);
                     }
-                }
 
-                if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
-                {
-                    var supported = string.Join(',', DataLakeConstants.OutputFormats.SupportedFormats);
-                    var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
-                    return new ConnectionVerificationResult(false, errorMessage);
-                }
+                    if (!CronSchedules.TryGetCronSchedule(jobData.GetCronOrScheduleName(), out _))
+                    {
+                        var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
+                        var errorMessage = $"Schedule '{jobData.Schedule}' with cron '{jobData.CustomCron}' is not supported. Supported schedules are {supported} and valid cron expression.";
+                        return new ConnectionVerificationResult(false, errorMessage);
+                    }
 
-                if (!DataLakeConstants.JobScheduleNames.IsValid(jobData.Schedule))
-                {
-                    var supported = string.Join(',', DataLakeConstants.JobScheduleNames.SupportedSchedules);
-                    var errorMessage = $"Format '{jobData.Schedule}' is not supported. Supported schedules are {supported}.";
-                    return new ConnectionVerificationResult(false, errorMessage);
+                    if (!string.IsNullOrWhiteSpace(jobData.FileNamePattern))
+                    {
+                        var trimmed = jobData.FileNamePattern.Trim();
+                        var  invalidCharacters = new[] { '/', '\\', '?', '%' };
+                        if (trimmed.StartsWith("."))
+                        {
+                            return new ConnectionVerificationResult(false, "File name pattern cannot start with a period.");
+                        }
+                        else if (trimmed.IndexOfAny(invalidCharacters) != -1)
+                        {
+                            return new ConnectionVerificationResult(false, "File name contains invalid characters.");
+                        }
+                    }
                 }
 
                 return new ConnectionVerificationResult(true);
@@ -496,7 +497,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 await using var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync();
 
-                if (!await DistributedLockHelper.TryAcquireTableCreationLock(connection, nameof(VerifyConnection), -1))
+                if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, nameof(VerifyConnection), -1))
                 {
                     throw new ApplicationException("Failed to acquire lock for verifying connection.");
                 }
@@ -510,7 +511,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Changed });
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Removed });
                 await RenameCacheTableIfExists(connection, testTableName);
-
             }
             catch (Exception ex)
             {
@@ -554,7 +554,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             _client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
         }
-        
+
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
         {
             await Task.CompletedTask;
@@ -658,19 +658,19 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 END
 
                 WHILE EXISTS(
-                    SELECT [CONSTRAINT_NAME] 
-                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
-                    WHERE 
-                        [TABLE_NAME] = @NewTableName 
-                        AND 
+                    SELECT [CONSTRAINT_NAME]
+                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                    WHERE
+                        [TABLE_NAME] = @NewTableName
+                        AND
                         NOT [CONSTRAINT_NAME] LIKE '%' + @ArchiveSuffix)
                 BEGIN
                     DECLARE @ConstraintName SYSNAME;
-                    SELECT TOP 1 @ConstraintName = [CONSTRAINT_NAME] 
-                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
-                    WHERE 
+                    SELECT TOP 1 @ConstraintName = [CONSTRAINT_NAME]
+                    FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                    WHERE
                         [TABLE_NAME] = @NewTableName
-                        AND 
+                        AND
                         NOT [CONSTRAINT_NAME] LIKE '%' + @ArchiveSuffix;
 
                     DECLARE @FullConstraintName SYSNAME = @Schema + '.' + @ConstraintName;

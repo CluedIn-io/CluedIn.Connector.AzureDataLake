@@ -1,4 +1,6 @@
-﻿using CluedIn.Connector.DataLake.Common.Connector;
+﻿using System;
+
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
@@ -11,8 +13,9 @@ internal class AzureDatabricksExportEntitiesJob : DataLakeExportEntitiesJobBase
         IStreamRepository streamRepository,
         AzureDatabricksClient dataLakeClient,
         IAzureDatabricksConstants dataLakeConstants,
-        AzureDatabricksJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        AzureDatabricksJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 }

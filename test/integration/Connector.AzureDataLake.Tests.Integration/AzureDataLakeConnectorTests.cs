@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.IO;
+using System.IO.Enumeration;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -35,8 +36,8 @@ using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 using Moq;
-
-using ParquetSharp;
+using Newtonsoft.Json;
+using Parquet;
 
 using Xunit;
 using Xunit.Abstractions;
@@ -50,6 +51,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
     public class AzureDataLakeConnectorTests
     {
         private readonly ITestOutputHelper _testOutputHelper;
+        private static readonly DateTimeOffset DefaultCurrentTime = new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5));
 
         public AzureDataLakeConnectorTests(ITestOutputHelper testOutputHelper)
         {
@@ -64,8 +66,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var container = new WindsorContainer();
 
-            var mockClock = new Mock<ISystemClock>();
-            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5)));
+            var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
+            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5)));
 
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
@@ -81,11 +83,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var context = new ExecutionContext(applicationContext, organization, logger);
 
-            var azureDataLakeConstantsMock = new Mock<IAzureDataLakeConstants>();
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
+            var azureDataLakeConstantsMock = CreateConstantsMock();
 
             var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
@@ -110,10 +108,10 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 new AzureDataLakeClient(),
                 azureDataLakeConstantsMock.Object,
                 jobDataFactory.Object,
-                mockClock.Object
+                mockDateTimeOffsetProvider.Object
             );
 
-            jobDataFactory.Setup(x => x.GetConfiguration(context, providerDefinitionId, It.IsAny<string>()  ))
+            jobDataFactory.Setup(x => x.GetConfiguration(context, providerDefinitionId, It.IsAny<string>()))
                 .ReturnsAsync(new AzureDataLakeConnectorJobData(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
             connectorMock.CallBase = true;
 
@@ -332,6 +330,17 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             }
         }
 
+        private static Mock<IAzureDataLakeConstants> CreateConstantsMock()
+        {
+            var azureDataLakeConstantsMock = new Mock<IAzureDataLakeConstants>();
+            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
+            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
+            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
+            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
+            azureDataLakeConstantsMock.Setup(x => x.ProviderId).Returns(AzureDataLakeConstants.DataLakeProviderId);
+            return azureDataLakeConstantsMock;
+        }
+
         [Fact]
         public async void VerifyStoreData_Sync_WithoutStreamCache()
         {
@@ -340,8 +349,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var container = new WindsorContainer();
 
-            var mockClock = new Mock<ISystemClock>();
-            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5)));
+            var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
+            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5)));
 
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
@@ -357,11 +366,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var context = new ExecutionContext(applicationContext, organization, logger);
 
-            var azureDataLakeConstantsMock = new Mock<IAzureDataLakeConstants>();
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
+            var azureDataLakeConstantsMock = CreateConstantsMock();
 
             var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
@@ -386,7 +391,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 new AzureDataLakeClient(),
                 azureDataLakeConstantsMock.Object,
                 jobDataFactory.Object,
-                mockClock.Object
+                mockDateTimeOffsetProvider.Object
             );
 
             jobDataFactory.Setup(x => x.GetConfiguration(context, providerDefinitionId, It.IsAny<string>()))
@@ -626,15 +631,197 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             await VerifyStoreData_Sync_WithStreamCache("pArQuet", AssertParquetResult);
         }
 
-        private async Task VerifyStoreData_Sync_WithStreamCache(string format, Func<DataLakeFileClient, Task> assertMethod)
+        [Fact]
+        public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndSameDataTime_CanSkip()
+        {
+            await VerifyStoreData_Sync_WithStreamCache(
+                "csv",
+                AssertCsvResult,
+                async executeExportArg =>
+                {
+                    var jobArgs = new DataLakeJobArgs
+                    {
+                        OrganizationId = executeExportArg.Organization.Id.ToString(),
+                        Schedule = "0 0/1 * * *",
+                        Message = executeExportArg.StreamId.ToString(),
+                        IsTriggeredFromJobServer = false,
+                    };
+                    await executeExportArg.ExportJob.DoRunAsync(
+                        executeExportArg.ExecutionContext,
+                        jobArgs);
+
+                    var firstPath = await WaitForFileToBeCreated(
+                        executeExportArg.FileSystemName,
+                        executeExportArg.DirectoryName,
+                    executeExportArg.Client);
+
+                    var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+                    await executeExportArg.ExportJob.DoRunAsync(
+                        executeExportArg.ExecutionContext,
+                        jobArgs);
+
+                    var secondPath = await WaitForFileToBeCreated(
+                        executeExportArg.FileSystemName,
+                        executeExportArg.DirectoryName,
+                        executeExportArg.Client);
+                    var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
+
+                    Assert.Equal(firstDataTime, secondDataTime);
+                    return secondPath;
+                });
+        }
+
+        [Fact]
+        public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanOverwrite()
+        {
+            var executionCount = 0;
+            var dateTimeList = new List<DateTimeOffset>
+            {
+                DefaultCurrentTime,
+                new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+            };
+            await VerifyStoreData_Sync_WithStreamCache(
+                "csv",
+                AssertCsvResult,
+                async executeExportArg =>
+                {
+                    var jobArgs = new DataLakeJobArgs
+                    {
+                        OrganizationId = executeExportArg.Organization.Id.ToString(),
+                        Schedule = "0 0 1-31 * *",
+                        Message = executeExportArg.StreamId.ToString(),
+                        IsTriggeredFromJobServer = false,
+                    };
+                    await executeExportArg.ExportJob.DoRunAsync(
+                        executeExportArg.ExecutionContext,
+                        jobArgs);
+
+                    executionCount++;
+
+                    var firstPath = await WaitForFileToBeCreated(
+                        executeExportArg.FileSystemName,
+                        executeExportArg.DirectoryName,
+                    executeExportArg.Client);
+
+                    var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+                    await executeExportArg.ExportJob.DoRunAsync(
+                        executeExportArg.ExecutionContext,
+                        jobArgs);
+
+                    var secondPath = await WaitForFileToBeCreated(
+                        executeExportArg.FileSystemName,
+                        executeExportArg.DirectoryName,
+                        executeExportArg.Client,
+                        paths =>
+                        {
+                            return paths.Where(path => path.Name != firstPath.Name).ToList();
+                        });
+                    var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
+
+                    Assert.NotEqual(firstDataTime, secondDataTime);
+                    return secondPath;
+                },
+                mockDateTimeOffsetProvider =>
+                {
+                    mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                        .Returns(() =>
+                        {
+                            return dateTimeList[executionCount];
+                        });
+                });
+        }
+
+        private static async Task<DateTimeOffset> GetFileDataTime(ExecuteExportArg executeExportArg, PathItem path)
+        {
+            var fsClient = executeExportArg.Client.GetFileSystemClient(executeExportArg.FileSystemName);
+            var dirClient = fsClient.GetDirectoryClient(executeExportArg.DirectoryName);
+            var fileClient = dirClient.GetFileClient(path.Name[(executeExportArg.DirectoryName.Length + 1)..]);
+            var fileProperties = await fileClient.GetPropertiesAsync();
+            var fileMetadata = fileProperties.Value.Metadata;
+            var fileDataTime = fileMetadata["DataTime"];
+
+            return DateTimeOffset.Parse(fileDataTime);
+        }
+
+        [Fact]
+        public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingJobServer_CanCreateNewFile()
+        {
+            var executionCount = 0;
+            var dateTimeList = new List<DateTimeOffset>
+            {
+                DefaultCurrentTime,
+                new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+            };
+            await VerifyStoreData_Sync_WithStreamCache(
+                "csv",
+                AssertCsvResult,
+                async executeExportArg =>
+                {
+                    var jobArgs = new DataLakeJobArgs
+                    {
+                        OrganizationId = executeExportArg.Organization.Id.ToString(),
+                        Schedule = "0 0/1 * * *",
+                        Message = executeExportArg.StreamId.ToString(),
+                        IsTriggeredFromJobServer = false,
+                    };
+                    await executeExportArg.ExportJob.DoRunAsync(
+                        executeExportArg.ExecutionContext,
+                        jobArgs);
+                    executionCount++;
+
+                    var firstPath = await WaitForFileToBeCreated(
+                        executeExportArg.FileSystemName,
+                        executeExportArg.DirectoryName,
+                    executeExportArg.Client);
+
+                    var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+                    await executeExportArg.ExportJob.DoRunAsync(
+                        executeExportArg.ExecutionContext,
+                        jobArgs);
+
+                    var secondPath = await WaitForFileToBeCreated(
+                        executeExportArg.FileSystemName,
+                        executeExportArg.DirectoryName,
+                        executeExportArg.Client,
+                        paths =>
+                        {
+                            return paths.Where(path => path.Name != firstPath.Name).ToList();
+                        });
+                    var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
+
+                    Assert.NotEqual(firstDataTime, secondDataTime);
+                    return secondPath;
+                },
+                mockDateTimeOffsetProvider =>
+                {
+                    mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                        .Returns(() =>
+                        {
+                            return dateTimeList[executionCount];
+                        });
+                });
+        }
+
+        private async Task VerifyStoreData_Sync_WithStreamCache(
+            string format,
+            Func<DataLakeFileClient, Task> assertMethod,
+            Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
+            Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null)
         {
             var organizationId = Guid.NewGuid();
             var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
 
             var container = new WindsorContainer();
 
-            var mockClock = new Mock<ISystemClock>();
-            mockClock.Setup(x => x.UtcNow).Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5)));
+            var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
+            if (configureTimeProvider != null)
+            {
+                configureTimeProvider(mockDateTimeOffsetProvider);
+            }
+            else
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DefaultCurrentTime);
+            }
 
             container.Register(Component.For<ILogger<OrganizationDataStores>>()
                 .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
@@ -688,12 +875,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
             var context = new ExecutionContext(applicationContext, organization, logger);
 
-            var azureDataLakeConstantsMock = new Mock<IAzureDataLakeConstants>();
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
-            azureDataLakeConstantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
-            azureDataLakeConstantsMock.Setup(x => x.ProviderId).Returns(AzureDataLakeConstants.DataLakeProviderId);
+            var azureDataLakeConstantsMock = CreateConstantsMock();
 
             var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
             Assert.NotNull(accountName);
@@ -727,7 +909,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 new AzureDataLakeClient(),
                 azureDataLakeConstantsMock.Object,
                 jobDataFactory.Object,
-                mockClock.Object
+                mockDateTimeOffsetProvider.Object
             );
 
             jobDataFactory.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
@@ -801,10 +983,39 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 await connection.OpenAsync();
                 var tableName = CacheTableHelper.GetCacheTableName(streamId);
 
+                var disableHistorySql = $"""
+                    ALTER TABLE [dbo].[{tableName}] SET (SYSTEM_VERSIONING = OFF);
+                    ALTER TABLE [dbo].[{tableName}] DROP PERIOD FOR SYSTEM_TIME;
+                    """;
+                var alterHistorySql = $"""
+                        UPDATE [dbo].[{tableName}] SET [ValidFrom] = @ValidFrom;
+                        ALTER TABLE [dbo].[{tableName}] ADD PERIOD FOR SYSTEM_TIME ([ValidFrom], [ValidTo]);
+                        ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidFrom] ADD HIDDEN;
+                        ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidTo] ADD HIDDEN;
+                        """;
+                var enableHistorySql = $"ALTER TABLE [dbo].[{tableName}] SET (SYSTEM_VERSIONING = ON (HISTORY_TABLE = [dbo].[{tableName}_History], DATA_CONSISTENCY_CHECK = ON));";
+
+                var disableHistoryCommand = new SqlCommand(disableHistorySql, connection)
+                {
+                    CommandType = CommandType.Text,
+                };
+                await disableHistoryCommand.ExecuteNonQueryAsync();
+                var alterHistoryCommand = new SqlCommand(alterHistorySql, connection)
+                {
+                    CommandType = CommandType.Text,
+                };
+                alterHistoryCommand.Parameters.Add(new SqlParameter("@ValidFrom", mockDateTimeOffsetProvider.Object.GetCurrentUtcTime()));
+                await alterHistoryCommand.ExecuteNonQueryAsync();
+                var enableHistoryCommand = new SqlCommand(enableHistorySql, connection)
+                {
+                    CommandType = CommandType.Text,
+                };
+                await enableHistoryCommand.ExecuteNonQueryAsync();
+
                 var getCountSql = $"SELECT COUNT(*) FROM [{tableName}]";
                 var sqlCommand = new SqlCommand(getCountSql, connection)
                 {
-                    CommandType = CommandType.Text
+                    CommandType = CommandType.Text,
                 };
                 var total = (int)await sqlCommand.ExecuteScalarAsync();
 
@@ -815,16 +1026,20 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                     streamRepository.Object,
                     azureDataLakeClient,
                     azureDataLakeConstantsMock.Object,
-                    jobDataFactory.Object);
-                exportJob.Run(new Core.Jobs.JobArgs
-                {
-                    OrganizationId = organization.Id.ToString(),
-                    Schedule = "* * * * *",
-                    Message = streamId.ToString(),
-                });
+                    jobDataFactory.Object,
+                    mockDateTimeOffsetProvider.Object);
+                var executeExportArg = new ExecuteExportArg(
+                    context,
+                    streamId,
+                    organization,
+                    FileSystemName: fileSystemName,
+                    DirectoryName: directoryName,
+                    client,
+                    exportJob);
 
-
-                var path = await WaitForFileToBeCreated(fileSystemName, directoryName, client);
+                var path = executeExport == null
+                    ? await DefaultExecuteExport(executeExportArg)
+                    : await executeExport(executeExportArg);
                 var fsClient = client.GetFileSystemClient(fileSystemName);
                 var fileClient = fsClient.GetFileClient(path.Name);
 
@@ -837,6 +1052,23 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 await DeleteFileSystem(client, fileSystemName);
                 await DeleteTable(streamId, streamCacheConnectionString);
             }
+        }
+
+        private static async Task<PathItem> DefaultExecuteExport(ExecuteExportArg executeExportArg)
+        {
+            executeExportArg.ExportJob.Run(new Core.Jobs.JobArgs
+            {
+                OrganizationId = executeExportArg.Organization.Id.ToString(),
+                Schedule = "* * * * *",
+                Message = executeExportArg.StreamId.ToString(),
+            });
+
+
+            var path = await WaitForFileToBeCreated(
+                executeExportArg.FileSystemName,
+                executeExportArg.DirectoryName,
+                executeExportArg.Client);
+            return path;
         }
 
         private static async Task DeleteTable(Guid streamId, string streamCacheConnectionString)
@@ -1036,23 +1268,19 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
         {
             using var memoryStream = new MemoryStream();
             await fileClient.ReadToAsync(memoryStream);
-            using var file = new ParquetFileReader(memoryStream);
-
+            using var parquetReader = await ParquetReader.CreateAsync(memoryStream);
             var sb = new StringBuilder();
-            for (var rowGroup = 0; rowGroup < file.FileMetaData.NumRowGroups; ++rowGroup)
+            for (var rowGroup = 0; rowGroup < parquetReader.RowGroupCount; rowGroup++)
             {
-                using var rowGroupReader = file.RowGroup(rowGroup);
-                var groupNumRows = checked((int)rowGroupReader.MetaData.NumRows);
+                using var rowGroupReader = parquetReader.OpenRowGroupReader(rowGroup);
 
-                var totalColumns = rowGroupReader.MetaData.NumColumns;
-
-                for (var column = 0; column <totalColumns; ++column)
+                foreach (var dataField in parquetReader.Schema!.GetDataFields())
                 {
-                    var columnType = rowGroupReader.MetaData.Schema.Column(column).LogicalType.Type;
-                    var columnReader = rowGroupReader.Column(column);
+                    var dataColumn = await rowGroupReader.ReadColumnAsync(dataField);
+                    var columnType = dataColumn.Field.SchemaType;
 
-                    object value = getValue(groupNumRows, columnType, columnReader);
-                    sb.AppendLine($"{rowGroupReader.MetaData.Schema.Column(column).Name} {value}");
+                    var value = getValue(dataColumn);
+                    sb.AppendLine($"{dataField.Name} {value}");
                 }
             }
 
@@ -1064,42 +1292,54 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             ContainerName test
             EntityType /Person
             Epoch 1724192160000
-            IncomingEdges [{"FromReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"1234","Key":"/EntityA#Somewhere:1234","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityA"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
+            IncomingEdges ["EdgeType: /EntityA; From: §C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; To: §C:/EntityA#Somewhere:1234; Properties: 0"]
             Name Jean Luc Picard
             OriginEntityCode /Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0
-            OutgoingEdges [{"FromReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"5678","Key":"/EntityB#Somewhere:5678","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityB"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
+            OutgoingEdges ["EdgeType: /EntityB; From: §C:/EntityB#Somewhere:5678; To: §C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; Properties: 0"]
             PersistHash etypzcezkiehwq8vw4oqog==
             PersistVersion 1
             ProviderDefinitionId c444cda8-d9b5-45cc-a82d-fef28e08d55c
             Timestamp 2024-08-21T03:16:00.0000000+05:00
-            user.age 123
-            user.dobInDateTime 2000-01-02T03:04:05
-            user.dobInDateTimeOffset 2000-01-02T03:04:05+12:34
-            user.lastName Picard
+            user_age 123
+            user_dobInDateTime 2000-01-02T03:04:05
+            user_dobInDateTimeOffset 2000-01-02T03:04:05+12:34
+            user_lastName Picard
 
             """, sb.ToString());
 
-            object getValue(int groupNumRows, LogicalTypeEnum columnType, ColumnReader columnReader)
+            object getValue(Parquet.Data.DataColumn dataColumn)
             {
-                switch (columnType)
+                if (dataColumn.Field.ClrType == typeof(Guid))
+                    return ((Guid[])dataColumn.Data)[0];
+                else if (dataColumn.Field.ClrType == typeof(int))
                 {
-                    case LogicalTypeEnum.Uuid:
-                        return columnReader.LogicalReader<Guid?>().ReadAll(groupNumRows).Single();
-                    case LogicalTypeEnum.Int:
-                        if (columnReader is ColumnReader<int>)
-                        {
-                            return columnReader.LogicalReader<int?>().ReadAll(groupNumRows).Single();
-                        }
-                        return columnReader.LogicalReader<long?>().ReadAll(groupNumRows).Single();
-                    case LogicalTypeEnum.String:
-                        return columnReader.LogicalReader<string>().ReadAll(groupNumRows).Single();
-                    default:
-                        throw new NotSupportedException($"Type {columnType} not supported.");
+                    if (dataColumn.Field.IsNullable)
+                        return ((int?[])dataColumn.Data)[0];
+
+                    return ((int[])dataColumn.Data)[0];
                 }
+                else if (dataColumn.Field.ClrType == typeof(long))
+                {
+                    if (dataColumn.Field.IsNullable)
+                        return ((long?[])dataColumn.Data)[0];
+
+                    return ((long[])dataColumn.Data)[0];
+                }
+                else if (dataColumn.Field.ClrType == typeof(string))
+                {
+                    var value = ((string[])dataColumn.Data);
+
+                    if (dataColumn.Field.IsArray)
+                        return JsonConvert.SerializeObject(value);
+
+                    return value[0];
+                }
+
+                throw new NotSupportedException($"Type {dataColumn.Field.ClrType} not supported.");
             }
         }
 
-        
+
 
         private static async Task WaitForFileToBeDeleted(string fileSystemName, string directoryName, DataLakeServiceClient client, PathItem path)
         {
@@ -1144,7 +1384,11 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             await fsClient.DeleteAsync();
         }
 
-        private static async Task<PathItem> WaitForFileToBeCreated(string fileSystemName, string directoryName, DataLakeServiceClient client)
+        private static async Task<PathItem> WaitForFileToBeCreated(
+            string fileSystemName,
+            string directoryName,
+            DataLakeServiceClient client,
+            Func<IList<PathItem>, IList<PathItem>> filterPaths = null)
         {
             PathItem path;
             var d = DateTime.Now;
@@ -1162,12 +1406,14 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
                 var fsClient = client.GetFileSystemClient(fileSystemName);
 
-                var paths = fsClient.GetPaths(recursive: true)
+                IList<PathItem> paths = fsClient.GetPaths(recursive: true)
                     .Where(p => p.IsDirectory == false)
                     .Where(p => p.Name.Contains(directoryName))
-                    .ToArray();
+                    .ToList();
 
-                if (paths.Length == 0)
+                paths = filterPaths == null ? paths : filterPaths(paths);
+
+                if (paths.Count == 0)
                 {
                     await Task.Delay(1000);
                     continue;
@@ -1182,5 +1428,14 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             }
             return path;
         }
+
+        private record ExecuteExportArg(
+                ExecutionContext ExecutionContext,
+                Guid StreamId,
+                Organization Organization,
+                string FileSystemName,
+                string DirectoryName,
+                DataLakeServiceClient Client,
+                AzureDataLakeExportEntitiesJob ExportJob);
     }
 }

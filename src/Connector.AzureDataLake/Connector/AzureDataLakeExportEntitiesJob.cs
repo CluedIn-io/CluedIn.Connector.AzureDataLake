@@ -11,8 +11,11 @@ internal class AzureDataLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
         IStreamRepository streamRepository,
         AzureDataLakeClient dataLakeClient,
         IAzureDataLakeConstants dataLakeConstants,
-        AzureDataLakeJobDataFactory dataLakeJobDataFactory)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory)
+        AzureDataLakeJobDataFactory dataLakeJobDataFactory,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
+
+    protected override string StreamIdDefaultStringFormat => "D";
 }
