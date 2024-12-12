@@ -185,7 +185,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                         Name = Schedule,
                         Operator = ControlDependencyOperator.Equals,
                         Value = CustomCronScheduleName,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Disabled,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
                     },
                 },
             });
