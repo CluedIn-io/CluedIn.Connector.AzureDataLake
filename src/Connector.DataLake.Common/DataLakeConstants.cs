@@ -176,6 +176,12 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                 {
                     new ControlDisplayDependency
                     {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                    new ControlDisplayDependency
+                    {
                         Name = Schedule,
                         Operator = ControlDependencyOperator.Equals,
                         Value = CustomCronScheduleName,
@@ -195,6 +201,15 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                        Variables can also be formatted using formatString modifier. For more information, please refer to the documentation.
                        """,
                 IsRequired = false,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
             });
 
         return controls;
