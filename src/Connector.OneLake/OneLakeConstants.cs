@@ -39,52 +39,101 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
         {
             new ()
             {
-                name = WorkspaceName,
-                displayName = WorkspaceName,
-                type = "input",
-                isRequired = true
+                Name = WorkspaceName,
+                DisplayName = WorkspaceName,
+                Type = "input",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
-                name = ItemName,
-                displayName = ItemName,
-                type = "input",
-                isRequired = true
+                Name = ItemName,
+                DisplayName = ItemName,
+                Type = "input",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
-                name = ItemType,
-                displayName = ItemType,
-                type = "input",
-                isRequired = true
+                Name = ItemType,
+                DisplayName = ItemType,
+                Type = "input",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
-                name = ItemFolder,
-                displayName = ItemFolder,
-                type = "input",
-                isRequired = true
+                Name = ItemFolder,
+                DisplayName = ItemFolder,
+                Type = "input",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
-                name = ClientId,
-                displayName = ClientId,
-                type = "input",
-                isRequired = true
+                Name = ClientId,
+                DisplayName = ClientId,
+                Type = "input",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
-                name = ClientSecret,
-                displayName = ClientSecret,
-                type = "password",
-                isRequired = true
+                Name = ClientSecret,
+                DisplayName = ClientSecret,
+                Type = "password",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
-                name = TenantId,
-                displayName = TenantId,
-                type = "input",
-                isRequired = true
+                Name = TenantId,
+                DisplayName = TenantId,
+                Type = "input",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
         };
 
@@ -92,7 +141,7 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
 
         return new AuthMethods
         {
-            token = controls
+            Token = controls
         };
     }
 }
