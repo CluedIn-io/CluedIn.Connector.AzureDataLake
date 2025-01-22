@@ -66,6 +66,52 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
         };
 
         controls.AddRange(GetAuthMethods(applicationContext));
+        controls.Add(
+            new()
+            {
+                Name = ShouldEscapeVocabularyKeys,
+                DisplayName = "Replace Non-Alphanumeric Characters in Column Names",
+                Type = "checkbox",
+                IsRequired = false,
+                Help = """
+                    Replaces characters in the column names that are not in this list ('a-z', 'A-Z', '0-9' and '_') with the character '_'.
+                    Enable this if you plan to access the output file in Microsoft Purview.
+                    """,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = OutputFormat,
+                        Operator = ControlDependencyOperator.Equals,
+                        Value = OutputFormats.Parquet.ToLowerInvariant(),
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
+            }
+        );
+        controls.Add(
+            new()
+            {
+                Name = ShouldWriteGuidAsString,
+                DisplayName = "Write Guid as string",
+                Type = "checkbox",
+                IsRequired = false,
+                Help = """
+                    Write Guid values as string instead of byte array.
+                    Enable this if you plan to access the output file in Microsoft Purview.
+                    """,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = OutputFormat,
+                        Operator = ControlDependencyOperator.Equals,
+                        Value = OutputFormats.Parquet.ToLowerInvariant(),
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
+            }
+        );
 
         return new AuthMethods
         {
