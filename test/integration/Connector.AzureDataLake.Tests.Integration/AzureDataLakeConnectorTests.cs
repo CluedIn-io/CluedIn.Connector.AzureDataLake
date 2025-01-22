@@ -15,6 +15,7 @@ using Azure.Storage.Files.DataLake.Models;
 using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
+using CluedIn.Connector.AzureDataLake;
 using CluedIn.Connector.AzureDataLake.Connector;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Core;
@@ -32,6 +33,7 @@ using CluedIn.Core.Streams.Models;
 using CsvHelper.Configuration;
 
 using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient.Server;
 using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
@@ -626,9 +628,22 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
         }
 
         [Fact]
-        public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormat()
+        public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatUnescaped()
         {
-            await VerifyStoreData_Sync_WithStreamCache("pArQuet", AssertParquetResult);
+            await VerifyStoreData_Sync_WithStreamCache("pArQuet", AssertParquetResultUnescaped);
+        }
+
+        [Fact]
+        public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithEscaped()
+        {
+            await VerifyStoreData_Sync_WithStreamCache(
+                "pArQuet",
+                AssertParquetResultEscaped,
+                configureAuthentication: (values) =>
+                {
+                    values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
+                    values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                });
         }
 
         [Fact]
@@ -806,7 +821,8 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             string format,
             Func<DataLakeFileClient, Task> assertMethod,
             Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
-            Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null)
+            Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
+            Action<Dictionary<string, object>> configureAuthentication = null)
         {
             var organizationId = Guid.NewGuid();
             var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
@@ -890,7 +906,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             var directoryName = $"xunit-{DateTime.Now.Ticks}";
 
             var connectorConnectionMock = new Mock<IConnectorConnectionV2>();
-            connectorConnectionMock.Setup(x => x.Authentication).Returns(new Dictionary<string, object>()
+            var authenticationValues = new Dictionary<string, object>()
             {
                 { nameof(AzureDataLakeConstants.AccountName), accountName },
                 { nameof(AzureDataLakeConstants.AccountKey), accountKey },
@@ -900,7 +916,10 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
                 { nameof(DataLakeConstants.OutputFormat), format },
                 { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
-            });
+            };
+            configureAuthentication?.Invoke(authenticationValues);
+
+            connectorConnectionMock.Setup(x => x.Authentication).Returns(authenticationValues);
 
             var azureDataLakeClient = new AzureDataLakeClient();
             var jobDataFactory = new Mock<AzureDataLakeJobDataFactory>();
@@ -1264,7 +1283,17 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             Assert.Equal(sb.ToString(), content);
         }
 
-        private async Task AssertParquetResult(DataLakeFileClient fileClient)
+        private Task AssertParquetResultUnescaped(DataLakeFileClient fileClient)
+        {
+            return AssertParquetResult(fileClient, ".");
+        }
+
+        private Task AssertParquetResultEscaped(DataLakeFileClient fileClient)
+        {
+            return AssertParquetResult(fileClient, "_");
+        }
+
+        private async Task AssertParquetResult(DataLakeFileClient fileClient, string separator)
         {
             using var memoryStream = new MemoryStream();
             await fileClient.ReadToAsync(memoryStream);
@@ -1300,32 +1329,30 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
             PersistVersion 1
             ProviderDefinitionId c444cda8-d9b5-45cc-a82d-fef28e08d55c
             Timestamp 2024-08-21T03:16:00.0000000+05:00
-            user_age 123
-            user_dobInDateTime 2000-01-02T03:04:05
-            user_dobInDateTimeOffset 2000-01-02T03:04:05+12:34
-            user_lastName Picard
+            user{{{separator}}}age 123
+            user{{{separator}}}dobInDateTime 2000-01-02T03:04:05
+            user{{{separator}}}dobInDateTimeOffset 2000-01-02T03:04:05+12:34
+            user{{{separator}}}lastName Picard
 
             """, sb.ToString());
 
             object getValue(Parquet.Data.DataColumn dataColumn)
             {
-                if (dataColumn.Field.ClrType == typeof(Guid))
-                    return ((Guid[])dataColumn.Data)[0];
-                else if (dataColumn.Field.ClrType == typeof(int))
-                {
-                    if (dataColumn.Field.IsNullable)
-                        return ((int?[])dataColumn.Data)[0];
+                var type = dataColumn.Field.ClrType;
 
-                    return ((int[])dataColumn.Data)[0];
-                }
-                else if (dataColumn.Field.ClrType == typeof(long))
+                if (type == typeof(Guid))
                 {
-                    if (dataColumn.Field.IsNullable)
-                        return ((long?[])dataColumn.Data)[0];
-
-                    return ((long[])dataColumn.Data)[0];
+                    return getValueFromArray<Guid?, Guid>(dataColumn);
                 }
-                else if (dataColumn.Field.ClrType == typeof(string))
+                else if (type == typeof(int))
+                {
+                    return getValueFromArray<int?, int>(dataColumn);
+                }
+                else if (type == typeof(long))
+                {
+                    return getValueFromArray<long?, long>(dataColumn);
+                }
+                else if (type == typeof(string))
                 {
                     var value = ((string[])dataColumn.Data);
 
@@ -1337,9 +1364,15 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
 
                 throw new NotSupportedException($"Type {dataColumn.Field.ClrType} not supported.");
             }
+
+            object getValueFromArray<TNullable, TNonNullable>(Parquet.Data.DataColumn dataColumn)
+            {
+                if (dataColumn.Field.IsNullable)
+                    return ((TNullable[])dataColumn.Data)[0];
+
+                return ((TNonNullable[])dataColumn.Data)[0];
+            }
         }
-
-
 
         private static async Task WaitForFileToBeDeleted(string fileSystemName, string directoryName, DataLakeServiceClient client, PathItem path)
         {
