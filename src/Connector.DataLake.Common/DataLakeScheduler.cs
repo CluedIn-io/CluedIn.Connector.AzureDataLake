@@ -48,15 +48,15 @@ internal class DataLakeScheduler : Scheduler
             if (stream.Mode != StreamMode.Sync)
             {
                 _logger.LogDebug("Stream {StreamId} is not in {Mode} mode. Removing it from scheduler '{SchedulerName}'.", stream.Id, StreamMode.Sync, _schedulerName);
-                removeExportJob(jobKey);
+                removeExportJob(jobKey, warnIfNotRemoved: false);
                 return;
             }
 
             var jobSchedule = await _dataLakeJobDataFactory.GetScheduleAsync(executionContext, stream);
             if (IsExportJobDisabled(jobSchedule))
             {
-                _logger.LogDebug("Stream {StreamId} is disabled. Removing it from scheduler '{SchedulerName}'.", stream.Id, _schedulerName);
-                removeExportJob(jobKey);
+                _logger.LogDebug("Stream {StreamId} export is disabled. Removing it from scheduler '{SchedulerName}'.", stream.Id, _schedulerName);
+                removeExportJob(jobKey, warnIfNotRemoved: false);
                 return;
             }
 
@@ -72,7 +72,7 @@ internal class DataLakeScheduler : Scheduler
         var removed = 0;
         foreach (var jobKey in jobKeysToRemove)
         {
-            removeExportJob(jobKey);
+            removeExportJob(jobKey, warnIfNotRemoved: true);
             removed++;
         }
 
@@ -81,15 +81,15 @@ internal class DataLakeScheduler : Scheduler
             _logger.LogInformation("Total of obsolete {RemovedCount} stream jobs removed from scheduler '{SchedulerName}'.", removed, _schedulerName);
         }
 
-        void removeExportJob(string jobKey)
+        void removeExportJob(string jobKey, bool warnIfNotRemoved)
         {
             if (jobQueue.TryRemove(jobKey, out var _))
             {
                 _logger.LogDebug("Stream export for stream {StreamId} removed from scheduler '{SchedulerName}'.", jobKey, _schedulerName);
             }
-            else
+            else if (warnIfNotRemoved)
             {
-                _logger.LogWarning("Failed to disable stream export for stream {StreamId} from scheduler '{SchedulerName}'..", jobKey, _schedulerName);
+                _logger.LogWarning("Failed to disable stream export for stream {StreamId} from scheduler '{SchedulerName}'.", jobKey, _schedulerName);
             }
         }
     }
