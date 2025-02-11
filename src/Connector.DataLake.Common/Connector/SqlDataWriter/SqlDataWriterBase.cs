@@ -45,3 +45,22 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
         ICollection<string> fieldNames,
         SqlDataReader reader);
 }
+
+internal interface IDataTransformer
+{
+    KeyValuePair<string, Type> GetType(KeyValuePair<string, Type> pair);
+    KeyValuePair<string, object> Transform(KeyValuePair<string, object> pair);
+}
+
+internal class DefaultDataTransformer : IDataTransformer
+{
+    public KeyValuePair<string, Type> GetType(KeyValuePair<string, Type> pair)
+    {
+        return pair;
+    }
+
+    public KeyValuePair<string, object> Transform(KeyValuePair<string, object> pair)
+    {
+        return pair;
+    }
+}

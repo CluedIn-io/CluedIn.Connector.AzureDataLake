@@ -52,6 +52,8 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             [typeof(string)] = "NVARCHAR(MAX)"
         };
 
+        protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
+
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
             IDataLakeClient client,
@@ -117,14 +119,28 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             AddToData("ProviderDefinitionId", providerDefinitionId);
             AddToData("ContainerName", containerName);
 
+            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+
             if (!data.ContainsKey("Timestamp"))
             {
-                AddToData("Timestamp", _dateTimeOffsetProvider.GetCurrentUtcTime().ToString("O"));
+                AddToData("Timestamp", now.ToString("O"));
             }
 
             if (!data.ContainsKey("Epoch"))
             {
-                AddToData("Epoch", _dateTimeOffsetProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds());
+                AddToData("Epoch", now.ToUnixTimeMilliseconds());
+            }
+
+            if (jobData.IsDeltaMode)
+            {
+                if (!data.ContainsKey("__ChangeType__"))
+                {
+                    AddToData("__ChangeType__", connectorEntityData.ChangeType.ToString());
+                }
+                //if (!data.ContainsKey("__ModifiedAt__"))
+                //{
+                //    AddToData("__ModifiedAt__", now);
+                //}
             }
 
             // end match previous version of the connector
@@ -218,7 +234,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
                 await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
                 await connection.OpenAsync();
-                await WriteToCacheTable(connection, syncItem, tableName);
+                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: configurations.IsDeltaMode);
                 transactionScope.Complete();
             }
             catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
@@ -239,7 +255,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     {
                         await EnsureCacheTableExists(connection, tableName, syncItem);
                     }
-                    await WriteToCacheTable(connection, syncItem, tableName);
+                    await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: configurations.IsDeltaMode);
                     transactionScope.Complete();
                 }
                 catch (Exception ex2)
@@ -269,21 +285,19 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private async Task WriteToCacheTable(
             SqlConnection connection,
             SyncItem syncItem,
-            string tableName)
+            string tableName,
+            bool useSoftDelete)
         {
             var propertyKeys = GetPropertyKeysWithoutId(syncItem);
             if (syncItem.ChangeType == VersionChangeType.Removed)
             {
-                var deleteCommandText = $"DELETE FROM [{tableName}] WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey}";
-                var command = new SqlCommand(deleteCommandText, connection)
+                if (useSoftDelete)
                 {
-                    CommandType = CommandType.Text
-                };
-                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
-                var rowsAffected = await command.ExecuteNonQueryAsync();
-                if (rowsAffected != 1)
+                    await SoftDeleteEntity(connection, syncItem, tableName);
+                }
+                else
                 {
-                    throw new ApplicationException($"Rows affected for deletion is not 1, it is {rowsAffected}.");
+                    await HardDeleteEntity(connection, syncItem, tableName);
                 }
             }
             else
@@ -320,6 +334,47 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 if (rowsAffected != 1)
                 {
                     throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
+                }
+            }
+
+            static async Task HardDeleteEntity(SqlConnection connection, SyncItem syncItem, string tableName)
+            {
+                var deleteCommandText = $"DELETE FROM [{tableName}] WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey}";
+                var command = new SqlCommand(deleteCommandText, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected != 1)
+                {
+                    throw new ApplicationException($"Rows affected for hard deletion is not 1, it is {rowsAffected}.");
+                }
+            }
+
+            static async Task SoftDeleteEntity(SqlConnection connection, SyncItem syncItem, string tableName)
+            {
+                var updateSql = $"""
+                        IF EXISTS (
+                            SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
+                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})
+                        BEGIN
+                            UPDATE [{tableName}]
+                            SET
+                                [__ChangeType__] = {syncItem.ChangeType.ToString()}
+                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};
+                        END
+                        """;
+                var command = new SqlCommand(updateSql, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
+
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected != 1)
+                {
+                    throw new ApplicationException($"Rows affected for soft deletion of is not 1, it is {rowsAffected}.");
                 }
             }
         }
@@ -523,7 +578,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             try
             {
-                await WriteToCacheTable(connection, syncItem, tableName);
+                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: false);
 
             }
             catch (Exception ex)
