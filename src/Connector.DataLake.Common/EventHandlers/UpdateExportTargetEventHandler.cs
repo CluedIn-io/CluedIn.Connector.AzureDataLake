@@ -42,7 +42,7 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
 
     private async Task ProcessEventAsync(UpdateExportTargetEvent eventData)
     {
-        if (!TryGetResourceInfo(eventData, "AccountId", "Id", out var organizationId, out var providerDefinitionId))
+        if (!eventData.TryGetResourceInfo("AccountId", "Id", out var organizationId, out var providerDefinitionId))
         {
             return;
         }

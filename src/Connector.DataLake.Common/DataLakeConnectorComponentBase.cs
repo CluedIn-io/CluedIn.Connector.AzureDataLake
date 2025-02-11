@@ -62,7 +62,7 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
         State = ServiceState.Stopped;
     }
 
-    private protected void SubscribeToEvents(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory, IScheduledJobQueue jobQueue)
+    private protected virtual void SubscribeToEvents(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory, IScheduledJobQueue jobQueue)
     {
         var dateTimeProvider = Container.Resolve<IDateTimeOffsetProvider>();
         _updateExportTargetEventHandler = new(ApplicationContext, constants, jobDataFactory, dateTimeProvider, ExportEntitiesJobType, jobQueue);

@@ -55,6 +55,11 @@ namespace CluedIn.Connector.DataLake.Common
         {
             // WARNING: The log output can contain sensitive information
             _logger.LogDebug($"GetCrawlJobData config input: {JsonConvert.SerializeObject(configuration)}");
+
+            if (!configuration.TryGetValue("__ProviderDefinitionId__", out var _))
+            {
+                configuration.Add("__ProviderDefinitionId__", providerDefinitionId);
+            }
             return Task.FromResult<CrawlJobData>(new CrawlJobDataWrapper(configuration));
         }
 
