@@ -15,4 +15,5 @@ public interface IDataLakeClient
     Task<bool> FileInPathExists(IDataLakeJobData configuration, string fileName, string subDirectory);
     Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName);
     Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName, string subDirectory);
+    Task<bool> DirectoryExists(IDataLakeJobData configuration, string subDirectory);
 }

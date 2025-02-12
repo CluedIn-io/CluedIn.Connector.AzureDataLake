@@ -13,11 +13,10 @@ public class FabricMirroringConstants : DataLakeConstants, IFabricMirroringConst
 
     public const string WorkspaceName = nameof(WorkspaceName);
     public const string ItemName = nameof(ItemName);
-    public const string ItemType = nameof(ItemType);
-    public const string ItemFolder = nameof(ItemFolder);
     public const string ClientId = nameof(ClientId);
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
+    public const string ShouldCreateMirroredDatabase = nameof(ShouldCreateMirroredDatabase);
 
     public FabricMirroringConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
         providerName: "FabricMirroring Connector",
@@ -42,49 +41,35 @@ public class FabricMirroringConstants : DataLakeConstants, IFabricMirroringConst
                 Name = WorkspaceName,
                 DisplayName = WorkspaceName,
                 Type = "input",
-                IsRequired = true
+                IsRequired = true,
             },
             new ()
             {
                 Name = ItemName,
                 DisplayName = ItemName,
                 Type = "input",
-                IsRequired = true
-            },
-            new ()
-            {
-                Name = ItemType,
-                DisplayName = ItemType,
-                Type = "input",
-                IsRequired = true
-            },
-            new ()
-            {
-                Name = ItemFolder,
-                DisplayName = ItemFolder,
-                Type = "input",
-                IsRequired = true
+                IsRequired = false,
             },
             new ()
             {
                 Name = ClientId,
                 DisplayName = ClientId,
                 Type = "input",
-                IsRequired = true
+                IsRequired = true,
             },
             new ()
             {
                 Name = ClientSecret,
                 DisplayName = ClientSecret,
                 Type = "password",
-                IsRequired = true
+                IsRequired = true,
             },
             new ()
             {
                 Name = TenantId,
                 DisplayName = TenantId,
                 Type = "input",
-                IsRequired = true
+                IsRequired = true,
             },
         };
 

@@ -42,44 +42,9 @@ internal abstract class UpdateStreamScheduleBase
         JobQueue = jobQueue ?? throw new ArgumentNullException(nameof(jobQueue));
     }
 
-    protected static bool TryGetResourceInfo(RemoteEvent remoteEvent, string organizationIdKey, string resourceIdKey, out Guid organizationId, out Guid resourceId)
-    {
-        if (!(remoteEvent.EventData?.StartsWith("{") ?? false))
-        {
-            setResultToDefault(out organizationId, out resourceId);
-            return false;
-        }
-
-        var eventObject = JsonUtility.Deserialize<JObject>(remoteEvent.EventData);
-        if (!eventObject.TryGetValue(organizationIdKey, out var accountIdToken))
-        {
-            setResultToDefault(out organizationId, out resourceId);
-            return false;
-        }
-
-        if (!eventObject.TryGetValue(resourceIdKey, out var resourceIdToken))
-        {
-            setResultToDefault(out organizationId, out resourceId);
-            return false;
-        }
-
-        var accountId = accountIdToken.Value<string>();
-        var resourceIdString = resourceIdToken.Value<string>();
-        resourceId = new Guid(resourceIdString);
-        organizationId = new Guid(accountId);
-
-        return true;
-
-        static void setResultToDefault(out Guid organizationId, out Guid resourceId)
-        {
-            organizationId = Guid.Empty;
-            resourceId = Guid.Empty;
-        }
-    }
-
     protected async Task UpdateStreamScheduleFromStreamEvent(RemoteEvent remoteEvent)
     {
-        if (!TryGetResourceInfo(remoteEvent, "AccountId", "StreamId", out var organizationId, out var streamId))
+        if (!remoteEvent.TryGetResourceInfo("AccountId", "StreamId", out var organizationId, out var streamId))
         {
             return;
         }
@@ -142,5 +107,43 @@ internal abstract class UpdateStreamScheduleBase
         }
 
         return provider.ProviderId == Constants.ProviderId;
+    }
+}
+
+internal static class RemoteEventExtensions
+{
+    internal static bool TryGetResourceInfo(this RemoteEvent remoteEvent, string organizationIdKey, string resourceIdKey, out Guid organizationId, out Guid resourceId)
+    {
+        if (!(remoteEvent.EventData?.StartsWith("{") ?? false))
+        {
+            setResultToDefault(out organizationId, out resourceId);
+            return false;
+        }
+
+        var eventObject = JsonUtility.Deserialize<JObject>(remoteEvent.EventData);
+        if (!eventObject.TryGetValue(organizationIdKey, out var accountIdToken))
+        {
+            setResultToDefault(out organizationId, out resourceId);
+            return false;
+        }
+
+        if (!eventObject.TryGetValue(resourceIdKey, out var resourceIdToken))
+        {
+            setResultToDefault(out organizationId, out resourceId);
+            return false;
+        }
+
+        var accountId = accountIdToken.Value<string>();
+        var resourceIdString = resourceIdToken.Value<string>();
+        resourceId = new Guid(resourceIdString);
+        organizationId = new Guid(accountId);
+
+        return true;
+
+        static void setResultToDefault(out Guid organizationId, out Guid resourceId)
+        {
+            organizationId = Guid.Empty;
+            resourceId = Guid.Empty;
+        }
     }
 }

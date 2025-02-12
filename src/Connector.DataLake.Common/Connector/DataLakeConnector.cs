@@ -479,7 +479,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             try
             {
                 var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, config.ToDictionary(config => config.Key, config => config.Value));
-                await _client.EnsureDataLakeDirectoryExist(jobData);
+                await VerifyDataLakeConnection(jobData);
 
                 if (jobData.IsStreamCacheEnabled)
                 {
@@ -507,7 +507,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     if (!string.IsNullOrWhiteSpace(jobData.FileNamePattern))
                     {
                         var trimmed = jobData.FileNamePattern.Trim();
-                        var  invalidCharacters = new[] { '/', '\\', '?', '%' };
+                        var invalidCharacters = new[] { '/', '\\', '?', '%' };
                         if (trimmed.StartsWith("."))
                         {
                             return new ConnectionVerificationResult(false, "File name pattern cannot start with a period.");
@@ -526,6 +526,11 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 _logger.LogError(e, "Error verifying connection");
                 return new ConnectionVerificationResult(false, e.Message);
             }
+        }
+
+        protected virtual async Task VerifyDataLakeConnection(IDataLakeJobData jobData)
+        {
+            await _client.EnsureDataLakeDirectoryExist(jobData);
         }
 
         private async Task VerifyTableOperations(string connectionString)
