@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Core;
+using CluedIn.Core.Data.Relational;
 
 namespace CluedIn.Connector.FabricMirroring;
 
@@ -18,18 +19,35 @@ public class FabricMirroringJobDataFactory : DataLakeJobDataFactoryBase, IDataLa
         return Task.FromResult<IDataLakeJobData>(new FabricMirroringConnectorJobData(authenticationDetails, containerName));
     }
 
-    public override async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, Guid providerDefinitionId, string containerName)
-    {
-        var authenticationDetails = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-        var dictionary = authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value);
+    //public override async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, Guid providerDefinitionId, string containerName)
+    //{
+    //    var baseResult = await base.GetConfiguration(executionContext, providerDefinitionId, containerName);
+    //}
 
-        if (!dictionary.TryGetValue(FabricMirroringConstants.ItemName, out var value)
+    public override async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, IDictionary<string, object> authenticationDetails, string containerName = null)
+    {
+        if (!authenticationDetails.TryGetValue(FabricMirroringConstants.MirroredDatabaseName, out var value)
             || string.IsNullOrWhiteSpace(value?.ToString()))
         {
-            dictionary[FabricMirroringConstants.ItemName] = $"CluedIn_ExportTarget_{providerDefinitionId:N}";
-            dictionary[FabricMirroringConstants.ShouldCreateMirroredDatabase] = true;
+            if (!authenticationDetails.TryGetValue("__ProviderDefinitionId__", out var providerDefinitionId))
+            {
+                throw new ApplicationException("Failed to get provider definition id from authentication details.");
+            }
+
+            authenticationDetails[FabricMirroringConstants.MirroredDatabaseName] = $"CluedIn_ExportTarget_{providerDefinitionId:N}";
+            authenticationDetails[FabricMirroringConstants.ShouldCreateMirroredDatabase] = true;
         }
 
-        return await GetConfiguration(executionContext, dictionary, containerName);
+        return await base.GetConfiguration(executionContext, authenticationDetails, containerName);
     }
+
+    //private static void UpdateMirroredDatabaseName(IDictionary<string, object> authenticationDetails, Guid providerDefinitionId, bool shouldCreate)
+    //{
+    //    if (!authenticationDetails.TryGetValue(FabricMirroringConstants.MirroredDatabaseName, out var value)
+    //        || string.IsNullOrWhiteSpace(value?.ToString()))
+    //    {
+    //        authenticationDetails[FabricMirroringConstants.MirroredDatabaseName] = $"CluedIn_ExportTarget_{providerDefinitionId:N}";
+    //        authenticationDetails[FabricMirroringConstants.ShouldCreateMirroredDatabase] = true;
+    //    }
+    //}
 }

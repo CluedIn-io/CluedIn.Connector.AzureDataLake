@@ -12,7 +12,7 @@ public class FabricMirroringConstants : DataLakeConstants, IFabricMirroringConst
     internal static readonly Guid DataLakeProviderId = Guid.Parse("75CD5880-0537-4C6D-AE14-511C273ACD68");
 
     public const string WorkspaceName = nameof(WorkspaceName);
-    public const string ItemName = nameof(ItemName);
+    public const string MirroredDatabaseName = nameof(MirroredDatabaseName);
     public const string ClientId = nameof(ClientId);
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
@@ -45,10 +45,11 @@ public class FabricMirroringConstants : DataLakeConstants, IFabricMirroringConst
             },
             new ()
             {
-                Name = ItemName,
-                DisplayName = ItemName,
+                Name = MirroredDatabaseName,
+                DisplayName = MirroredDatabaseName,
                 Type = "input",
                 IsRequired = false,
+                Help = "When left blank, one will be auto created"
             },
             new ()
             {
@@ -73,7 +74,7 @@ public class FabricMirroringConstants : DataLakeConstants, IFabricMirroringConst
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext));
+        controls.AddRange(GetAuthMethods(applicationContext, isCustomFileNamePatternSupported: false));
 
         return new AuthMethods
         {

@@ -54,6 +54,8 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
 
+        protected IDataLakeClient Client => _client;
+
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
             IDataLakeClient client,
@@ -432,13 +434,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
-                    await _client.DeleteFile(configurations, filePathAndName);
+                    await Client.DeleteFile(configurations, filePathAndName);
                 }
                 else
                 {
                     var json = JsonConvert.SerializeObject(data, _immediateOutputSerializerSettings);
 
-                    await _client.SaveData(configurations, json, filePathAndName, JsonMimeType);
+                    await Client.SaveData(configurations, json, filePathAndName, JsonMimeType);
 
                 }
             }
@@ -479,7 +481,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             try
             {
                 var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, config.ToDictionary(config => config.Key, config => config.Value));
-                await VerifyDataLakeConnection(jobData);
+                if (!await VerifyDataLakeConnection(jobData))
+                {
+                    return new ConnectionVerificationResult(false, "Data Lake connection cannot be established.");
+                }
 
                 if (jobData.IsStreamCacheEnabled)
                 {
@@ -528,9 +533,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
         }
 
-        protected virtual async Task VerifyDataLakeConnection(IDataLakeJobData jobData)
+        protected virtual async Task<bool> VerifyDataLakeConnection(IDataLakeJobData jobData)
         {
-            await _client.EnsureDataLakeDirectoryExist(jobData);
+            await Client.EnsureDataLakeDirectoryExist(jobData);
+            return true;
         }
 
         private async Task VerifyTableOperations(string connectionString)
@@ -612,7 +618,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-            _client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
+            Client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
         }
 
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)

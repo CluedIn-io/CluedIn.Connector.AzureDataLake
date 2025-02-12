@@ -32,8 +32,9 @@ internal abstract class UpdateMirroredDatabaseBase
         IDataLakeJobDataFactory jobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
     {
-        _constants = constants;
-        _jobDataFactory = jobDataFactory;
+        _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
+        _constants = constants ?? throw new ArgumentNullException(nameof(constants));
+        _jobDataFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
@@ -64,13 +65,13 @@ internal abstract class UpdateMirroredDatabaseBase
             throw new ApplicationException($"Failed to find workspace using {jobData.WorkspaceName}.");
         }
 
-        var mirrorDatabaseName = jobData.ItemName;
-        var mirroredDatabase = await GetMirroredDatabaseAsync(workspace.Id, jobData.ItemName);
+        var mirrorDatabaseName = jobData.MirroredDatabaseName;
+        var mirroredDatabase = await GetMirroredDatabaseAsync(workspace.Id, jobData.MirroredDatabaseName);
         if (mirroredDatabase == null)
         {
             if (!jobData.ShouldCreateMirroredDatabase)
             {
-                throw new ApplicationException($"Mirrored database is not found using workspace {jobData.WorkspaceName} and mirrored database name {jobData.ItemName}.");
+                throw new ApplicationException($"Mirrored database is not found using workspace {jobData.WorkspaceName} and mirrored database name {jobData.MirroredDatabaseName}.");
             }
             var result = await FabricClient.MirroredDatabase.Items.CreateMirroredDatabaseAsync(
                 workspace.Id,
@@ -110,12 +111,12 @@ internal abstract class UpdateMirroredDatabaseBase
             var status = await PollForCompletion(workspace.Id, result.Value.Id.Value);
             if (status != SqlEndpointProvisioningStatus.Success)
             {
-                throw new ApplicationException($"Failed to provision sql endpoint using workspace {jobData.WorkspaceName} and mirrored database name {jobData.ItemName}.");
+                throw new ApplicationException($"Failed to provision sql endpoint using workspace {jobData.WorkspaceName} and mirrored database name {jobData.MirroredDatabaseName}.");
             }
 
         }
 
-        mirroredDatabase = await GetMirroredDatabaseAsync(workspace.Id, jobData.ItemName);
+        mirroredDatabase = await GetMirroredDatabaseAsync(workspace.Id, jobData.MirroredDatabaseName);
 
         var store = executionContext.Organization.DataStores.GetDataStore<ProviderDefinition>();
         var definition = await store.GetByIdAsync(executionContext, providerDefinitionId);
@@ -205,12 +206,13 @@ internal abstract class UpdateMirroredDatabaseBase
         return null;
     }
 }
-internal class RegisterExportTargetEventHandler : UpdateMirroredDatabaseBase, IDisposable
+internal class ExportTargetEventHandler : UpdateMirroredDatabaseBase, IDisposable
 {
-    private readonly IDisposable _subscription;
+    private readonly IDisposable _registerExportTargetSubscription;
+    private readonly IDisposable _updateExportTargetSubscription;
     private bool _disposedValue;
 
-    public RegisterExportTargetEventHandler(
+    public ExportTargetEventHandler(
         ApplicationContext applicationContext,
         FabricMirroringClient client,
         IDataLakeConstants constants,
@@ -218,15 +220,18 @@ internal class RegisterExportTargetEventHandler : UpdateMirroredDatabaseBase, ID
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(applicationContext, constants, jobDataFactory, dateTimeOffsetProvider)
     {
-        _subscription = applicationContext.System.Events.Local.Subscribe<RegisterExportTargetEvent>(ProcessEvent);
+        _registerExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<RegisterExportTargetEvent>(ProcessEvent);
+        _updateExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
     }
 
-    private void ProcessEvent(RegisterExportTargetEvent eventData)
+    private void ProcessEvent<TEvent>(TEvent eventData)
+        where TEvent : RemoteEvent
     {
         ProcessEventAsync(eventData).GetAwaiter().GetResult();
     }
 
-    private async Task ProcessEventAsync(RegisterExportTargetEvent eventData)
+    private async Task ProcessEventAsync<TEvent>(TEvent eventData)
+        where TEvent : RemoteEvent
     {
         await UpdateOrCreateMirroredDatabaseAsync(eventData);
     }
@@ -237,7 +242,7 @@ internal class RegisterExportTargetEventHandler : UpdateMirroredDatabaseBase, ID
         {
             if (disposing)
             {
-                _subscription.Dispose();
+                _registerExportTargetSubscription.Dispose();
             }
 
             _disposedValue = true;

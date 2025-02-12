@@ -28,7 +28,7 @@ public class FabricMirroringClient : DataLakeClient
     protected override string GetDirectory(IDataLakeJobData configuration)
     {
         var casted = CastJobData<FabricMirroringConnectorJobData>(configuration);
-        return  $"{casted.ItemName}.MountedRelationalDatabase/Files/LandingZone";
+        return  $"{casted.MirroredDatabaseName}.MountedRelationalDatabase/Files/LandingZone";
     }
 
     protected override string GetFileSystemName(IDataLakeJobData configuration)

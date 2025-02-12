@@ -16,7 +16,7 @@ public class FabricMirroringConnectorProvider : ConnectorProviderBase<FabricMirr
     protected override IEnumerable<string> ProviderNameParts => new[]
     {
        FabricMirroringConstants.WorkspaceName,
-       FabricMirroringConstants.ItemName,
+       FabricMirroringConstants.MirroredDatabaseName,
        FabricMirroringConstants.ClientId,
        FabricMirroringConstants.TenantId,
     };

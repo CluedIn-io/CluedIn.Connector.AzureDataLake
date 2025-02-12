@@ -91,6 +91,11 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return await dataLakeFileClient.ExistsAsync();
         }
 
+        public Task<bool> DirectoryExists(IDataLakeJobData configuration)
+        {
+            return DirectoryExists(configuration, string.Empty);
+        }
+
         public async Task<bool> DirectoryExists(IDataLakeJobData configuration, string subDirectory)
         {
             var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: false);
