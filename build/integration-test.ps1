@@ -53,7 +53,7 @@ function Run-Setup() {
 	Write-Host "##[command]docker run -d -e `"ACCEPT_EULA=Y`" --name $containerName -p `":1433`" -e `"MSSQL_SA_PASSWORD=$($databasePassword)`" $sqlServerImage"
 	docker run -d -e "ACCEPT_EULA=Y" --name $containerName -p ":1433" -e "MSSQL_SA_PASSWORD=$($databasePassword)" $sqlServerImage
 	$port = ((docker inspect $containerName | convertfrom-json).NetworkSettings.Ports."1433/tcp" | Where-Object { $_.HostIp -eq '0.0.0.0'}).HostPort
-	$connectionString = "Data Source=$($databaseHost),$($port);Initial Catalog=$($databaseName);User Id=$($databaseUser);Password=$($databasePassword);connection timeout=0;Max Pool Size=200;Pooling=True"
+	$connectionString = "Data Source=$($databaseHost),$($port);Initial Catalog=$($databaseName);User Id=$($databaseUser);Password=$($databasePassword);connection timeout=0;Max Pool Size=200;Pooling=True;Encrypt=false"
 	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
 	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
 	Write-Host "##[command]docker logs -f $($containerName)"
