@@ -198,14 +198,17 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             });
             var createTableSql = $"""
                 IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
-                CREATE TABLE [{tableName}] (
-                    {DataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
-                    {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
-                    [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
-                    [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
-                    PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
-                    CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({DataLakeConstants.IdKey})
-                ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
+                BEGIN
+                    CREATE TABLE [{tableName}] (
+                        {DataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
+                        {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
+                        [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
+                        [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
+                        PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
+                        CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({DataLakeConstants.IdKey})
+                    ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
+                    CREATE INDEX [ValidFromValidTo] ON [{tableName}] ([ValidFrom], [ValidTo]);
+                END
                 """;
             var command = new SqlCommand(createTableSql, connection)
             {
