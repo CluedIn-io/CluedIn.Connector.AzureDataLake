@@ -19,13 +19,13 @@ public class FabricMirroringConstants : DataLakeConstants, IFabricMirroringConst
     public const string ShouldCreateMirroredDatabase = nameof(ShouldCreateMirroredDatabase);
 
     public FabricMirroringConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
-        providerName: "FabricMirroring Connector",
+        providerName: "Fabric Mirroring Connector",
         componentName: "FabricMirroringConnector",
         icon: "Resources.fabricMirroring.svg",
         domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
-        about: "Supports publishing of data to FabricMirroring.",
+        about: "Supports publishing of data to Microsoft Fabric Mirrored Database.",
         authMethods: GetFabricMirroringAuthMethods(applicationContext),
-        guideDetails: "Supports publishing of data to FabricMirroring.",
+        guideDetails: "Supports publishing of data to Microsoft Fabric Mirrored Database.",
         guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
     {
     }
