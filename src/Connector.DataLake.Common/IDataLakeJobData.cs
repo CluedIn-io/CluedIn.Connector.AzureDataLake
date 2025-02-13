@@ -12,4 +12,6 @@ public interface IDataLakeJobData
     bool ShouldWriteGuidAsString { get; }
     bool ShouldEscapeVocabularyKeys { get; }
     string CustomCron { get; }
+    bool IsDeltaMode { get; }
+    bool IsOverwriteEnabled { get; }
 }
