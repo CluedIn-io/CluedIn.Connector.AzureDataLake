@@ -22,6 +22,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return directoryClient;
         }
 
+        public async Task DeleteDirectory(IDataLakeJobData configuration, string subDirectory)
+        {
+            var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: true);
+            var directoryClient = await GetDirectoryClientAsync(configuration, fileSystemClient, subDirectory, ensureExists: true);
+
+            await directoryClient.DeleteIfExistsAsync();
+        }
+
         public async Task SaveData(IDataLakeJobData configuration, string content, string fileName, string contentType)
         {
             using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));

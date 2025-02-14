@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
+using CluedIn.Core.Streams.Models;
 
 using Microsoft.Extensions.Logging;
 
@@ -36,5 +37,15 @@ public class FabricMirroringConnector : DataLakeConnector
         {
             return false;
         }
+    }
+
+    public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+    {
+        var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+        var containerName = streamModel.ContainerName;
+
+        var jobData = await DataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName) as FabricMirroringConnectorJobData;
+        await Client.DeleteDirectory(jobData, streamModel.Id.ToString("N"));
+        await base.ArchiveContainer(executionContext, streamModel);
     }
 }

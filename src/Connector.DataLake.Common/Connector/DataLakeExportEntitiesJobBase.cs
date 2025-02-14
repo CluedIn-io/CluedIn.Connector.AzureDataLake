@@ -611,6 +611,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                     FROM
                         [{tableName}]
                     WHERE StreamId = @StreamId
+                    ORDER BY StreamId, DataTime DESC
                     """;
             var command = new SqlCommand(getSql, connection)
             {
