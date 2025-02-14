@@ -21,10 +21,16 @@ namespace CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 
 internal class ParquetSqlDataWriter : SqlDataWriterBase
 {
+    public ParquetSqlDataWriter (IDataTransformer dataTransformer)
+    {
+        _dataTransformer = dataTransformer;
+    }
     // From documentation, it's ambiguous whether we need at least 5k or 50k rows to be optimal
-    // TODO: Find recommendations or method to calculate row group threshold        
+    // TODO: Find recommendations or method to calculate row group threshold
     public const int RowGroupThreshold = 10000;
     private static readonly Regex NonAlphaNumericRegex = new ("[^a-zA-Z0-9_]");
+    private readonly IDataTransformer _dataTransformer;
+
     public override async Task<long> WriteOutputAsync(
         ExecutionContext context,
         IDataLakeJobData configuration,
@@ -33,19 +39,21 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         SqlDataReader reader)
     {
         var fields = new List<Field>();
+        //var fieldNamesToUse = configuration.IsDeltaMode ? fieldNames.Where(fieldName => fieldName != "__ChangeType__") : fieldNames;
         foreach (var fieldName in fieldNames)
         {
             var type = reader.GetFieldType(fieldName);
 
-            var parquetFieldName = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
-            if (fieldName == "Codes" || fieldName == "OutgoingEdges" || fieldName == "IncomingEdges")
-            {
-                fields.Add(new DataField(parquetFieldName, typeof(IEnumerable<string>)));
-            }
-            else
-            {
-                fields.Add(new DataField(parquetFieldName, GetParquetDataType(type, configuration)));
-            }
+            var isArrayField = fieldName == "Codes" || fieldName == "OutgoingEdges" || fieldName == "IncomingEdges";
+
+            var parquetType = isArrayField ? typeof(IEnumerable<string>) : GetParquetDataType(type, configuration);
+            var transformed = _dataTransformer.GetType(new KeyValuePair<string, Type>(fieldName, parquetType));
+
+            var transformedFieldName = transformed.Key;
+            var transformedFieldType = transformed.Value;
+
+            var parquetFieldName = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(transformedFieldName) : transformedFieldName;
+            fields.Add(new DataField(parquetFieldName, transformedFieldType));
         }
 
         var schema = new ParquetSchema(fields);
@@ -56,7 +64,20 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
 
         while (await reader.ReadAsync())
         {
-            var fieldValues = fieldNames.Select(key => GetValue(key, reader, configuration));
+            var fieldValues = fieldNames.Select(key => {
+                var value = GetValue(key, reader, configuration);
+                var transformed = _dataTransformer.Transform(new KeyValuePair<string, object>(key, value));
+                var transformedFieldName = transformed.Key;
+                var transformedFieldValue = transformed.Value;
+                return transformedFieldValue;
+            });
+
+            if (configuration.IsDeltaMode)
+            {
+                //var validFrom = GetValue("ValidFrom", reader, configuration);
+                //var validTo = GetValue("ValidTo", reader, configuration);
+                //var changeType = GetValue("ChangeType", reader, configuration);
+            }
             parquetTable.Add(new ParquetRow(fieldValues));
 
             totalProcessed++;
