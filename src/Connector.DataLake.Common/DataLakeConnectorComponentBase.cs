@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common.EventHandlers;
 using CluedIn.Core;
+using CluedIn.Core.Configuration;
 using CluedIn.Core.DataStore.Entities;
 using CluedIn.Core.Server;
 
@@ -43,7 +44,11 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
         _ = Task.Run(migrator.MigrateAsync);
 
         var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, dateTimeOffsetProvider);
-        _ = Task.Run(scheduler.RunAsync);
+
+        if (ConfigurationManagerEx.AppSettings.GetFlag("Streams.Processing.Enabled", true))
+            _ = Task.Run(scheduler.RunAsync);
+        else
+            Log.LogInformation($"{ConnectorComponentName} scheduled jobs disabled");
 
         SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
 
