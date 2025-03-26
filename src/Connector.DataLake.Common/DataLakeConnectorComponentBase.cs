@@ -34,24 +34,28 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
         where TDataLakeJobFactory : IDataLakeJobDataFactory
         where TDataLakeExportJob : IDataLakeJob
     {
-        ExportEntitiesJobType = typeof(TDataLakeExportJob);
+         if (ConfigurationManagerEx.AppSettings.GetFlag("Streams.Processing.Enabled", true))
+         {
+            ExportEntitiesJobType = typeof(TDataLakeExportJob);
 
-        var dataLakeConstants = Container.Resolve<TDataLakeConstants>();
-        var jobDataFactory = Container.Resolve<TDataLakeJobFactory>();
-        var dateTimeOffsetProvider = Container.Resolve<IDateTimeOffsetProvider>();
+            var dataLakeConstants = Container.Resolve<TDataLakeConstants>();
+            var jobDataFactory = Container.Resolve<TDataLakeJobFactory>();
+            var dateTimeOffsetProvider = Container.Resolve<IDateTimeOffsetProvider>();
 
-        var migrator = GetDataMigrator(dataLakeConstants, jobDataFactory);
-        _ = Task.Run(migrator.MigrateAsync);
+            var migrator = GetDataMigrator(dataLakeConstants, jobDataFactory);
+            _ = Task.Run(migrator.MigrateAsync);
 
-        var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, dateTimeOffsetProvider);
+            var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, dateTimeOffsetProvider);
 
-        if (ConfigurationManagerEx.AppSettings.GetFlag("Streams.Processing.Enabled", true))
             _ = Task.Run(scheduler.RunAsync);
+            
+            SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
+        }
         else
+        {
             Log.LogInformation($"{ConnectorComponentName} scheduled jobs disabled");
-
-        SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
-
+        }
+        
         Log.LogInformation($"{ConnectorComponentName} Registered");
         State = ServiceState.Started;
     }
