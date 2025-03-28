@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common.EventHandlers;
 using CluedIn.Core;
+using CluedIn.Core.Configuration;
 using CluedIn.Core.DataStore.Entities;
 using CluedIn.Core.Server;
 
@@ -33,20 +34,28 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
         where TDataLakeJobFactory : IDataLakeJobDataFactory
         where TDataLakeExportJob : IDataLakeJob
     {
-        ExportEntitiesJobType = typeof(TDataLakeExportJob);
+         if (ConfigurationManagerEx.AppSettings.GetFlag("Streams.Processing.Enabled", true))
+         {
+            ExportEntitiesJobType = typeof(TDataLakeExportJob);
 
-        var dataLakeConstants = Container.Resolve<TDataLakeConstants>();
-        var jobDataFactory = Container.Resolve<TDataLakeJobFactory>();
-        var dateTimeOffsetProvider = Container.Resolve<IDateTimeOffsetProvider>();
+            var dataLakeConstants = Container.Resolve<TDataLakeConstants>();
+            var jobDataFactory = Container.Resolve<TDataLakeJobFactory>();
+            var dateTimeOffsetProvider = Container.Resolve<IDateTimeOffsetProvider>();
 
-        var migrator = GetDataMigrator(dataLakeConstants, jobDataFactory);
-        _ = Task.Run(migrator.MigrateAsync);
+            var migrator = GetDataMigrator(dataLakeConstants, jobDataFactory);
+            _ = Task.Run(migrator.MigrateAsync);
 
-        var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, dateTimeOffsetProvider);
-        _ = Task.Run(scheduler.RunAsync);
+            var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, dateTimeOffsetProvider);
 
-        SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
-
+            _ = Task.Run(scheduler.RunAsync);
+            
+            SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
+        }
+        else
+        {
+            Log.LogInformation($"{ConnectorComponentName} scheduled jobs disabled");
+        }
+        
         Log.LogInformation($"{ConnectorComponentName} Registered");
         State = ServiceState.Started;
     }
