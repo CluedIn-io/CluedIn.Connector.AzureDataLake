@@ -35,7 +35,8 @@ public abstract class DataLakeJobDataFactoryBase
     public virtual async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, Guid providerDefinitionId, string containerName)
     {
         var authenticationDetails = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-        return await GetConfiguration(executionContext, authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value), containerName);
+        var values = authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value);
+        return await GetConfiguration(executionContext, values, containerName);
     }
 
     public virtual async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, IDictionary<string, object> authenticationDetails, string containerName = null)

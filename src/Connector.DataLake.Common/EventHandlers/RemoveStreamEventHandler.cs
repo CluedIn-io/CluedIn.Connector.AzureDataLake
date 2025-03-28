@@ -47,7 +47,7 @@ internal class RemoveStreamEventHandler : UpdateStreamScheduleBase, IDisposable
 
     private void ProcessEvent(RemoveStreamEvent eventData)
     {
-        if (!TryGetResourceInfo(eventData, "AccountId", "StreamId", out var organizationId, out var streamId))
+        if (!eventData.TryGetResourceInfo("AccountId", "StreamId", out var organizationId, out var streamId))
         {
             return;
         }

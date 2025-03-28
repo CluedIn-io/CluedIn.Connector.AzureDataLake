@@ -7,6 +7,10 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
 
+using Apache.Arrow;
+
+using Azure.Storage.Files.DataLake;
+
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
@@ -16,12 +20,14 @@ using CluedIn.Core.Streams.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
+using Parquet;
+
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
 internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 {
     private readonly IStreamRepository _streamRepository;
-    private readonly IDataLakeClient _dataLakeClient;
+    protected readonly IDataLakeClient _dataLakeClient;
     private readonly IDataLakeConstants _dataLakeConstants;
     private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
@@ -91,7 +97,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                     outputFileName,
                     asOfTime);
                 asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
-                outputFileName = GetOutputFileName(configuration, streamId, streamModel.ContainerName, asOfTime, outputFormat);
+                outputFileName = await GetOutputFileNameAsync(context, configuration, streamId, streamModel.ContainerName, asOfTime, outputFormat);
             }
             else if (HasExportedFileBefore(streamId, asOfTime, filePathProperties?.Metadata))
             {
@@ -109,6 +115,9 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             }
         }
 
+        var subDirectory = await GetSubDirectory(configuration, streamId);
+        var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration, subDirectory);
+        await InitializeDirectoryAsync(configuration, streamId, directoryClient);
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
@@ -125,11 +134,18 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         await InsertHistory(context, connection, exportHistory);
 
-        var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
+        var shouldProduceDelta = configuration.IsDeltaMode && LastExport != null;
+        var getDataSql = shouldProduceDelta
+            ? $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}' WHERE ValidFrom > @ValidFrom"
+            : $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
         var command = new SqlCommand(getDataSql, connection)
         {
             CommandType = CommandType.Text
         };
+        if (shouldProduceDelta)
+        {
+            command.Parameters.Add(new SqlParameter("@ValidFrom", LastExport.DataTime));
+        }
         await using var reader = await command.ExecuteReaderAsync();
 
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
@@ -152,7 +168,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             outputFileName,
             asOfTime,
             temporaryOutputFileName);
-        var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
         var temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
         var totalRows = await writeFileContentsAsync();
         await setFilePropertiesAsync();
@@ -183,7 +198,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         async Task<long> writeFileContentsAsync()
         {
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
-            await using var outputStream = await temporaryFileClient.OpenWriteAsync(true);
+            await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
             return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNames, reader);
         }
@@ -230,6 +245,17 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             var targetFileClient = directoryClient.GetFileClient(outputFileName);
             await targetFileClient.DeleteIfExistsAsync();
         }
+    }
+    private protected ExportHistory LastExport { get; private set; }
+
+    protected virtual Task<string> GetSubDirectory(IDataLakeJobData configuration, Guid streamId)
+    {
+        return Task.FromResult(string.Empty);
+    }
+
+    protected virtual Task InitializeDirectoryAsync(IDataLakeJobData configuration, Guid streamId, DataLakeDirectoryClient client)
+    {
+        return Task.CompletedTask;
     }
 
     private static string GetTriggerSource(IDataLakeJobArgs args)
@@ -294,9 +320,14 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return null;
         }
 
+        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
+        await connection.OpenAsync();
+        var lastExport = await GetLastExport(context, connection, streamId, configuration);
+        LastExport = lastExport;
+
         var asOfTime = GetAsOfTime(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
-        var outputFileName = GetOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
+        var outputFileName = await GetOutputFileNameAsync(context, configuration, streamId, containerName, asOfTime, outputFormat);
 
         return new ExportJobData(
             streamId,
@@ -385,14 +416,14 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 && fileMetadata.DataTime == asOfTime;
     }
 
-    protected virtual string GetOutputFileName(IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    protected virtual Task<string> GetOutputFileNameAsync(ExecutionContext context, IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
     {
         if (HasCustomFileNamePattern(configuration))
         {
-            return GetOutputFileNameUsingPattern(configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
+            return GetOutputFileNameUsingPatternAsync(context, configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
         }
 
-        return GetDefaultOutputFileName(configuration, streamId, containerName, asOfTime, outputFormat);
+        return GetDefaultOutputFileNameAsync(context, configuration, streamId, containerName, asOfTime, outputFormat);
     }
 
     private static bool HasCustomFileNamePattern(IDataLakeJobData configuration)
@@ -400,15 +431,15 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return !string.IsNullOrWhiteSpace(configuration.FileNamePattern);
     }
 
-    protected virtual string GetDefaultOutputFileName(IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    protected virtual Task<string> GetDefaultOutputFileNameAsync(ExecutionContext context, IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
     {
         var fileExtension = GetFileExtension(outputFormat);
         var streamIdFormatted = streamId.ToString(StreamIdDefaultStringFormat);
 
-        return $"{streamIdFormatted}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}";
+        return Task.FromResult($"{streamIdFormatted}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}");
     }
 
-    private static string GetOutputFileNameUsingPattern(string outputFileNamePattern, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    private static Task<string> GetOutputFileNameUsingPatternAsync(ExecutionContext context, string outputFileNamePattern, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
     {
         var timeRegexPattern = @"\{(DataTime)(\:[a-zA-Z0-9\-\._]+)?\}";
         var streamIdRegexPattern = @"\{(StreamId)(\:[a-zA-Z0-9\-\._]+)?\}";
@@ -431,7 +462,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             };
         });
 
-        return outputFormatReplaced;
+        return Task.FromResult(outputFormatReplaced);
     }
 
     private static string Replace(string pattern, string input, Func<Match, string, string> formatter)
@@ -471,7 +502,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return args.InstanceTime;
     }
 
-    private static ISqlDataWriter GetSqlDataWriter(string outputFormat)
+    protected virtual ISqlDataWriter GetSqlDataWriter(string outputFormat)
     {
         var format = outputFormat.Trim();
         if (format.Equals(DataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
@@ -484,7 +515,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
         else if (format.Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
         {
-            return new ParquetSqlDataWriter();
+            return new ParquetSqlDataWriter(new DefaultDataTransformer());
         }
 
         throw new NotSupportedException($"Format '{outputFormat}' is not supported.");
@@ -556,6 +587,73 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             {
                 throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
             }
+        }
+    }
+    private protected virtual async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, Guid streamId, IDataLakeJobData configuration)
+    {
+        var tableName = GetExportHistoryTableName(streamId);
+
+        try
+        {
+            var getSql = $"""
+                    SELECT TOP 1
+                        StreamId,
+                        DataTime,
+                        TriggerSource,
+                        CronSchedule,
+                        FilePath,
+                        FileFormat,
+                        StartTime,
+                        EndTime,
+                        TotalRows,
+                        Status,
+                        ExporterHostName
+                    FROM
+                        [{tableName}]
+                    WHERE StreamId = @StreamId
+                    """;
+            var command = new SqlCommand(getSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
+
+            command.Parameters.Add(new SqlParameter($"@StreamId", streamId));
+
+            await using var reader = await command.ExecuteReaderAsync();
+            var exportHistoryList = new List<ExportHistory>();
+            while (await reader.ReadAsync())
+            {
+                var dataTime = (DateTimeOffset)GetValue("DataTime", reader);
+                var triggerSource = (string)GetValue("TriggerSource", reader);
+                var cronSchedule = (string)GetValue("CronSchedule", reader);
+                var filePath = (string)GetValue("FilePath", reader);
+                var fileFormat = (string)GetValue("FileFormat", reader);
+                var startTime = (DateTimeOffset)GetValue("StartTime", reader);
+                var endTime = (DateTimeOffset?)GetValue("EndTime", reader);
+                var totalRows = (int?)GetValue("TotalRows", reader);
+                var status = (string)GetValue("status", reader);
+                var exporterHostName = (string)GetValue("exporterHostName", reader);
+                var history = new ExportHistory(streamId, dataTime, triggerSource, cronSchedule, filePath, fileFormat, startTime, endTime, totalRows, status, exporterHostName);
+                exportHistoryList.Add(history);
+            }
+
+            return exportHistoryList.Single();
+        }
+        catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
+        {
+            return null;
+        }
+
+        object GetValue(string key, SqlDataReader reader)
+        {
+            var value = reader.GetValue(key);
+
+            if (value == DBNull.Value)
+            {
+                return null;
+            }
+
+            return value;
         }
     }
 
@@ -682,7 +780,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         string OutputFormat,
         string OutputFileName);
 
-    private record ExportHistory(
+    private protected record ExportHistory(
         Guid StreamId,
         DateTimeOffset DataTime,
         string TriggerSource,
