@@ -75,7 +75,14 @@ namespace CluedIn.Connector.DataLake.Common
         {
             while (true)
             {
-                await Task.Delay(100, _idleCancellationTokenSource.Token);
+                try
+                {
+                    await Task.Delay(100, _idleCancellationTokenSource.Token);
+                }
+                catch (TaskCanceledException taskCanceledException)
+                {
+                    // TODO add log
+                }
 
                 if (!_idleCancellationTokenSource.IsCancellationRequested && DateTime.Now.Subtract(_lastAdded).TotalMilliseconds < _timeout)
                 {
@@ -159,7 +166,9 @@ namespace CluedIn.Connector.DataLake.Common
             var t = _idleTask;
             if (t != null)
             {
+                Console.WriteLine("Canceling");
                 _idleCancellationTokenSource.Cancel();
+                Console.WriteLine("Canceled");
 
                 await t;
             }
