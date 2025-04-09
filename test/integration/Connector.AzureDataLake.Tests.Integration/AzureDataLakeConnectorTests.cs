@@ -746,6 +746,144 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration
                 });
         }
 
+        [Fact]
+        public async Task GetContainers_InvalidParamsTest()
+        {
+            var azureDataLakeConstantsMock = CreateConstantsMock();
+
+            var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
+
+            var connectorConnectionMock = new Mock<IConnectorConnectionV2>();
+
+            var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
+            Assert.NotNull(accountName);
+            var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
+            Assert.NotNull(accountKey);
+
+            var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}";
+            var directoryName = $"xunit-{DateTime.Now.Ticks}";
+
+            var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ADL2_STREAMCACHE");
+            var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
+
+            var authenticationValues = new Dictionary<string, object>()
+            {
+                { nameof(AzureDataLakeConstants.AccountName), accountName },
+                { nameof(AzureDataLakeConstants.AccountKey), accountKey },
+                { nameof(AzureDataLakeConstants.FileSystemName), fileSystemName },
+                { nameof(AzureDataLakeConstants.DirectoryName), directoryName },
+                { nameof(DataLakeConstants.IsStreamCacheEnabled), true },
+                { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
+                { nameof(DataLakeConstants.OutputFormat), "JSON" },
+                { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
+            };
+            connectorConnectionMock.Setup(x => x.Authentication).Returns(authenticationValues);
+
+            var jobDataFactory = new Mock<AzureDataLakeJobDataFactory>();
+            jobDataFactory.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
+                .ReturnsAsync(new AzureDataLakeConnectorJobData(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
+
+            var connector = new AzureDataLakeConnector(
+                Mock.Of<ILogger<AzureDataLakeConnector>>(),
+                new AzureDataLakeClient(),
+                azureDataLakeConstantsMock.Object,
+                jobDataFactory.Object,
+                Mock.Of<IDateTimeOffsetProvider>());
+
+            var container = new WindsorContainer();
+            container.Register(Component.For<ILogger<OrganizationDataStores>>()
+                .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
+            var applicationContext = new ApplicationContext(container);
+            var organizationId = Guid.NewGuid();
+            var organization = new Organization(applicationContext, organizationId);
+            var context = new ExecutionContext(applicationContext, organization, Mock.Of<ILogger>());
+
+            var containers = await connector.GetContainers(context, providerDefinitionId);
+            Assert.Null(containers);
+
+            //This is an existing container in the Azure Data Lake account
+            //This is an existing directory in the Azure Data Lake account
+            //There are existing files in the directory
+            //Changing this or removing the files will cause the test to fail
+            authenticationValues[AzureDataLakeConstants.FileSystemName] = "apac-container";
+            authenticationValues[AzureDataLakeConstants.DirectoryName] = "TestExport01";
+
+            connectorConnectionMock.Setup(x => x.Authentication).Returns(authenticationValues);
+            jobDataFactory.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
+                .ReturnsAsync(new AzureDataLakeConnectorJobData(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
+
+            connector = new AzureDataLakeConnector(
+                Mock.Of<ILogger<AzureDataLakeConnector>>(),
+                new AzureDataLakeClient(),
+                azureDataLakeConstantsMock.Object,
+                jobDataFactory.Object,
+                Mock.Of<IDateTimeOffsetProvider>());
+
+            containers = await connector.GetContainers(context, providerDefinitionId);
+            Assert.NotNull(containers);
+        }
+
+        [Fact]
+        public async Task GetContainers_HasValuesTest()
+        {
+            var azureDataLakeConstantsMock = CreateConstantsMock();
+
+            var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
+
+            var connectorConnectionMock = new Mock<IConnectorConnectionV2>();
+
+            var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
+            Assert.NotNull(accountName);
+            var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
+            Assert.NotNull(accountKey);
+
+            //This is an existing container in the Azure Data Lake account
+            //This is an existing directory in the Azure Data Lake account
+            //There are existing files in the directory
+            //Changing this or removing the files will cause the test to fail
+            var fileSystemName = $"apac-container";
+            var directoryName = $"TestExport01";
+
+            var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ADL2_STREAMCACHE");
+            var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
+
+            var authenticationValues = new Dictionary<string, object>()
+            {
+                { nameof(AzureDataLakeConstants.AccountName), accountName },
+                { nameof(AzureDataLakeConstants.AccountKey), accountKey },
+                { nameof(AzureDataLakeConstants.FileSystemName), fileSystemName },
+                { nameof(AzureDataLakeConstants.DirectoryName), directoryName },
+                { nameof(DataLakeConstants.IsStreamCacheEnabled), true },
+                { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
+                { nameof(DataLakeConstants.OutputFormat), "JSON" },
+                { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
+            };
+            connectorConnectionMock.Setup(x => x.Authentication).Returns(authenticationValues);
+
+            var jobDataFactory = new Mock<AzureDataLakeJobDataFactory>();
+            jobDataFactory.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
+                .ReturnsAsync(new AzureDataLakeConnectorJobData(connectorConnectionMock.Object.Authentication.ToDictionary(x => x.Key, x => x.Value)));
+
+            var connector = new AzureDataLakeConnector(
+                Mock.Of<ILogger<AzureDataLakeConnector>>(),
+                new AzureDataLakeClient(),
+                azureDataLakeConstantsMock.Object,
+                jobDataFactory.Object,
+                Mock.Of<IDateTimeOffsetProvider>());
+
+            var container = new WindsorContainer();
+            container.Register(Component.For<ILogger<OrganizationDataStores>>()
+                .Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
+            var applicationContext = new ApplicationContext(container);
+            var organizationId = Guid.NewGuid();
+            var organization = new Organization(applicationContext, organizationId);
+            var context = new ExecutionContext(applicationContext, organization, Mock.Of<ILogger>());
+
+            var containers = await connector.GetContainers(context, providerDefinitionId);
+            Assert.NotNull(containers);
+            Assert.NotEmpty(containers);
+        }
+
         private static async Task<DateTimeOffset> GetFileDataTime(ExecuteExportArg executeExportArg, PathItem path)
         {
             var fsClient = executeExportArg.Client.GetFileSystemClient(executeExportArg.FileSystemName);
