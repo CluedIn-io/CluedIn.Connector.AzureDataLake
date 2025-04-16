@@ -52,6 +52,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             [typeof(string)] = "NVARCHAR(MAX)"
         };
 
+        protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
+
+        protected IDataLakeClient Client => _client;
+
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
             IDataLakeClient client,
@@ -117,14 +121,21 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             AddToData("ProviderDefinitionId", providerDefinitionId);
             AddToData("ContainerName", containerName);
 
+            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+
             if (!data.ContainsKey("Timestamp"))
             {
-                AddToData("Timestamp", _dateTimeOffsetProvider.GetCurrentUtcTime().ToString("O"));
+                AddToData("Timestamp", now.ToString("O"));
             }
 
             if (!data.ContainsKey("Epoch"))
             {
-                AddToData("Epoch", _dateTimeOffsetProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds());
+                AddToData("Epoch", now.ToUnixTimeMilliseconds());
+            }
+
+            if (jobData.IsDeltaMode && !data.ContainsKey(DataLakeConstants.ChangeTypeKey))
+            {
+                AddToData(DataLakeConstants.ChangeTypeKey, connectorEntityData.ChangeType.ToString());
             }
 
             // end match previous version of the connector
@@ -180,14 +191,17 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             });
             var createTableSql = $"""
                 IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
-                CREATE TABLE [{tableName}] (
-                    {DataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
-                    {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
-                    [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
-                    [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
-                    PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
-                    CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({DataLakeConstants.IdKey})
-                ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
+                BEGIN
+                    CREATE TABLE [{tableName}] (
+                        {DataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
+                        {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
+                        [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
+                        [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
+                        PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
+                        CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({DataLakeConstants.IdKey})
+                    ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
+                    CREATE INDEX [ValidFromValidTo] ON [{tableName}] ([ValidFrom], [ValidTo]);
+                END
                 """;
             var command = new SqlCommand(createTableSql, connection)
             {
@@ -218,7 +232,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
                 await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
                 await connection.OpenAsync();
-                await WriteToCacheTable(connection, syncItem, tableName);
+                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: configurations.IsDeltaMode);
                 transactionScope.Complete();
             }
             catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
@@ -239,7 +253,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     {
                         await EnsureCacheTableExists(connection, tableName, syncItem);
                     }
-                    await WriteToCacheTable(connection, syncItem, tableName);
+                    await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: configurations.IsDeltaMode);
                     transactionScope.Complete();
                 }
                 catch (Exception ex2)
@@ -269,21 +283,19 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private async Task WriteToCacheTable(
             SqlConnection connection,
             SyncItem syncItem,
-            string tableName)
+            string tableName,
+            bool useSoftDelete)
         {
             var propertyKeys = GetPropertyKeysWithoutId(syncItem);
             if (syncItem.ChangeType == VersionChangeType.Removed)
             {
-                var deleteCommandText = $"DELETE FROM [{tableName}] WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey}";
-                var command = new SqlCommand(deleteCommandText, connection)
+                if (useSoftDelete)
                 {
-                    CommandType = CommandType.Text
-                };
-                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
-                var rowsAffected = await command.ExecuteNonQueryAsync();
-                if (rowsAffected != 1)
+                    await SoftDeleteEntity(connection, syncItem, tableName);
+                }
+                else
                 {
-                    throw new ApplicationException($"Rows affected for deletion is not 1, it is {rowsAffected}.");
+                    await HardDeleteEntity(connection, syncItem, tableName);
                 }
             }
             else
@@ -320,6 +332,47 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 if (rowsAffected != 1)
                 {
                     throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
+                }
+            }
+
+            static async Task HardDeleteEntity(SqlConnection connection, SyncItem syncItem, string tableName)
+            {
+                var deleteCommandText = $"DELETE FROM [{tableName}] WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey}";
+                var command = new SqlCommand(deleteCommandText, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected != 1)
+                {
+                    throw new ApplicationException($"Rows affected for hard deletion is not 1, it is {rowsAffected}.");
+                }
+            }
+
+            static async Task SoftDeleteEntity(SqlConnection connection, SyncItem syncItem, string tableName)
+            {
+                var updateSql = $"""
+                        IF EXISTS (
+                            SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
+                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})
+                        BEGIN
+                            UPDATE [{tableName}]
+                            SET
+                                [{DataLakeConstants.ChangeTypeKey}] = {syncItem.ChangeType.ToString()}
+                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};
+                        END
+                        """;
+                var command = new SqlCommand(updateSql, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
+
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected != 1)
+                {
+                    throw new ApplicationException($"Rows affected for soft deletion of is not 1, it is {rowsAffected}.");
                 }
             }
         }
@@ -377,13 +430,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
-                    await _client.DeleteFile(configurations, filePathAndName);
+                    await Client.DeleteFile(configurations, filePathAndName);
                 }
                 else
                 {
                     var json = JsonConvert.SerializeObject(data, _immediateOutputSerializerSettings);
 
-                    await _client.SaveData(configurations, json, filePathAndName, JsonMimeType);
+                    await Client.SaveData(configurations, json, filePathAndName, JsonMimeType);
 
                 }
             }
@@ -424,7 +477,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             try
             {
                 var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, config.ToDictionary(config => config.Key, config => config.Value));
-                await _client.EnsureDataLakeDirectoryExist(jobData);
+                if (!await VerifyDataLakeConnection(jobData))
+                {
+                    return new ConnectionVerificationResult(false, "Data Lake connection cannot be established.");
+                }
 
                 if (jobData.IsStreamCacheEnabled)
                 {
@@ -452,7 +508,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     if (!string.IsNullOrWhiteSpace(jobData.FileNamePattern))
                     {
                         var trimmed = jobData.FileNamePattern.Trim();
-                        var  invalidCharacters = new[] { '/', '\\', '?', '%' };
+                        var invalidCharacters = new[] { '/', '\\', '?', '%' };
                         if (trimmed.StartsWith("."))
                         {
                             return new ConnectionVerificationResult(false, "File name pattern cannot start with a period.");
@@ -471,6 +527,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 _logger.LogError(e, "Error verifying connection");
                 return new ConnectionVerificationResult(false, e.Message);
             }
+        }
+
+        protected virtual async Task<bool> VerifyDataLakeConnection(IDataLakeJobData jobData)
+        {
+            await Client.EnsureDataLakeDirectoryExist(jobData);
+            return true;
         }
 
         private async Task VerifyTableOperations(string connectionString)
@@ -523,7 +585,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             try
             {
-                await WriteToCacheTable(connection, syncItem, tableName);
+                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: false);
 
             }
             catch (Exception ex)
@@ -552,7 +614,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-            _client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
+            Client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
         }
 
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)

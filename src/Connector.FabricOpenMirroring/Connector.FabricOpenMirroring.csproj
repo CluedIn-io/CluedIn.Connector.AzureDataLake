@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CluedIn.Connector.FabricMirroring provides the ability to post data to FabricMirroring</Description>
+    <AssemblyName>CluedIn.Connector.FabricMirroring</AssemblyName>
+    <RootNamespace>CluedIn.Connector.FabricMirroring</RootNamespace>
+    <IsCluedInServerComponent>true</IsCluedInServerComponent>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Resources\fabricOpenMirroring.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\fabricOpenMirroring.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Fabric.Api" />
+  </ItemGroup>
+</Project>
