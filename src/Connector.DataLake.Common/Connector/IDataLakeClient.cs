@@ -1,7 +1,9 @@
-﻿using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
+using CluedIn.Core.Connectors;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
@@ -12,4 +14,5 @@ public interface IDataLakeClient
     Task DeleteFile(IDataLakeJobData configuration, string fileName);
     Task<bool> FileInPathExists(IDataLakeJobData configuration, string fileName);
     Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName);
+    Task<IEnumerable<IConnectorContainer>> GetFilesInDirectory(IDataLakeJobData configuration, string subDirectory = null);
 }
