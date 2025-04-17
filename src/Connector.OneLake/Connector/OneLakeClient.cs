@@ -46,7 +46,7 @@ public class OneLakeClient : DataLakeClient
         return casted.WorkspaceName;
     }
 
-    internal async Task LoadToTableAsync(string outputFileName, IDataLakeJobData configuration)
+    internal async Task LoadToTableAsync(string sourceFileName, string targetTableName, IDataLakeJobData configuration)
     {
         var casted = CastJobData<OneLakeConnectorJobData>(configuration);
         if (!casted.ShouldLoadToTable)
@@ -69,14 +69,14 @@ public class OneLakeClient : DataLakeClient
             throw new ApplicationException($"Lakehouse {casted.ItemName} is not found in workspace {workspace.Id}.");
         }
 
-        var loadTableRequest = new LoadTableRequest($"{casted.ItemFolder}/{outputFileName}", PathType.File)
+        var loadTableRequest = new LoadTableRequest($"{casted.ItemFolder}/{sourceFileName}", PathType.File)
         {
             Mode = ModeType.Overwrite,
-            FileExtension = Path.GetExtension(outputFileName)[1..],
+            FileExtension = Path.GetExtension(sourceFileName)[1..],
             FormatOptions = GetFileFormatOptions(configuration),
         };
 
-        await fabricClient.Lakehouse.Tables.LoadTableAsync(workspace.Id, lakehouse.Id.Value, casted.TableName, loadTableRequest);
+        await fabricClient.Lakehouse.Tables.LoadTableAsync(workspace.Id, lakehouse.Id.Value, targetTableName, loadTableRequest);
     }
 
     private FileFormatOptions GetFileFormatOptions(IDataLakeJobData configuration)

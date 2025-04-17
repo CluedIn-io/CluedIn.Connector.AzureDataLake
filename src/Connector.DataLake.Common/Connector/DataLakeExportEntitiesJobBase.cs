@@ -188,7 +188,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             await setFilePropertiesAsync();
             await deleteFileIfExistsAsync(outputFileName);
             await renameToTargetFileAsync();
-            await PostExportAsync(exportJobData);
+            await PostExportAsync(context, exportJobData);
         }
         context.Log.LogInformation(
             "End writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName}.",
@@ -272,7 +272,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
     private protected virtual bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => true;
 
-    private protected virtual Task PostExportAsync(ExportJobData exportJobData)
+    private protected virtual Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
         return Task.CompletedTask;
     }
@@ -449,7 +449,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     {
         if (HasCustomFileNamePattern(configuration))
         {
-            return GetOutputFileNameUsingPatternAsync(context, configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
+            return ReplaceNameUsingPatternAsync(context, configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
         }
 
         return GetDefaultOutputFileNameAsync(context, configuration, streamId, containerName, asOfTime, outputFormat);
@@ -468,14 +468,14 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return Task.FromResult($"{streamIdFormatted}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}");
     }
 
-    private static Task<string> GetOutputFileNameUsingPatternAsync(ExecutionContext context, string outputFileNamePattern, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    protected static Task<string> ReplaceNameUsingPatternAsync(ExecutionContext context, string pattern, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
     {
         var timeRegexPattern = @"\{(DataTime)(\:[a-zA-Z0-9\-\._]+)?\}";
         var streamIdRegexPattern = @"\{(StreamId)(\:[a-zA-Z0-9\-\._]+)?\}";
         var containerNameRegexPattern = @"\{(ContainerName)(\:[a-zA-Z0-9\-\._]+)?\}";
         var outputFormatRegexPattern = @"\{(OutputFormat)(\:[a-zA-Z0-9\-\._]+)?\}";
 
-        var timeReplaced = Replace(timeRegexPattern, outputFileNamePattern, (match, format) => asOfTime.ToString(format ?? "o"));
+        var timeReplaced = Replace(timeRegexPattern, pattern, (match, format) => asOfTime.ToString(format ?? "o"));
         var streamIdReplaced = Replace(streamIdRegexPattern, timeReplaced, (match, format) => streamId.ToString(format ?? "D"));
         var containerNameReplaced = Replace(containerNameRegexPattern, streamIdReplaced, (match, format) => containerName);
         var outputFormatReplaced = Replace(outputFormatRegexPattern, containerNameReplaced, (match, format) =>

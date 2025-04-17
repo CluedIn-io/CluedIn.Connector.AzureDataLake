@@ -23,9 +23,16 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private OneLakeClient DataLakeClient { get; }
 
-    private protected override async Task PostExportAsync(ExportJobData exportJobData)
+    private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
-        await base.PostExportAsync(exportJobData);
-        await DataLakeClient.LoadToTableAsync(exportJobData.OutputFileName, exportJobData.DataLakeJobData);
+        var jobData = exportJobData.DataLakeJobData as OneLakeConnectorJobData;
+        var replacedTableName = await ReplaceNameUsingPatternAsync(
+            context,
+            jobData.TableName,
+            exportJobData.StreamId,
+            exportJobData.StreamModel.ContainerName,
+            exportJobData.AsOfTime,
+            exportJobData.OutputFormat);
+        await DataLakeClient.LoadToTableAsync(exportJobData.OutputFileName, replacedTableName, exportJobData.DataLakeJobData);
     }
 }
