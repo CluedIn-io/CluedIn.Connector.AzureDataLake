@@ -28,7 +28,6 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
     // From documentation, it's ambiguous whether we need at least 5k or 50k rows to be optimal
     // TODO: Find recommendations or method to calculate row group threshold
     public const int RowGroupThreshold = 10000;
-    private static readonly Regex NonAlphaNumericRegex = new ("[^a-zA-Z0-9_]");
 
     public override async Task<long> WriteOutputAsync(
         ExecutionContext context,
@@ -82,11 +81,6 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         }
 
         return totalProcessed;
-    }
-
-    private string EscapeVocabularyKey(string fieldName)
-    {
-        return NonAlphaNumericRegex.Replace(fieldName, "_");
     }
 
     protected virtual DataField GetParquetDataField(string fieldName, Type databaseFieldType, IDataLakeJobData configuration)
