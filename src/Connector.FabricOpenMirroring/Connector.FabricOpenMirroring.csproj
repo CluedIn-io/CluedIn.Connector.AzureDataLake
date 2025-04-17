@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>CluedIn.Connector.FabricMirroring provides the ability to post data to FabricMirroring</Description>
-    <AssemblyName>CluedIn.Connector.FabricMirroring</AssemblyName>
-    <RootNamespace>CluedIn.Connector.FabricMirroring</RootNamespace>
+    <Description>CluedIn.Connector.FabricOpenMirroring provides the ability to post data to Microsoft's Fabric Mirrored Database using Open Mirroring</Description>
+    <AssemblyName>CluedIn.Connector.FabricOpenMirroring</AssemblyName>
+    <RootNamespace>CluedIn.Connector.FabricOpenMirroring</RootNamespace>
     <IsCluedInServerComponent>true</IsCluedInServerComponent>
   </PropertyGroup>
   <ItemGroup>

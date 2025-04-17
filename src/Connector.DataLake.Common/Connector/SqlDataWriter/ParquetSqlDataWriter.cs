@@ -25,15 +25,10 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
     private static readonly List<string> EdgesFields = new List<string> { "OutgoingEdges", "IncomingEdges" };
     private static readonly List<string> ArrayFields = CodesFields.Concat(EdgesFields).ToList();
 
-    public ParquetSqlDataWriter (IDataTransformer dataTransformer)
-    {
-        _dataTransformer = dataTransformer;
-    }
     // From documentation, it's ambiguous whether we need at least 5k or 50k rows to be optimal
     // TODO: Find recommendations or method to calculate row group threshold
     public const int RowGroupThreshold = 10000;
     private static readonly Regex NonAlphaNumericRegex = new ("[^a-zA-Z0-9_]");
-    private readonly IDataTransformer _dataTransformer;
 
     public override async Task<long> WriteOutputAsync(
         ExecutionContext context,
@@ -45,22 +40,8 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         var fields = new List<Field>();
         foreach (var fieldName in fieldNames)
         {
-            var type = reader.GetFieldType(fieldName);
-
-            var isArrayField = ArrayFields.Contains(fieldName);
-
-            var parquetType = isArrayField ? typeof(IEnumerable<string>) : GetParquetDataType(type, configuration);
-
-            var transformedTypes = _dataTransformer.GetType(configuration, new KeyValuePair<string, Type>(fieldName, parquetType));
-
-            foreach (var transformed in transformedTypes)
-            {
-                var transformedFieldName = transformed.Key;
-                var transformedFieldType = transformed.Value;
-
-                var parquetFieldName = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(transformedFieldName) : transformedFieldName;
-                fields.Add(new DataField(parquetFieldName, transformedFieldType));
-            }
+            var databaseFieldType = reader.GetFieldType(fieldName);
+            fields.Add(GetParquetDataField(fieldName, databaseFieldType, configuration));
         }
 
         var schema = new ParquetSchema(fields);
@@ -71,10 +52,9 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
 
         while (await reader.ReadAsync())
         {
-            var fieldValues = fieldNames.SelectMany(key => {
+            var fieldValues = fieldNames.Select(key => {
                 var value = GetValue(key, reader, configuration);
-                var transformedValues = _dataTransformer.GetValue(configuration, new KeyValuePair<string, object>(key, value));
-                return transformedValues.Select(value => value.Value);
+                return value;
             });
 
             parquetTable.Add(new ParquetRow(fieldValues));
@@ -109,11 +89,29 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         return NonAlphaNumericRegex.Replace(fieldName, "_");
     }
 
-    private static Type GetParquetDataType(Type type, IDataLakeJobData configuration)
+    protected virtual DataField GetParquetDataField(string fieldName, Type databaseFieldType, IDataLakeJobData configuration)
+    {
+        var parquetFieldType = GetParquetDataFieldType(fieldName, databaseFieldType, configuration);
+        var parquetFieldName = GetParquetDataFieldName(fieldName, databaseFieldType, configuration);
+        var parquetFieldNameToUse = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(parquetFieldName) : parquetFieldName;
+        return new DataField(parquetFieldNameToUse, parquetFieldType);
+    }
+
+    protected virtual string GetParquetDataFieldName(string fieldName, Type type, IDataLakeJobData configuration)
+    {
+        return fieldName;
+    }
+
+    protected virtual Type GetParquetDataFieldType(string fieldName, Type type, IDataLakeJobData configuration)
     {
         if (type == typeof(string))
         {
             return type;
+        }
+
+        if (ArrayFields.Contains(fieldName) && !configuration.IsArrayColumnsEnabled)
+        {
+            return typeof(IEnumerable<string>);
         }
 
         // TODO: Consider using DateTime and possibly additional column?
@@ -173,14 +171,17 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
             return (value as DateTimeOffset?).Value.ToString("o", CultureInfo.InvariantCulture);
         }
 
-        if (CodesFields.Contains(key))
+        if (configuration.IsArrayColumnsEnabled)
         {
-            return JsonConvert.DeserializeObject<string[]>(value.ToString());
-        }
+            if (CodesFields.Contains(key))
+            {
+                return JsonConvert.DeserializeObject<string[]>(value.ToString());
+            }
 
-        if (EdgesFields.Contains(key))
-        {
-            return GetEdgesData(value);
+            if (EdgesFields.Contains(key))
+            {
+                return GetEdgesData(value);
+            }
         }
 
         return value;

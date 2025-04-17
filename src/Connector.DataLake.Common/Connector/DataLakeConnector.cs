@@ -477,56 +477,61 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             try
             {
                 var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, config.ToDictionary(config => config.Key, config => config.Value));
-                if (!await VerifyDataLakeConnection(jobData))
-                {
-                    return new ConnectionVerificationResult(false, "Data Lake connection cannot be established.");
-                }
-
-                if (jobData.IsStreamCacheEnabled)
-                {
-                    if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
-                    {
-                        return new ConnectionVerificationResult(false, $"Stream cache connection string must be valid when buffer is enabled.");
-                    }
-
-                    await VerifyTableOperations(jobData.StreamCacheConnectionString);
-
-                    if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
-                    {
-                        var supported = string.Join(',', DataLakeConstants.OutputFormats.SupportedFormats);
-                        var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
-                        return new ConnectionVerificationResult(false, errorMessage);
-                    }
-
-                    if (!CronSchedules.TryGetCronSchedule(jobData.GetCronOrScheduleName(), out _))
-                    {
-                        var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
-                        var errorMessage = $"Schedule '{jobData.Schedule}' with cron '{jobData.CustomCron}' is not supported. Supported schedules are {supported} and valid cron expression.";
-                        return new ConnectionVerificationResult(false, errorMessage);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(jobData.FileNamePattern))
-                    {
-                        var trimmed = jobData.FileNamePattern.Trim();
-                        var invalidCharacters = new[] { '/', '\\', '?', '%' };
-                        if (trimmed.StartsWith("."))
-                        {
-                            return new ConnectionVerificationResult(false, "File name pattern cannot start with a period.");
-                        }
-                        else if (trimmed.IndexOfAny(invalidCharacters) != -1)
-                        {
-                            return new ConnectionVerificationResult(false, "File name contains invalid characters.");
-                        }
-                    }
-                }
-
-                return new ConnectionVerificationResult(true);
+                return await VerifyConnectionInternal(executionContext, jobData);
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Error verifying connection");
                 return new ConnectionVerificationResult(false, e.Message);
             }
+        }
+
+        protected virtual async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData)
+        {
+            if (!await VerifyDataLakeConnection(jobData))
+            {
+                return new ConnectionVerificationResult(false, "Data Lake connection cannot be established.");
+            }
+
+            if (jobData.IsStreamCacheEnabled)
+            {
+                if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
+                {
+                    return new ConnectionVerificationResult(false, $"Stream cache connection string must be valid when buffer is enabled.");
+                }
+
+                await VerifyTableOperations(jobData.StreamCacheConnectionString);
+
+                if (!DataLakeConstants.OutputFormats.IsValid(jobData.OutputFormat))
+                {
+                    var supported = string.Join(',', DataLakeConstants.OutputFormats.AllSupportedFormats);
+                    var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
+                if (!CronSchedules.TryGetCronSchedule(jobData.GetCronOrScheduleName(), out _))
+                {
+                    var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
+                    var errorMessage = $"Schedule '{jobData.Schedule}' with cron '{jobData.CustomCron}' is not supported. Supported schedules are {supported} and valid cron expression.";
+                    return new ConnectionVerificationResult(false, errorMessage);
+                }
+
+                if (!string.IsNullOrWhiteSpace(jobData.FileNamePattern))
+                {
+                    var trimmed = jobData.FileNamePattern.Trim();
+                    var invalidCharacters = new[] { '/', '\\', '?', '%' };
+                    if (trimmed.StartsWith("."))
+                    {
+                        return new ConnectionVerificationResult(false, "File name pattern cannot start with a period.");
+                    }
+                    else if (trimmed.IndexOfAny(invalidCharacters) != -1)
+                    {
+                        return new ConnectionVerificationResult(false, "File name contains invalid characters.");
+                    }
+                }
+            }
+
+            return new ConnectionVerificationResult(true);
         }
 
         protected virtual async Task<bool> VerifyDataLakeConnection(IDataLakeJobData jobData)

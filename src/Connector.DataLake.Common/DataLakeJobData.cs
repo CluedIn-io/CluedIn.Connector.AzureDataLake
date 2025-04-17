@@ -22,7 +22,7 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
     public string CustomCron => GetConfigurationValue(DataLakeConstants.CustomCron) as string;
     public virtual bool IsDeltaMode => GetConfigurationValue(DataLakeConstants.IsDeltaMode) as bool? ?? false;
     public virtual bool IsOverwriteEnabled => GetConfigurationValue(DataLakeConstants.IsOverwriteEnabled) as bool? ?? true;
-    public virtual bool IsSerializedArrayColumnsEnabled => GetConfigurationValue(DataLakeConstants.IsSerializedArrayColumnsEnabled) as bool? ?? true;
+    public virtual bool IsArrayColumnsEnabled => GetConfigurationValue(DataLakeConstants.IsArrayColumnsEnabled) as bool? ?? false;
 
     public override int GetHashCode()
     {
@@ -45,7 +45,7 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
         hash.Add(CustomCron);
         hash.Add(IsDeltaMode);
         hash.Add(IsOverwriteEnabled);
-        hash.Add(IsSerializedArrayColumnsEnabled);
+        hash.Add(IsArrayColumnsEnabled);
     }
 
     public override bool Equals(object obj)
@@ -68,7 +68,7 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
             CustomCron == other.CustomCron &&
             IsDeltaMode == other.IsDeltaMode &&
             IsOverwriteEnabled == other.IsOverwriteEnabled &&
-            IsSerializedArrayColumnsEnabled == other.IsSerializedArrayColumnsEnabled;
+            IsArrayColumnsEnabled == other.IsArrayColumnsEnabled;
     }
 
     protected object GetConfigurationValue(string key)

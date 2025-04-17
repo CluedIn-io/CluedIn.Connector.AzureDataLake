@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
@@ -17,5 +18,14 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
+        DataLakeClient = dataLakeClient;
+    }
+
+    private OneLakeClient DataLakeClient { get; }
+
+    private protected override async Task PostExportAsync(ExportJobData exportJobData)
+    {
+        await base.PostExportAsync(exportJobData);
+        await DataLakeClient.LoadToTableAsync(exportJobData.OutputFileName, exportJobData.DataLakeJobData);
     }
 }

@@ -88,7 +88,12 @@ public class OpenMirroringConstants : DataLakeConstants, IOpenMirroringConstants
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext, isCustomFileNamePatternSupported: false));
+        controls.AddRange(
+            GetAuthMethods(
+                applicationContext,
+                isCustomFileNamePatternSupported: false,
+                isReducedFormats: true,
+                isArrayColumnOptionEnabled: false));
 
         return new AuthMethods
         {

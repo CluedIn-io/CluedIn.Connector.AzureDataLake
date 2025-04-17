@@ -174,7 +174,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             temporaryOutputFileName);
         var temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
         var totalRows = await writeFileContentsAsync();
-        if (totalRows == 0 && !GetIsEmptyFileAllowed(exportJobData))
+        if (configuration.IsDeltaMode && totalRows == 0 && !GetIsEmptyFileAllowed(exportJobData))
         {
             context.Log.LogDebug(
                 "File '{FileName}' for StreamId {StreamId} and DataTime {DataTime} has zero rows. It will be deleted because empty file is not allowed.",
@@ -188,6 +188,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             await setFilePropertiesAsync();
             await deleteFileIfExistsAsync(outputFileName);
             await renameToTargetFileAsync();
+            await PostExportAsync(exportJobData);
         }
         context.Log.LogInformation(
             "End writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName}.",
@@ -270,6 +271,11 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     private protected ExportHistory LastExport { get; private set; }
 
     private protected virtual bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => true;
+
+    private protected virtual Task PostExportAsync(ExportJobData exportJobData)
+    {
+        return Task.CompletedTask;
+    }
 
     protected virtual Task<string> GetSubDirectory(IDataLakeJobData configuration, Guid streamId)
     {
@@ -538,7 +544,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
         else if (format.Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
         {
-            return new ParquetSqlDataWriter(new DefaultDataTransformer());
+            return new ParquetSqlDataWriter();
         }
 
         throw new NotSupportedException($"Format '{outputFormat}' is not supported.");

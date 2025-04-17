@@ -14,5 +14,5 @@ public interface IDataLakeJobData
     string CustomCron { get; }
     bool IsDeltaMode { get; }
     bool IsOverwriteEnabled { get; }
-    bool IsSerializedArrayColumnsEnabled { get; }
+    bool IsArrayColumnsEnabled { get; }
 }

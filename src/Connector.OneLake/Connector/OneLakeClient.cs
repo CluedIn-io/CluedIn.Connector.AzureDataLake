@@ -1,10 +1,19 @@
 ﻿using System;
+using System.IO;
+using System.Threading.Tasks;
 
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
+
+using Microsoft.Fabric.Api;
+using Microsoft.Fabric.Api.Core.Models;
+using Microsoft.Fabric.Api.Lakehouse.Models;
+
+using ParquetModel = Microsoft.Fabric.Api.Lakehouse.Models.Parquet;
+using CsvModel = Microsoft.Fabric.Api.Lakehouse.Models.Csv;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
@@ -35,5 +44,78 @@ public class OneLakeClient : DataLakeClient
     {
         var casted = CastJobData<OneLakeConnectorJobData>(configuration);
         return casted.WorkspaceName;
+    }
+
+    internal async Task LoadToTableAsync(string outputFileName, IDataLakeJobData configuration)
+    {
+        var casted = CastJobData<OneLakeConnectorJobData>(configuration);
+        if (!casted.ShouldLoadToTable)
+        {
+            return;
+        }
+
+        var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
+
+        var fabricClient = new FabricClient(sharedKeyCredential);
+        var workspace = await GetWorkspaceAsync(fabricClient, casted.WorkspaceName);
+        if (workspace == null)
+        {
+            throw new ApplicationException($"Workspace {casted.WorkspaceName}is not found.");
+        }
+
+        var lakehouse = await GetLakehouseAsync(fabricClient, workspace.Id, casted.ItemName);
+        if (lakehouse == null)
+        {
+            throw new ApplicationException($"Lakehouse {casted.ItemName} is not found in workspace {workspace.Id}.");
+        }
+
+        var loadTableRequest = new LoadTableRequest($"{casted.ItemFolder}/{outputFileName}", PathType.File)
+        {
+            Mode = ModeType.Overwrite,
+            FileExtension = Path.GetExtension(outputFileName)[1..],
+            FormatOptions = GetFileFormatOptions(configuration),
+        };
+
+        await fabricClient.Lakehouse.Tables.LoadTableAsync(workspace.Id, lakehouse.Id.Value, casted.TableName, loadTableRequest);
+    }
+
+    private FileFormatOptions GetFileFormatOptions(IDataLakeJobData configuration)
+    {
+        if (configuration.OutputFormat.Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
+        {
+            return new ParquetModel();
+        }
+
+        if (configuration.OutputFormat.Equals(DataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
+        {
+            return new CsvModel();
+        }
+
+        throw new NotSupportedException($"File format {configuration.OutputFormat} is not supported.");
+    }
+
+    private async Task<Lakehouse?> GetLakehouseAsync(FabricClient fabricClient, Guid workspaceId, string lakehouseName)
+    {
+        await foreach (var lakehouse in fabricClient.Lakehouse.Items.ListLakehousesAsync(workspaceId))
+        {
+            if (lakehouse.DisplayName.Equals(lakehouseName, StringComparison.OrdinalIgnoreCase))
+            {
+                return lakehouse;
+            }
+        }
+
+        return null;
+    }
+    private async Task<Workspace?> GetWorkspaceAsync(FabricClient fabricClient, string workspaceName)
+    {
+        await foreach (var workspace in fabricClient.Core.Workspaces.ListWorkspacesAsync())
+        {
+            if (workspace.DisplayName.Equals(workspaceName, StringComparison.OrdinalIgnoreCase))
+            {
+                return workspace;
+            }
+        }
+
+        return null;
     }
 }

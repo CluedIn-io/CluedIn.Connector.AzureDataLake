@@ -23,7 +23,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     public const string CustomCron = nameof(CustomCron);
     public const string IsDeltaMode = nameof(IsDeltaMode);
     public const string IsOverwriteEnabled = nameof(IsOverwriteEnabled);
-    public const string IsSerializedArrayColumnsEnabled = nameof(IsSerializedArrayColumnsEnabled);
+    public const string IsArrayColumnsEnabled = nameof(IsArrayColumnsEnabled);
 
     public const string IdKey = "Id";
     public const string StreamCacheConnectionStringKey = "StreamCache";
@@ -31,10 +31,15 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
 
     internal static class OutputFormats
     {
-        private static readonly HashSet<string> _supportedFormats = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> _allSupportedFormats = new(StringComparer.OrdinalIgnoreCase)
         {
             Csv,
             Json,
+            Parquet,
+        };
+        private static readonly HashSet<string> _reducedSupportedFormats = new(StringComparer.OrdinalIgnoreCase)
+        {
+            Csv,
             Parquet,
         };
 
@@ -42,10 +47,15 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
         public const string Json = "JSON";
         public const string Parquet = "Parquet";
 
-        public static ICollection<string> SupportedFormats => _supportedFormats;
-        public static bool IsValid(string format)
+        public static ICollection<string> AllSupportedFormats => _allSupportedFormats;
+
+        public static ICollection<string> ReducedSupportedFormats => _reducedSupportedFormats;
+
+        public static bool IsValid(string format, bool isReducedSupportedFormat = false)
         {
-            return _supportedFormats.Contains(format);
+            return isReducedSupportedFormat
+                ? _reducedSupportedFormats.Contains(format)
+                : _allSupportedFormats.Contains(format);
         }
     }
 
@@ -96,8 +106,9 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     protected static IEnumerable<Control> GetAuthMethods(
         ApplicationContext applicationContext,
         bool isCustomFileNamePatternSupported = true,
-        bool isDeltaOptionEnabled = false,
-        bool isSerializedArrayColumnEnabled = false)
+        bool isArrayColumnOptionEnabled = false,
+        bool isReducedFormats = false,
+        bool isDeltaOptionEnabled = false)
     {
         string connectionString = null;
         if (applicationContext.System.ConnectionStrings.ConnectionStringExists(StreamCacheConnectionStringKey))
@@ -122,7 +133,9 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                 Type = "option",
                 IsRequired = true,
                 SourceType = ControlSourceType.Dynamic,
-                Source = DataLakeExtendedConfigurationProvider.SourceName,
+                Source = isReducedFormats
+                    ? DataLakeExtendedConfigurationProvider.ReducedFormatsSourceName
+                    : DataLakeExtendedConfigurationProvider.DefaultSourceName,
                 DisplayDependencies = new[]
                 {
                     new ControlDisplayDependency
@@ -156,7 +169,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                 Help = utcExportHelpText,
                 IsRequired = true,
                 SourceType = ControlSourceType.Dynamic,
-                Source = DataLakeExtendedConfigurationProvider.SourceName,
+                Source = DataLakeExtendedConfigurationProvider.DefaultSourceName,
                 DisplayDependencies = new[]
                 {
                     new ControlDisplayDependency
@@ -225,30 +238,30 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                     },
                 });
         }
-        if (isSerializedArrayColumnEnabled)
+        if (isArrayColumnOptionEnabled)
         {
             controls.Add(
                 new()
                 {
-                    Name = IsSerializedArrayColumnsEnabled,
-                    DisplayName = "Adds additional column for Codes and Edges in string format",
+                    Name = IsArrayColumnsEnabled,
+                    DisplayName = "Exports Codes and Edges in array format",
                     Type = "checkbox",
                     IsRequired = false,
                     DisplayDependencies = new[]
                     {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                    new ControlDisplayDependency
-                    {
-                        Name = OutputFormat,
-                        Operator = ControlDependencyOperator.Equals,
-                        Value = OutputFormats.Parquet,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
+                        new ControlDisplayDependency
+                        {
+                            Name = IsStreamCacheEnabled,
+                            Operator = ControlDependencyOperator.Exists,
+                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                        },
+                        new ControlDisplayDependency
+                        {
+                            Name = OutputFormat,
+                            Operator = ControlDependencyOperator.Equals,
+                            Value = OutputFormats.Parquet.ToLowerInvariant(),
+                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                        },
                     },
                 });
         }
@@ -261,17 +274,24 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                     DisplayName = "Delta Mode",
                     Type = "checkbox",
                     Help = """
-                       Write changes since last export instead of all data
+                       Only write changes since last export instead of all data
                        """,
                     IsRequired = false,
                     DisplayDependencies = new[]
                     {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
+                        new ControlDisplayDependency
+                        {
+                            Name = IsStreamCacheEnabled,
+                            Operator = ControlDependencyOperator.Exists,
+                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                        },
+                        new ControlDisplayDependency
+                        {
+                            Name = OutputFormat,
+                            Operator = ControlDependencyOperator.Equals,
+                            Value = OutputFormats.Parquet.ToLowerInvariant(),
+                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                        },
                     },
                 });
         }

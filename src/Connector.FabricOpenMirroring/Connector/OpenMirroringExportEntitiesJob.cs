@@ -8,6 +8,7 @@ using Azure.Storage.Files.DataLake;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
+using CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
@@ -84,7 +85,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
         var format = outputFormat.Trim();
         if (format.Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
         {
-            return new ParquetSqlDataWriter(new OpenMirroringDataTransformer());
+            return new OpenMirroringParquetSqlDataWriter();
         }
         return base.GetSqlDataWriter(outputFormat);
     }

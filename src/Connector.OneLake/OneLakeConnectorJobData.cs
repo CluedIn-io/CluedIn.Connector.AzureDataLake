@@ -23,6 +23,8 @@ internal class OneLakeConnectorJobData : DataLakeJobData
     public string TenantId => Configurations[OneLakeConstants.TenantId] as string;
     public override bool ShouldWriteGuidAsString => true;
     public override bool ShouldEscapeVocabularyKeys => true;
+    public virtual bool ShouldLoadToTable => GetConfigurationValue(OneLakeConstants.ShouldLoadToTable) as bool? ?? false;
+    public string TableName => Configurations[OneLakeConstants.TableName] as string;
 
     protected override void AddToHashCode(HashCode hash)
     {
@@ -33,6 +35,8 @@ internal class OneLakeConnectorJobData : DataLakeJobData
         hash.Add(ClientId);
         hash.Add(ClientSecret);
         hash.Add(TenantId);
+        hash.Add(ShouldLoadToTable);
+        hash.Add(TableName);
 
         base.AddToHashCode(hash);
     }
@@ -52,6 +56,8 @@ internal class OneLakeConnectorJobData : DataLakeJobData
             ClientId == other.ClientId &&
             ClientSecret == other.ClientSecret &&
             TenantId == other.TenantId &&
+            ShouldLoadToTable == other.ShouldLoadToTable &&
+            TableName == other.TableName &&
             base.Equals(other);
     }
 

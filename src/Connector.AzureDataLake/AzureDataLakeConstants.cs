@@ -93,7 +93,7 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext));
+        controls.AddRange(GetAuthMethods(applicationContext, isArrayColumnOptionEnabled: true));
         controls.Add(
             new()
             {

@@ -23,7 +23,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
     public override bool ShouldEscapeVocabularyKeys => true;
     public override bool IsDeltaMode => true;
     public override bool IsOverwriteEnabled => false;
-    public override bool IsSerializedArrayColumnsEnabled => false;
+    public override bool IsArrayColumnsEnabled => false;
     public virtual bool ShouldCreateMirroredDatabase => GetConfigurationValue(OpenMirroringConstants.ShouldCreateMirroredDatabase) as bool? ?? false;
 
     protected override void AddToHashCode(HashCode hash)
