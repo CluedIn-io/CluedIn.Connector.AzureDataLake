@@ -100,12 +100,11 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
     {
         if (type == typeof(string))
         {
+            if (configuration.IsArrayColumnsEnabled && ArrayFields.Contains(fieldName))
+            {
+                return typeof(IEnumerable<string>);
+            }
             return type;
-        }
-
-        if (ArrayFields.Contains(fieldName) && !configuration.IsArrayColumnsEnabled)
-        {
-            return typeof(IEnumerable<string>);
         }
 
         // TODO: Consider using DateTime and possibly additional column?
