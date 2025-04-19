@@ -10,17 +10,25 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 {
     public abstract class DataLakeClient : IDataLakeClient
     {
-        public async Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(IDataLakeJobData configuration)
+        public Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(IDataLakeJobData configuration)
         {
-            var fileSystemClient = await GetFileSystemClientAsync(configuration);
-            var directory = GetDirectory(configuration);
-            var directoryClient = fileSystemClient.GetDirectoryClient(directory);
-            if (!await directoryClient.ExistsAsync())
-            {
-                directoryClient = await fileSystemClient.CreateDirectoryAsync(directory);
-            }
+            return EnsureDataLakeDirectoryExist(configuration, string.Empty);
+        }
+
+        public async Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(IDataLakeJobData configuration, string subDirectory)
+        {
+            var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: true);
+            var directoryClient = await GetDirectoryClientAsync(configuration, fileSystemClient, subDirectory, ensureExists: true);
 
             return directoryClient;
+        }
+
+        public async Task DeleteDirectory(IDataLakeJobData configuration, string subDirectory)
+        {
+            var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: true);
+            var directoryClient = await GetDirectoryClientAsync(configuration, fileSystemClient, subDirectory, ensureExists: true);
+
+            await directoryClient.DeleteIfExistsAsync();
         }
 
         public async Task SaveData(IDataLakeJobData configuration, string content, string fileName, string contentType)
@@ -69,19 +77,20 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return castedJobData;
         }
 
-        public async Task<bool> FileInPathExists(IDataLakeJobData configuration, string fileName)
+        public Task<bool> FileInPathExists(IDataLakeJobData configuration, string fileName)
         {
-            var serviceClient = GetDataLakeServiceClient(configuration);
-            var fileSystemName = GetFileSystemName(configuration);
-            var fileSystemClient = serviceClient.GetFileSystemClient(fileSystemName);
+            return FileInPathExists(configuration, fileName, string.Empty);
+        }
 
+        public async Task<bool> FileInPathExists(IDataLakeJobData configuration, string fileName, string subDirectory)
+        {
+            var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: false);
             if (!await fileSystemClient.ExistsAsync())
             {
                 return false;
             }
 
-            var directory = GetDirectory(configuration);
-            var directoryClient = fileSystemClient.GetDirectoryClient(directory);
+            var directoryClient = await GetDirectoryClientAsync(configuration, fileSystemClient, subDirectory, ensureExists: false);
             if (!await directoryClient.ExistsAsync())
             {
                 return false;
@@ -91,19 +100,38 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return await dataLakeFileClient.ExistsAsync();
         }
 
-        public async Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName)
+        public Task<bool> DirectoryExists(IDataLakeJobData configuration)
         {
-            var serviceClient = GetDataLakeServiceClient(configuration);
-            var fileSystemName = GetFileSystemName(configuration);
-            var fileSystemClient = serviceClient.GetFileSystemClient(fileSystemName);
+            return DirectoryExists(configuration, string.Empty);
+        }
+
+        public async Task<bool> DirectoryExists(IDataLakeJobData configuration, string subDirectory)
+        {
+            var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: false);
+            if (!await fileSystemClient.ExistsAsync())
+            {
+                return false;
+            }
+
+            var directoryClient = await GetDirectoryClientAsync(configuration, fileSystemClient, subDirectory, ensureExists: false);
+            return await directoryClient.ExistsAsync();
+        }
+
+        public Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName)
+        {
+            return GetFilePathProperties(configuration, fileName, string.Empty);
+        }
+
+        public async Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName, string subDirectory)
+        {
+            var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: false);
 
             if (!await fileSystemClient.ExistsAsync())
             {
                 return null;
             }
 
-            var directory = GetDirectory(configuration);
-            var directoryClient = fileSystemClient.GetDirectoryClient(directory);
+            var directoryClient = await GetDirectoryClientAsync(configuration, fileSystemClient, subDirectory, ensureExists: false);
             if (!await directoryClient.ExistsAsync())
             {
                 return null;
@@ -118,13 +146,37 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return await dataLakeFileClient.GetPropertiesAsync();
         }
 
+        private async Task<DataLakeDirectoryClient> GetDirectoryClientAsync(
+            IDataLakeJobData configuration,
+            DataLakeFileSystemClient fileSystemClient,
+            string subDirectory,
+            bool ensureExists)
+        {
+            var directory = GetDirectory(configuration);
+            var directoryClient = fileSystemClient.GetDirectoryClient(directory);
+            if (string.IsNullOrWhiteSpace(subDirectory))
+            {
+                return directoryClient;
+            }
+
+            directoryClient = directoryClient.GetSubDirectoryClient(subDirectory);
+
+            if (ensureExists && !await directoryClient.ExistsAsync())
+            {
+                directoryClient = await fileSystemClient.CreateDirectoryAsync(directoryClient.Path);
+            }
+
+            return directoryClient;
+        }
+
         private async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(
-            IDataLakeJobData configuration)
+            IDataLakeJobData configuration,
+            bool ensureExists)
         {
             var dataLakeServiceClient = GetDataLakeServiceClient(configuration);
             var fileSystemName = GetFileSystemName(configuration);
             var dataLakeFileSystemClient = dataLakeServiceClient.GetFileSystemClient(fileSystemName);
-            if (!await dataLakeFileSystemClient.ExistsAsync())
+            if (ensureExists && !await dataLakeFileSystemClient.ExistsAsync())
             {
                 dataLakeFileSystemClient = await dataLakeServiceClient.CreateFileSystemAsync(fileSystemName);
             }

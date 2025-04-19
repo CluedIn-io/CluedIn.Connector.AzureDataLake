@@ -10,7 +10,8 @@ namespace CluedIn.Connector.DataLake.Common;
 
 internal class DataLakeExtendedConfigurationProvider : IExtendedConfigurationProvider
 {
-    internal const string SourceName = "DataLakeExtendedConfigurationProvider";
+    internal const string DefaultSourceName = "DataLakeExtendedConfigurationProvider";
+    internal const string ReducedFormatsSourceName = $"{DefaultSourceName}_ReducedFormats";
     internal const string CustomCronScheduleName = DataLakeConstants.CustomCronScheduleName;
     private const int DefaultPageSize = 20;
     private static readonly Option[] _scheduleOptions = CronSchedules.SupportedCronScheduleNames
@@ -18,7 +19,10 @@ internal class DataLakeExtendedConfigurationProvider : IExtendedConfigurationPro
         .Append(new Option(CustomCronScheduleName, "Custom Cron"))
         .ToArray();
 
-    private static readonly Option[] _outputFormatOptions = DataLakeConstants.OutputFormats.SupportedFormats
+    private static readonly Option[] _allOutputFormatOptions = DataLakeConstants.OutputFormats.AllSupportedFormats
+        .Select(name => new Option(name.ToLowerInvariant(), name))
+        .ToArray();
+    private static readonly Option[] _reducedOutputFormatOptions = DataLakeConstants.OutputFormats.ReducedSupportedFormats
         .Select(name => new Option(name.ToLowerInvariant(), name))
         .ToArray();
 
@@ -26,7 +30,7 @@ internal class DataLakeExtendedConfigurationProvider : IExtendedConfigurationPro
     {
         return Task.FromResult(new CanHandleResponse
         {
-            CanHandle = request?.Source == SourceName
+            CanHandle = DefaultSourceName.Equals(request?.Source) || ReducedFormatsSourceName.Equals(request?.Source),
         });
     }
 
@@ -34,7 +38,9 @@ internal class DataLakeExtendedConfigurationProvider : IExtendedConfigurationPro
     {
         var found = request.Key switch
         {
-            DataLakeConstants.OutputFormat => HandleOutputFormat(request.CurrentValues).Data.SingleOrDefault(item => item.Value.Equals(request.Value, StringComparison.OrdinalIgnoreCase)),
+            DataLakeConstants.OutputFormat
+                => HandleOutputFormat(request.CurrentValues, request).Data
+                    .SingleOrDefault(item => item.Value.Equals(request.Value, StringComparison.OrdinalIgnoreCase)),
             DataLakeConstants.Schedule => HandleSchedule().Data.SingleOrDefault(item => item.Value.Equals(request.Value, StringComparison.OrdinalIgnoreCase)),
             _ => null,
         };
@@ -52,18 +58,22 @@ internal class DataLakeExtendedConfigurationProvider : IExtendedConfigurationPro
 
         return request.Key switch
         {
-            DataLakeConstants.OutputFormat => HandleOutputFormat(request.CurrentValues),
+            DataLakeConstants.OutputFormat => HandleOutputFormat(request.CurrentValues, request),
             DataLakeConstants.Schedule => HandleSchedule(),
             _ => ResolveOptionsResponse.Empty,
         };
     }
 
-    private static ResolveOptionsResponse HandleOutputFormat(IDictionary<string, string> currentValues)
+    private static ResolveOptionsResponse HandleOutputFormat(IDictionary<string, string> currentValues, ExtendedConfigurationRequest request)
     {
+        var options = ReducedFormatsSourceName.Equals(request?.Source)
+            ? _reducedOutputFormatOptions
+            : _allOutputFormatOptions;
+
         return new ResolveOptionsResponse
         {
-            Data = _outputFormatOptions,
-            Total = _outputFormatOptions.Length,
+            Data = options,
+            Total = options.Length,
             Page = 0,
             Take = DefaultPageSize,
         };

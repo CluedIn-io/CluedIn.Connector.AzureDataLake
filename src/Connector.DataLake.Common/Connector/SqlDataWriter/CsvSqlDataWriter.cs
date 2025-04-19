@@ -27,7 +27,8 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         await using var csv = new CsvWriter(writer, csvConfig);
         foreach (var fieldName in fieldNames)
         {
-            csv.WriteField(fieldName);
+            var fieldNameToUse = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
+            csv.WriteField(fieldNameToUse);
         }
         await csv.NextRecordAsync();
 

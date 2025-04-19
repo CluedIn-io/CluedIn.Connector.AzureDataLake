@@ -21,10 +21,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 
 internal class ParquetSqlDataWriter : SqlDataWriterBase
 {
+    private static readonly List<string> CodesFields = new List<string> { "Codes" };
+    private static readonly List<string> EdgesFields = new List<string> { "OutgoingEdges", "IncomingEdges" };
+    private static readonly List<string> ArrayFields = CodesFields.Concat(EdgesFields).ToList();
+
     // From documentation, it's ambiguous whether we need at least 5k or 50k rows to be optimal
-    // TODO: Find recommendations or method to calculate row group threshold        
+    // TODO: Find recommendations or method to calculate row group threshold
     public const int RowGroupThreshold = 10000;
-    private static readonly Regex NonAlphaNumericRegex = new ("[^a-zA-Z0-9_]");
+
     public override async Task<long> WriteOutputAsync(
         ExecutionContext context,
         IDataLakeJobData configuration,
@@ -35,17 +39,8 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         var fields = new List<Field>();
         foreach (var fieldName in fieldNames)
         {
-            var type = reader.GetFieldType(fieldName);
-
-            var parquetFieldName = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
-            if (fieldName == "Codes" || fieldName == "OutgoingEdges" || fieldName == "IncomingEdges")
-            {
-                fields.Add(new DataField(parquetFieldName, typeof(IEnumerable<string>)));
-            }
-            else
-            {
-                fields.Add(new DataField(parquetFieldName, GetParquetDataType(type, configuration)));
-            }
+            var databaseFieldType = reader.GetFieldType(fieldName);
+            fields.Add(GetParquetDataField(fieldName, databaseFieldType, configuration));
         }
 
         var schema = new ParquetSchema(fields);
@@ -56,7 +51,11 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
 
         while (await reader.ReadAsync())
         {
-            var fieldValues = fieldNames.Select(key => GetValue(key, reader, configuration));
+            var fieldValues = fieldNames.Select(key => {
+                var value = GetValue(key, reader, configuration);
+                return value;
+            });
+
             parquetTable.Add(new ParquetRow(fieldValues));
 
             totalProcessed++;
@@ -84,15 +83,27 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         return totalProcessed;
     }
 
-    private string EscapeVocabularyKey(string fieldName)
+    protected virtual DataField GetParquetDataField(string fieldName, Type databaseFieldType, IDataLakeJobData configuration)
     {
-        return NonAlphaNumericRegex.Replace(fieldName, "_");
+        var parquetFieldType = GetParquetDataFieldType(fieldName, databaseFieldType, configuration);
+        var parquetFieldName = GetParquetDataFieldName(fieldName, databaseFieldType, configuration);
+        var parquetFieldNameToUse = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(parquetFieldName) : parquetFieldName;
+        return new DataField(parquetFieldNameToUse, parquetFieldType);
     }
 
-    private static Type GetParquetDataType(Type type, IDataLakeJobData configuration)
+    protected virtual string GetParquetDataFieldName(string fieldName, Type type, IDataLakeJobData configuration)
+    {
+        return fieldName;
+    }
+
+    protected virtual Type GetParquetDataFieldType(string fieldName, Type type, IDataLakeJobData configuration)
     {
         if (type == typeof(string))
         {
+            if (configuration.IsArrayColumnsEnabled && ArrayFields.Contains(fieldName))
+            {
+                return typeof(IEnumerable<string>);
+            }
             return type;
         }
 
@@ -153,14 +164,17 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
             return (value as DateTimeOffset?).Value.ToString("o", CultureInfo.InvariantCulture);
         }
 
-        if (key == "Codes")
+        if (configuration.IsArrayColumnsEnabled)
         {
-            return JsonConvert.DeserializeObject<string[]>(value.ToString());
-        }
+            if (CodesFields.Contains(key))
+            {
+                return JsonConvert.DeserializeObject<string[]>(value.ToString());
+            }
 
-        if (key == "OutgoingEdges" || key == "IncomingEdges")
-        {
-            return GetEdgesData(value);
+            if (EdgesFields.Contains(key))
+            {
+                return GetEdgesData(value);
+            }
         }
 
         return value;
