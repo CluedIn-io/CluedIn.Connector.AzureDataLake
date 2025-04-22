@@ -43,16 +43,16 @@ public class OpenMirroringConstants : DataLakeConstants, IOpenMirroringConstants
                 Type = "input",
                 IsRequired = true,
             },
-            new ()
-            {
-                Name = ShouldCreateMirroredDatabase,
-                DisplayName = "Create Mirrored Database",
-                Type = "checkbox",
-                IsRequired = true,
-                Help = """
-                Automatically creates the Mirrored Database if it doesn't exist. Requires 'Admin' permission in the workspace.
-                """,
-            },
+            //new ()
+            //{
+            //    Name = ShouldCreateMirroredDatabase,
+            //    DisplayName = "Create Mirrored Database",
+            //    Type = "checkbox",
+            //    IsRequired = true,
+            //    Help = """
+            //    Automatically creates the Mirrored Database if it doesn't exist. Requires 'Admin' permission in the workspace.
+            //    """,
+            //},
             new ()
             {
                 Name = MirroredDatabaseName,
