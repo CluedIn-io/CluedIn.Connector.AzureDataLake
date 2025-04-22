@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Threading.Tasks;
 
 using Azure.Identity;
@@ -13,9 +12,7 @@ using Azure.Core;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Collections.Generic;
-using System.Security.Policy;
 using System.Net.Http.Headers;
-using Castle.Core.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
@@ -92,7 +89,7 @@ public class OneLakeClient : DataLakeClient
 
     private async Task LoadTableAsync(HttpClient httpClient, string token, Guid workspaceId, Guid lakehouseId, string tableName, string filePath)
     {
-        Logger.LogError("Begin loading data from file {File} to table {TableName}.", filePath, tableName);
+        Logger.LogDebug("Begin loading data from file {File} to table {TableName}.", filePath, tableName);
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri($"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables/{tableName}/load");
@@ -101,7 +98,6 @@ public class OneLakeClient : DataLakeClient
             {
                 "pathType": "File",
                 "relativePath": "{{filePath}}",
-                "fileExtension": "{{Path.GetExtension(filePath)[1..]}}",
                 "mode": "Overwrite"
             }
             """);
@@ -114,19 +110,22 @@ public class OneLakeClient : DataLakeClient
             Logger.LogError("Failed to load data from file {File} to table {TableName}. {Error}.", filePath, tableName, responseContent);
             response.EnsureSuccessStatusCode();
         }
-        Logger.LogError("End loading data from file {File} to table {TableName}.", filePath, tableName);
+        Logger.LogDebug("End loading data from file {File} to table {TableName}.", filePath, tableName);
     }
 
     private async Task<Lakehouse?> GetLakehouseAsync(HttpClient httpClient, string token, Guid workspaceId, string lakehouseName)
     {
+        Logger.LogDebug("Begin getting lakehouse from name {LakehouseName}.", lakehouseName);
         await foreach (var lakehouse in ListLakehousesAsync(workspaceId))
         {
             if (lakehouse.DisplayName.Equals(lakehouseName, StringComparison.OrdinalIgnoreCase))
             {
+                Logger.LogDebug("End getting lakehouse from name {LakehouseName}. Lakehouse Id {LakehouseId}.", lakehouseName, lakehouse.Id);
                 return lakehouse;
             }
         }
 
+        Logger.LogDebug("Fail getting lakehouse from name {LakehouseName}.", lakehouseName);
         return null;
 
         async IAsyncEnumerable<Lakehouse> ListLakehousesAsync(Guid workspaceId)
@@ -154,14 +153,17 @@ public class OneLakeClient : DataLakeClient
 
     private async Task<Workspace?> GetWorkspaceAsync(HttpClient httpClient, string token, string workspaceName)
     {
+        Logger.LogDebug("Begin getting workspace from name {WorkspaceName}.", workspaceName);
         await foreach (var workspace in ListWorkspacesAsync())
         {
             if (workspace.DisplayName.Equals(workspaceName, StringComparison.OrdinalIgnoreCase))
             {
+                Logger.LogDebug("End getting workspace from name {WorkspaceName}. Workspace Id {WorkspaceId}.", workspaceName, workspace.Id);
                 return workspace;
             }
         }
 
+        Logger.LogDebug("Fail getting workspace from name {WorkspaceName}.", workspaceName);
         return null;
 
         async IAsyncEnumerable<Workspace> ListWorkspacesAsync()
