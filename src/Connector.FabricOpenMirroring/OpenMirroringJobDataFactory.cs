@@ -22,13 +22,11 @@ public class OpenMirroringJobDataFactory : DataLakeJobDataFactoryBase, IDataLake
         if (!authenticationDetails.TryGetValue(OpenMirroringConstants.MirroredDatabaseName, out var value)
             || string.IsNullOrWhiteSpace(value?.ToString()))
         {
-            if (!authenticationDetails.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out var providerDefinitionId))
+            if (authenticationDetails.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out var providerDefinitionId))
             {
-                throw new ApplicationException("Failed to get provider definition id from authentication details.");
+                authenticationDetails[OpenMirroringConstants.MirroredDatabaseName] = $"CluedIn_ExportTarget_{providerDefinitionId:N}";
+                authenticationDetails[OpenMirroringConstants.ShouldCreateMirroredDatabase] = true;
             }
-
-            authenticationDetails[OpenMirroringConstants.MirroredDatabaseName] = $"CluedIn_ExportTarget_{providerDefinitionId:N}";
-            authenticationDetails[OpenMirroringConstants.ShouldCreateMirroredDatabase] = true;
         }
 
         return await base.GetConfiguration(executionContext, authenticationDetails, containerName);
