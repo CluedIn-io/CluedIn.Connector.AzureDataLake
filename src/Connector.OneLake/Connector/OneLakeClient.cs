@@ -15,11 +15,20 @@ using System.Net.Http.Json;
 using System.Collections.Generic;
 using System.Security.Policy;
 using System.Net.Http.Headers;
+using Castle.Core.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
 public class OneLakeClient : DataLakeClient
 {
+    public ILogger<OneLakeClient> Logger { get; }
+
+    public OneLakeClient(ILogger<OneLakeClient> logger)
+    {
+        Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
     protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
     {
         var casted = CastJobData<OneLakeConnectorJobData>(configuration);
@@ -83,6 +92,7 @@ public class OneLakeClient : DataLakeClient
 
     private async Task LoadTableAsync(HttpClient httpClient, string token, Guid workspaceId, Guid lakehouseId, string tableName, string filePath)
     {
+        Logger.LogError("Begin loading data from file {File} to table {TableName}.", filePath, tableName);
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri($"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables/{tableName}/load");
@@ -100,8 +110,11 @@ public class OneLakeClient : DataLakeClient
 
         if (!response.IsSuccessStatusCode)
         {
+            var responseContent = await response.Content.ReadAsStringAsync();
+            Logger.LogError("Failed to load data from file {File} to table {TableName}. {Error}.", filePath, tableName, responseContent);
             response.EnsureSuccessStatusCode();
         }
+        Logger.LogError("End loading data from file {File} to table {TableName}.", filePath, tableName);
     }
 
     private async Task<Lakehouse?> GetLakehouseAsync(HttpClient httpClient, string token, Guid workspaceId, string lakehouseName)
