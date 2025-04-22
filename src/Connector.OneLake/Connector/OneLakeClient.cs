@@ -8,12 +8,13 @@ using Azure.Storage.Files.DataLake;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 
-using Microsoft.Fabric.Api;
-using Microsoft.Fabric.Api.Core.Models;
-using Microsoft.Fabric.Api.Lakehouse.Models;
 
-using ParquetModel = Microsoft.Fabric.Api.Lakehouse.Models.Parquet;
-using CsvModel = Microsoft.Fabric.Api.Lakehouse.Models.Csv;
+using Azure.Core;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Collections.Generic;
+using System.Security.Policy;
+using System.Net.Http.Headers;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
@@ -55,48 +56,57 @@ public class OneLakeClient : DataLakeClient
         }
 
         var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
+        var tokenResult = await sharedKeyCredential.GetTokenAsync(
+        new TokenRequestContext(new string[]
+        {
+            "https://api.fabric.microsoft.com/.default"
+        }));
+        var token = tokenResult.Token;
 
-        var fabricClient = new FabricClient(sharedKeyCredential);
-        var workspace = await GetWorkspaceAsync(fabricClient, casted.WorkspaceName);
+        var httpClient = new HttpClient();
+
+        var workspace = await GetWorkspaceAsync(httpClient, token, casted.WorkspaceName);
         if (workspace == null)
         {
             throw new ApplicationException($"Workspace {casted.WorkspaceName}is not found.");
         }
 
-        var lakehouse = await GetLakehouseAsync(fabricClient, workspace.Id, casted.ItemName);
+        var lakehouse = await GetLakehouseAsync(httpClient, token, workspace.Id, casted.ItemName);
         if (lakehouse == null)
         {
             throw new ApplicationException($"Lakehouse {casted.ItemName} is not found in workspace {workspace.Id}.");
         }
 
-        var loadTableRequest = new LoadTableRequest($"{casted.ItemFolder}/{sourceFileName}", PathType.File)
-        {
-            Mode = ModeType.Overwrite,
-            FileExtension = Path.GetExtension(sourceFileName)[1..],
-            FormatOptions = GetFileFormatOptions(configuration),
-        };
-
-        await fabricClient.Lakehouse.Tables.LoadTableAsync(workspace.Id, lakehouse.Id.Value, targetTableName, loadTableRequest);
+        var filePath = $"{casted.ItemFolder}/{sourceFileName}";
+        await LoadTableAsync(httpClient, token, workspace.Id, lakehouse.Id.Value, targetTableName, filePath);
     }
 
-    private FileFormatOptions GetFileFormatOptions(IDataLakeJobData configuration)
+    private async Task LoadTableAsync(HttpClient httpClient, string token, Guid workspaceId, Guid lakehouseId, string tableName, string filePath)
     {
-        if (configuration.OutputFormat.Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
-        {
-            return new ParquetModel();
-        }
+        var request = new HttpRequestMessage();
+        request.Method = HttpMethod.Post;
+        request.RequestUri = new Uri($"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables/{tableName}/load");
+        request.Headers.Add("Authorization", $"Bearer {token}");
+        request.Content = new StringContent($$"""
+            {
+                "pathType": "File",
+                "relativePath": "{{filePath}}",
+                "fileExtension": "{{Path.GetExtension(filePath)[1..]}}",
+                "mode": "Overwrite"
+            }
+            """);
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        var response = await httpClient.SendAsync(request);
 
-        if (configuration.OutputFormat.Equals(DataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
+        if (!response.IsSuccessStatusCode)
         {
-            return new CsvModel();
+            response.EnsureSuccessStatusCode();
         }
-
-        throw new NotSupportedException($"File format {configuration.OutputFormat} is not supported.");
     }
 
-    private async Task<Lakehouse?> GetLakehouseAsync(FabricClient fabricClient, Guid workspaceId, string lakehouseName)
+    private async Task<Lakehouse?> GetLakehouseAsync(HttpClient httpClient, string token, Guid workspaceId, string lakehouseName)
     {
-        await foreach (var lakehouse in fabricClient.Lakehouse.Items.ListLakehousesAsync(workspaceId))
+        await foreach (var lakehouse in ListLakehousesAsync(workspaceId))
         {
             if (lakehouse.DisplayName.Equals(lakehouseName, StringComparison.OrdinalIgnoreCase))
             {
@@ -105,10 +115,33 @@ public class OneLakeClient : DataLakeClient
         }
 
         return null;
+
+        async IAsyncEnumerable<Lakehouse> ListLakehousesAsync(Guid workspaceId)
+        {
+            var url = $"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses";
+            do
+            {
+                var request = new HttpRequestMessage();
+                request.Method = HttpMethod.Get;
+                request.RequestUri = new Uri(url);
+                request.Headers.Add("Authorization", $"Bearer {token}");
+                var response = await httpClient.SendAsync(request);
+                var content = await response.Content.ReadFromJsonAsync<GetLakehouseResponse>();
+
+                foreach (var lakehouse in content.Value)
+                {
+                    yield return lakehouse;
+                }
+
+                url = content.ContinuationUri;
+            }
+            while (!string.IsNullOrWhiteSpace(url));
+        }
     }
-    private async Task<Workspace?> GetWorkspaceAsync(FabricClient fabricClient, string workspaceName)
+
+    private async Task<Workspace?> GetWorkspaceAsync(HttpClient httpClient, string token, string workspaceName)
     {
-        await foreach (var workspace in fabricClient.Core.Workspaces.ListWorkspacesAsync())
+        await foreach (var workspace in ListWorkspacesAsync())
         {
             if (workspace.DisplayName.Equals(workspaceName, StringComparison.OrdinalIgnoreCase))
             {
@@ -117,5 +150,55 @@ public class OneLakeClient : DataLakeClient
         }
 
         return null;
+
+        async IAsyncEnumerable<Workspace> ListWorkspacesAsync()
+        {
+            var url = "https://api.fabric.microsoft.com/v1/workspaces";
+            do
+            {
+                var request = new HttpRequestMessage();
+                request.Method = HttpMethod.Get;
+                request.RequestUri = new Uri(url);
+                request.Headers.Add("Authorization", $"Bearer {token}");
+                var response = await httpClient.SendAsync(request);
+                var content = await response.Content.ReadFromJsonAsync<GetWorkspaceResponse>();
+
+                foreach (var workspace in content.Value)
+                {
+                    yield return workspace;
+                }
+
+                url = content.ContinuationUri;
+            }
+            while (!string.IsNullOrWhiteSpace(url));
+        }
     }
+
+    private record Lakehouse(Guid? Id, string DisplayName, Guid WorkspaceId);
+    private record Workspace(Guid Id, string DisplayName, string Description, string Type, Guid CapacityId);
+    private record GetWorkspaceResponse(List<Workspace> Value, string ContinuationToken, string ContinuationUri);
+    private record GetLakehouseResponse(List<Lakehouse> Value, string ContinuationToken, string ContinuationUri);
+
+    //internal HttpMessage CreateLoadTableRequest(Guid workspaceId, Guid lakehouseId, string tableName, LoadTableRequest loadTableRequest)
+    //{
+    //    var message = _pipeline.CreateMessage();
+    //    var request = message.Request;
+    //    request.Method = RequestMethod.Post;
+    //    var uri = new RawRequestUriBuilder();
+    //    uri.Reset(_endpoint);
+    //    uri.AppendPath("/workspaces/", false);
+    //    uri.AppendPath(workspaceId, true);
+    //    uri.AppendPath("/lakehouses/", false);
+    //    uri.AppendPath(lakehouseId, true);
+    //    uri.AppendPath("/tables/", false);
+    //    uri.AppendPath(tableName, true);
+    //    uri.AppendPath("/load", false);
+    //    request.Uri = uri;
+    //    request.Headers.Add("Accept", "application/json");
+    //    request.Headers.Add("Content-Type", "application/json");
+    //    var content = new Utf8JsonRequestContent();
+    //    content.JsonWriter.WriteObjectValue<LoadTableRequest>(loadTableRequest);
+    //    request.Content = content;
+    //    return message;
+    //}
 }
