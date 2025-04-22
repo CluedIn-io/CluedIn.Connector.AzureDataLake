@@ -37,35 +37,63 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
         {
             new ()
             {
-                name = AccountName,
-                displayName = AccountName,
-                type = "input",
-                isRequired = true
+                Name = AccountName,
+                DisplayName = AccountName,
+                Type = "input",
+                IsRequired = true,
+                //ValidationRules = new List<Dictionary<string, string>>()
+                //{
+                //    new() {
+                //        { "regex", "\\s" },
+                //        { "message", "Spaces are not allowed" }
+                //    }
+                //},
             },
             new ()
             {
-                name = AccountKey,
-                displayName = AccountKey,
-                type = "password",
-                isRequired = true
+                Name = AccountKey,
+                DisplayName = AccountKey,
+                Type = "password",
+                IsRequired = true,
+                //ValidationRules = new List<Dictionary<string, string>>()
+                //{
+                //    new() {
+                //        { "regex", "\\s" },
+                //        { "message", "Spaces are not allowed" }
+                //    }
+                //},
             },
             new ()
             {
-                name = FileSystemName,
-                displayName = FileSystemName,
-                type = "input",
-                isRequired = true
+                Name = FileSystemName,
+                DisplayName = FileSystemName,
+                Type = "input",
+                IsRequired = true,
+                //ValidationRules = new List<Dictionary<string, string>>()
+                //{
+                //    new() {
+                //        { "regex", "\\s" },
+                //        { "message", "Spaces are not allowed" }
+                //    }
+                //},
             },
             new ()
             {
-                name = DirectoryName,
-                displayName = DirectoryName,
-                type = "input",
-                isRequired = true
+                Name = DirectoryName,
+                DisplayName = DirectoryName,
+                Type = "input",
+                IsRequired = true,
+                //ValidationRules = new List<Dictionary<string, string>>()
+                //{
+                //    new() {
+                //        { "regex", "\\s" },
+                //        { "message", "Spaces are not allowed" }
+                //    }
+                //},
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext));
+        controls.AddRange(GetAuthMethods(applicationContext, isArrayColumnOptionEnabled: true));
         controls.Add(
             new()
             {
@@ -115,7 +143,7 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
 
         return new AuthMethods
         {
-            token = controls
+            Token = controls
         };
     }
 }
