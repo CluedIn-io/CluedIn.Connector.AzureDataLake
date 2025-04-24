@@ -24,7 +24,7 @@ internal class OneLakeConnectorJobData : DataLakeJobData
     public override bool ShouldWriteGuidAsString => true;
     public override bool ShouldEscapeVocabularyKeys => true;
     public virtual bool ShouldLoadToTable => GetConfigurationValue(OneLakeConstants.ShouldLoadToTable) as bool? ?? false;
-    public string TableName => Configurations[OneLakeConstants.TableName] as string;
+    public string TableName => GetConfigurationValue(OneLakeConstants.TableName) as string;
 
     protected override void AddToHashCode(HashCode hash)
     {
