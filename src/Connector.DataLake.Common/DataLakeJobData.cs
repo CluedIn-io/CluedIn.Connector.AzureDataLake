@@ -20,6 +20,9 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
     public virtual bool ShouldWriteGuidAsString => GetConfigurationValue(DataLakeConstants.ShouldWriteGuidAsString) as bool? ?? false;
     public virtual bool ShouldEscapeVocabularyKeys => GetConfigurationValue(DataLakeConstants.ShouldEscapeVocabularyKeys) as bool? ?? false;
     public string CustomCron => GetConfigurationValue(DataLakeConstants.CustomCron) as string;
+    public virtual bool IsDeltaMode => GetConfigurationValue(DataLakeConstants.IsDeltaMode) as bool? ?? false;
+    public virtual bool IsOverwriteEnabled => GetConfigurationValue(DataLakeConstants.IsOverwriteEnabled) as bool? ?? true;
+    public virtual bool IsArrayColumnsEnabled => GetConfigurationValue(DataLakeConstants.IsArrayColumnsEnabled) as bool? ?? false;
 
     public override int GetHashCode()
     {
@@ -40,6 +43,9 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
         hash.Add(ShouldWriteGuidAsString);
         hash.Add(ShouldEscapeVocabularyKeys);
         hash.Add(CustomCron);
+        hash.Add(IsDeltaMode);
+        hash.Add(IsOverwriteEnabled);
+        hash.Add(IsArrayColumnsEnabled);
     }
 
     public override bool Equals(object obj)
@@ -59,7 +65,10 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
             FileNamePattern == other.FileNamePattern &&
             ShouldWriteGuidAsString == other.ShouldWriteGuidAsString &&
             ShouldEscapeVocabularyKeys == other.ShouldEscapeVocabularyKeys &&
-            CustomCron == other.CustomCron;
+            CustomCron == other.CustomCron &&
+            IsDeltaMode == other.IsDeltaMode &&
+            IsOverwriteEnabled == other.IsOverwriteEnabled &&
+            IsArrayColumnsEnabled == other.IsArrayColumnsEnabled;
     }
 
     protected object GetConfigurationValue(string key)

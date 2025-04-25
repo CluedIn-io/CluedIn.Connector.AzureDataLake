@@ -18,6 +18,8 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
     public const string ClientId = nameof(ClientId);
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
+    public const string ShouldLoadToTable = nameof(ShouldLoadToTable);
+    public const string TableName = nameof(TableName);
 
     public OneLakeConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
         providerName: "OneLake Connector",
@@ -139,6 +141,46 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
 
         controls.AddRange(GetAuthMethods(applicationContext));
 
+        controls.Add(
+            new()
+            {
+                Name = ShouldLoadToTable,
+                DisplayName = "Load to table after exporting",
+                Type = "checkbox",
+                Help = """
+                       Load data from file to table after exporting. Only applicable to CSV and Parquet export
+                       """,
+                IsRequired = false,
+                DisplayDependencies = new[]
+                {
+                        new ControlDisplayDependency
+                        {
+                            Name = IsStreamCacheEnabled,
+                            Operator = ControlDependencyOperator.Exists,
+                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                        },
+                },
+            });
+        controls.Add(
+            new()
+            {
+                Name = TableName,
+                DisplayName = "Table Name",
+                Type = "input",
+                Help = """
+                       Table Name to load to after file export.
+                       """,
+                IsRequired = true,
+                DisplayDependencies = new[]
+                {
+                        new ControlDisplayDependency
+                        {
+                            Name = ShouldLoadToTable,
+                            Operator = ControlDependencyOperator.Exists,
+                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                        },
+                },
+            });
         return new AuthMethods
         {
             Token = controls
