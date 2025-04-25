@@ -22,7 +22,7 @@ internal class OneLakeConnectorJobData : DataLakeJobData
     public string ClientSecret => Configurations[OneLakeConstants.ClientSecret] as string;
     public string TenantId => Configurations[OneLakeConstants.TenantId] as string;
     public override bool ShouldWriteGuidAsString => true;
-    public override bool ShouldEscapeVocabularyKeys => true;
+    public override bool ShouldEscapeVocabularyKeys => GetConfigurationValue(DataLakeConstants.ShouldEscapeVocabularyKeys) as bool? ?? true;
     public virtual bool ShouldLoadToTable => GetConfigurationValue(OneLakeConstants.ShouldLoadToTable) as bool? ?? false;
     public string TableName => GetConfigurationValue(OneLakeConstants.TableName) as string;
 

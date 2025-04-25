@@ -109,9 +109,8 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
                 {
                     new ControlDisplayDependency
                     {
-                        Name = OutputFormat,
-                        Operator = ControlDependencyOperator.Equals,
-                        Value = OutputFormats.Parquet.ToLowerInvariant(),
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
                         UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
                     },
                 },
