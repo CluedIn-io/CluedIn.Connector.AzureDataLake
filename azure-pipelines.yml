@@ -29,7 +29,7 @@ resources:
       ref: ${{ parameters.pipelineTemplateRef }}
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: 'ubuntu-22.04'
 
 variables:
   - name: testFolderPath
@@ -61,3 +61,4 @@ steps:
       deleteIntegrationEnvironmentScriptArguments: '-Action TearDown'
       publishCodeCoverage: true
       useGitVersionDotNetTool: true
+      publishToDevFeed: true
