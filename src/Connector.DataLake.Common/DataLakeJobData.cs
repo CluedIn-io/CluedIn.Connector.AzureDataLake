@@ -11,7 +11,7 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
     }
 
     public string OutputFormat => GetConfigurationValue(DataLakeConstants.OutputFormat) as string ?? DataLakeConstants.OutputFormats.Json;
-    public bool IsStreamCacheEnabled => GetConfigurationValue(DataLakeConstants.IsStreamCacheEnabled) as bool? ?? false;
+    public virtual bool IsStreamCacheEnabled => GetConfigurationValue(DataLakeConstants.IsStreamCacheEnabled) as bool? ?? false;
     public string StreamCacheConnectionString => GetConfigurationValue(DataLakeConstants.StreamCacheConnectionString) as string;
     public string Schedule => GetConfigurationValue(DataLakeConstants.Schedule) as string;
     public string ContainerName { get; }

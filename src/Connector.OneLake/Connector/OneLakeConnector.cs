@@ -44,6 +44,11 @@ public class OneLakeConnector : DataLakeConnector
             return new ConnectionVerificationResult(false, errorMessage);
         }
 
+        if (!casted.ShouldEscapeVocabularyKeys)
+        {
+            return new ConnectionVerificationResult(false, $"Must set {nameof(casted.ShouldEscapeVocabularyKeys)} when data should be loaded to table.");
+        }
+
         return result;
     }
 }

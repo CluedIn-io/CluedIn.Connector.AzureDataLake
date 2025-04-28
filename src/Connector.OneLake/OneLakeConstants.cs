@@ -139,8 +139,30 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext));
+        controls.AddRange(GetAuthMethods(applicationContext, isArrayColumnOptionEnabled: true));
 
+        controls.Add(
+            new()
+            {
+                Name = ShouldEscapeVocabularyKeys,
+                DisplayName = "Replace Non-Alphanumeric Characters in Column Names",
+                Type = "checkbox",
+                IsRequired = false,
+                Help = """
+                    Replaces characters in the column names that are not in this list ('a-z', 'A-Z', '0-9' and '_') with the character '_'.
+                    Enable this if you plan to load the file to a table.
+                    """,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
+            }
+        );
         controls.Add(
             new()
             {
@@ -153,12 +175,18 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 IsRequired = false,
                 DisplayDependencies = new[]
                 {
-                        new ControlDisplayDependency
-                        {
-                            Name = IsStreamCacheEnabled,
-                            Operator = ControlDependencyOperator.Exists,
-                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                        },
+                    new ControlDisplayDependency
+                    {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                    new ControlDisplayDependency
+                    {
+                        Name = ShouldEscapeVocabularyKeys,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
                 },
             });
         controls.Add(
@@ -173,12 +201,12 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 IsRequired = true,
                 DisplayDependencies = new[]
                 {
-                        new ControlDisplayDependency
-                        {
-                            Name = ShouldLoadToTable,
-                            Operator = ControlDependencyOperator.Exists,
-                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                        },
+                    new ControlDisplayDependency
+                    {
+                        Name = ShouldLoadToTable,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
                 },
             });
         return new AuthMethods
