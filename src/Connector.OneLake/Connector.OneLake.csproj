@@ -14,4 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Fabric.Api" />
+  </ItemGroup>
 </Project>
