@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CluedIn.Connector.FabricOpenMirroring provides the ability to post data to Microsoft's Fabric Mirrored Database using Open Mirroring</Description>
+    <AssemblyName>CluedIn.Connector.FabricOpenMirroring</AssemblyName>
+    <RootNamespace>CluedIn.Connector.FabricOpenMirroring</RootNamespace>
+    <IsCluedInServerComponent>true</IsCluedInServerComponent>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Resources\fabricOpenMirroring.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\fabricOpenMirroring.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
+  </ItemGroup>
+</Project>
