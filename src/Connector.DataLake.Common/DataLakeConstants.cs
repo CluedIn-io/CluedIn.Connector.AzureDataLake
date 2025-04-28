@@ -108,7 +108,8 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
         bool isCustomFileNamePatternSupported = true,
         bool isArrayColumnOptionEnabled = false,
         bool isReducedFormats = false,
-        bool isDeltaOptionEnabled = false)
+        bool isDeltaOptionEnabled = false,
+        bool isForceStreamCache = false)
     {
         string connectionString = null;
         if (applicationContext.System.ConnectionStrings.ConnectionStringExists(StreamCacheConnectionStringKey))
@@ -117,38 +118,40 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
         }
 
         var utcExportHelpText = $"Files will be exported using {TimeZoneInfo.Utc.Id} time zone (offset {TimeZoneInfo.Utc.BaseUtcOffset:hh\\:mm})";
-        var controls = new List<Control>
+
+        var controls = new List<Control>();
+        if (!isForceStreamCache)
         {
-            new ()
+            controls.Add(new()
             {
                 Name = IsStreamCacheEnabled,
                 DisplayName = "Enable Stream Cache (Sync mode only)",
                 Type = "checkbox",
                 IsRequired = false,
-            },
-            new ()
-            {
-                Name = OutputFormat,
-                DisplayName = "Output Format",
-                Type = "option",
-                IsRequired = true,
-                SourceType = ControlSourceType.Dynamic,
-                Source = isReducedFormats
-                    ? DataLakeExtendedConfigurationProvider.ReducedFormatsSourceName
-                    : DataLakeExtendedConfigurationProvider.DefaultSourceName,
-                DisplayDependencies = new[]
-                {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                },
-            },
+            });
         };
 
-        if (string.IsNullOrWhiteSpace(connectionString))
+        var streamCacheDependency = new ControlDisplayDependency
+        {
+            Name = IsStreamCacheEnabled,
+            Operator = ControlDependencyOperator.Exists,
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
+
+        controls.Add(new()
+        {
+            Name = OutputFormat,
+            DisplayName = "Output Format",
+            Type = "option",
+            IsRequired = true,
+            SourceType = ControlSourceType.Dynamic,
+            Source = isReducedFormats
+                    ? DataLakeExtendedConfigurationProvider.ReducedFormatsSourceName
+                    : DataLakeExtendedConfigurationProvider.DefaultSourceName,
+            DisplayDependencies = isForceStreamCache ? [] : [streamCacheDependency],
+        });
+
+        if (!isForceStreamCache && string.IsNullOrWhiteSpace(connectionString))
         {
             controls.Add(
                 new ()
@@ -170,16 +173,17 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                 IsRequired = true,
                 SourceType = ControlSourceType.Dynamic,
                 Source = DataLakeExtendedConfigurationProvider.DefaultSourceName,
-                DisplayDependencies = new[]
-                {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                },
+                DisplayDependencies = isForceStreamCache ? [] : [streamCacheDependency],
             });
+
+        var customScheduleDependency = new ControlDisplayDependency
+        {
+            Name = Schedule,
+            Operator = ControlDependencyOperator.Equals,
+            Value = CustomCronScheduleName,
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
+
         controls.Add(
             new()
             {
@@ -195,22 +199,9 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                         Name = Schedule,
                     },
                 },
-                DisplayDependencies = new[]
-                {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                    new ControlDisplayDependency
-                    {
-                        Name = Schedule,
-                        Operator = ControlDependencyOperator.Equals,
-                        Value = CustomCronScheduleName,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                },
+                DisplayDependencies = isForceStreamCache
+                    ? [ customScheduleDependency ]
+                    : [ streamCacheDependency, customScheduleDependency ],
             });
 
         if (isCustomFileNamePatternSupported)
@@ -227,17 +218,17 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                        Variables can also be formatted using formatString modifier. For more information, please refer to the documentation.
                        """,
                     IsRequired = false,
-                    DisplayDependencies = new[]
-                    {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                    },
+                    DisplayDependencies = isForceStreamCache ? [] : [ streamCacheDependency ],
                 });
         }
+
+        var parquetFormatDependency = new ControlDisplayDependency
+        {
+            Name = OutputFormat,
+            Operator = ControlDependencyOperator.Equals,
+            Value = OutputFormats.Parquet.ToLowerInvariant(),
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
         if (isArrayColumnOptionEnabled)
         {
             controls.Add(
@@ -247,22 +238,9 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                     DisplayName = "Exports Codes and Edges in array format",
                     Type = "checkbox",
                     IsRequired = false,
-                    DisplayDependencies = new[]
-                    {
-                        new ControlDisplayDependency
-                        {
-                            Name = IsStreamCacheEnabled,
-                            Operator = ControlDependencyOperator.Exists,
-                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                        },
-                        new ControlDisplayDependency
-                        {
-                            Name = OutputFormat,
-                            Operator = ControlDependencyOperator.Equals,
-                            Value = OutputFormats.Parquet.ToLowerInvariant(),
-                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                        },
-                    },
+                    DisplayDependencies = isForceStreamCache
+                    ? [ parquetFormatDependency ]
+                    : [ streamCacheDependency, parquetFormatDependency ],
                 });
         }
         if (isDeltaOptionEnabled)
@@ -277,22 +255,9 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
                        Only write changes since last export instead of all data
                        """,
                     IsRequired = false,
-                    DisplayDependencies = new[]
-                    {
-                        new ControlDisplayDependency
-                        {
-                            Name = IsStreamCacheEnabled,
-                            Operator = ControlDependencyOperator.Exists,
-                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                        },
-                        new ControlDisplayDependency
-                        {
-                            Name = OutputFormat,
-                            Operator = ControlDependencyOperator.Equals,
-                            Value = OutputFormats.Parquet.ToLowerInvariant(),
-                            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                        },
-                    },
+                    DisplayDependencies = isForceStreamCache
+                    ? [ parquetFormatDependency ]
+                    : [ streamCacheDependency, parquetFormatDependency],
                 });
         }
         return controls;
