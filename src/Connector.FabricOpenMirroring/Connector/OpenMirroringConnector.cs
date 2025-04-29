@@ -31,7 +31,8 @@ public class OpenMirroringConnector : DataLakeConnector
         // probably could do it by verifying if jobdata from db = jobdata created from passed config
         // but we need to be able to get provider definition id, which is not passed
         if (jobData is OpenMirroringConnectorJobData castedJobData
-            && (!castedJobData.Configurations.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out var providerDefinition)))
+            && !castedJobData.Configurations.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out var providerDefinition)
+            && string.IsNullOrWhiteSpace(castedJobData.MirroredDatabaseName))
         {
             return true;
         }
