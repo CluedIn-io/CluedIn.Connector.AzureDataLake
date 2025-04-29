@@ -153,8 +153,8 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             .ToList();
 
         var fieldNamesToUse = configuration.IsDeltaMode
-            ? fieldNames.Where(fieldName => fieldName != DataLakeConstants.ChangeTypeKey).ToList()
-            : fieldNames;
+            ? fieldNames
+            : fieldNames.Where(fieldName => fieldName != DataLakeConstants.ChangeTypeKey).ToList();
 
         var temporaryOutputFileName = outputFileName + TemporaryFileSuffix;
         using var loggingScope = context.Log.BeginScope(new Dictionary<string, object>
