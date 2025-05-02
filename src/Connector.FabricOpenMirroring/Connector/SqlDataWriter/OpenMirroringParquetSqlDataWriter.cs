@@ -41,7 +41,7 @@ internal class OpenMirroringParquetSqlDataWriter : ParquetSqlDataWriter
                 VersionChangeType.Removed => 2,
                 _ => 3,
             };
-            return new KeyValuePair<string, object>(RowMarkerKey, value.ToString());
+            return value.ToString();
         }
 
         return valueFromBase;
