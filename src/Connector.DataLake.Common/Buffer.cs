@@ -34,7 +34,7 @@ namespace CluedIn.Connector.DataLake.Common
 
         private DateTime _lastAdded;
 
-        private readonly CancellationTokenSource _idleCancellationTokenSource;
+        private CancellationTokenSource _idleCancellationTokenSource;
 
         private readonly int _autoMaxSizeDetectionSampleSize = 3;   // twice is a coincidence, three times is a pattern
 
@@ -166,11 +166,11 @@ namespace CluedIn.Connector.DataLake.Common
             var t = _idleTask;
             if (t != null)
             {
-                Console.WriteLine("Canceling");
                 _idleCancellationTokenSource.Cancel();
-                Console.WriteLine("Canceled");
 
                 await t;
+
+                _idleCancellationTokenSource = new();
             }
         }
 
