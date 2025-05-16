@@ -5,6 +5,8 @@ using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
+using Microsoft.Extensions.Logging;
+
 namespace CluedIn.Connector.OneLake.Connector;
 
 internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
@@ -26,6 +28,18 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
     private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
         var jobData = exportJobData.DataLakeJobData as OneLakeConnectorJobData;
+        if (!jobData.ShouldLoadToTable)
+        {
+            context.Log.LogDebug("Skipping loading to table as the job data does not require it.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(jobData.TableName))
+        {
+            context.Log.LogWarning("Skipping loading to table as the table name is not specified.");
+            return;
+        }
+
         var replacedTableName = await ReplaceNameUsingPatternAsync(
             context,
             jobData.TableName,
