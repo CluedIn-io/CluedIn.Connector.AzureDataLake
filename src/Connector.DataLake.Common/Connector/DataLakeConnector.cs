@@ -509,7 +509,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     return new ConnectionVerificationResult(false, errorMessage);
                 }
 
-                if (!CronSchedules.TryGetCronSchedule(jobData.GetCronOrScheduleName(), out _))
+                var cronOrScheduleName = jobData.GetCronOrScheduleName();
+                if (string.IsNullOrWhiteSpace(cronOrScheduleName))
+                {
+                    return new ConnectionVerificationResult(false, "Schedule name cannot be empty.");
+                }
+
+                if (!CronSchedules.TryGetCronSchedule(cronOrScheduleName, out _))
                 {
                     var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
                     var errorMessage = $"Schedule '{jobData.Schedule}' with cron '{jobData.CustomCron}' is not supported. Supported schedules are {supported} and valid cron expression.";
