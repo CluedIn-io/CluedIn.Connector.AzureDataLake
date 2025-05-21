@@ -45,13 +45,13 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 DisplayName = WorkspaceName,
                 Type = "input",
                 IsRequired = true,
-                //ValidationRules = new List<Dictionary<string, string>>()
-                //{
-                //    new() {
-                //        { "regex", "\\s" },
-                //        { "message", "Spaces are not allowed" }
-                //    }
-                //},
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
@@ -59,13 +59,13 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 DisplayName = ItemName,
                 Type = "input",
                 IsRequired = true,
-                //ValidationRules = new List<Dictionary<string, string>>()
-                //{
-                //    new() {
-                //        { "regex", "\\s" },
-                //        { "message", "Spaces are not allowed" }
-                //    }
-                //},
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
@@ -73,13 +73,13 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 DisplayName = ItemType,
                 Type = "input",
                 IsRequired = true,
-                //ValidationRules = new List<Dictionary<string, string>>()
-                //{
-                //    new() {
-                //        { "regex", "\\s" },
-                //        { "message", "Spaces are not allowed" }
-                //    }
-                //},
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
@@ -87,13 +87,13 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 DisplayName = ItemFolder,
                 Type = "input",
                 IsRequired = true,
-                //ValidationRules = new List<Dictionary<string, string>>()
-                //{
-                //    new() {
-                //        { "regex", "\\s" },
-                //        { "message", "Spaces are not allowed" }
-                //    }
-                //},
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
@@ -101,13 +101,13 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 DisplayName = ClientId,
                 Type = "input",
                 IsRequired = true,
-                //ValidationRules = new List<Dictionary<string, string>>()
-                //{
-                //    new() {
-                //        { "regex", "\\s" },
-                //        { "message", "Spaces are not allowed" }
-                //    }
-                //},
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
@@ -115,13 +115,13 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 DisplayName = ClientSecret,
                 Type = "password",
                 IsRequired = true,
-                //ValidationRules = new List<Dictionary<string, string>>()
-                //{
-                //    new() {
-                //        { "regex", "\\s" },
-                //        { "message", "Spaces are not allowed" }
-                //    }
-                //},
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
             new ()
             {
@@ -129,13 +129,13 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 DisplayName = TenantId,
                 Type = "input",
                 IsRequired = true,
-                //ValidationRules = new List<Dictionary<string, string>>()
-                //{
-                //    new() {
-                //        { "regex", "\\s" },
-                //        { "message", "Spaces are not allowed" }
-                //    }
-                //},
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
             },
         };
 
