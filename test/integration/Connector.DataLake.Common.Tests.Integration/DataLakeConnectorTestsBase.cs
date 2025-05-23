@@ -1,4 +1,4 @@
-using System;
+嚜簑sing System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
@@ -53,7 +53,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     where TConstants : class, IDataLakeConstants
 {
     private readonly ITestOutputHelper _testOutputHelper;
-    private static readonly DateTimeOffset _defaultCurrentTime = new (2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5));
+    private static readonly DateTimeOffset _defaultCurrentTime = new(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5));
 
 
     public DataLakeConnectorTestsBase(ITestOutputHelper testOutputHelper)
@@ -598,7 +598,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                 var dataColumn = await rowGroupReader.ReadColumnAsync(dataField);
                 var columnType = dataColumn.Field.SchemaType;
 
-                var value = getValue(dataColumn);
+                var value = GetValue(dataColumn);
                 columns.Add(dataField.Name, value);
             }
             actualRows.Add(new DataRow() { Columns = columns });
@@ -613,10 +613,10 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             var firstRow = unformattedExpectedResult[0];
 
             firstRow.Columns["IncomingEdges"] = """
-                ["EdgeType: /EntityA; From: 低:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; To: 低:/EntityA#Somewhere:1234; Properties: 0"]
+                ["EdgeType: /EntityA; From: 禮C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; To: 禮C:/EntityA#Somewhere:1234; Properties: 0"]
                 """;
             firstRow.Columns["OutgoingEdges"] = """
-            ["EdgeType: /EntityB; From: 低:/EntityB#Somewhere:5678; To: 低:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; Properties: 0"]
+            ["EdgeType: /EntityB; From: 禮C:/EntityB#Somewhere:5678; To: 禮C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; Properties: 0"]
             """;
         }
 
@@ -624,7 +624,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
         AssertResult(actualRows, formattedExpectedResult.ToList());
 
-        string getValue(Parquet.Data.DataColumn dataColumn)
+        string GetValue(Parquet.Data.DataColumn dataColumn)
         {
             var type = dataColumn.Field.ClrType;
 
@@ -654,7 +654,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         }
 
         object getValueDirectlyOrFromNullable<TValue>(Parquet.Data.DataColumn dataColumn)
-            where TValue: struct
+            where TValue : struct
         {
             if (dataColumn.Field.IsNullable)
                 return ((TValue?[])dataColumn.Data)[0];
