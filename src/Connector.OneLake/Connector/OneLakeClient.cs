@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using Azure.Identity;
@@ -39,18 +39,6 @@ public class OneLakeClient : DataLakeClient
             new Uri(dfsUri),
             sharedKeyCredential);
         return dataLakeServiceClient;
-    }
-
-    protected override string GetDirectory(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OneLakeConnectorJobData>(configuration);
-        return  $"{casted.ItemName}.{casted.ItemType}/{casted.ItemFolder}/"; //"jlalakehouse.Lakehouse/Files/";
-    }
-
-    protected override string GetFileSystemName(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OneLakeConnectorJobData>(configuration);
-        return casted.WorkspaceName;
     }
 
     internal async Task LoadToTableAsync(string sourceFileName, string targetTableName, IDataLakeJobData configuration)
@@ -193,27 +181,4 @@ public class OneLakeClient : DataLakeClient
     private record Workspace(Guid Id, string DisplayName, string Description, string Type, Guid CapacityId);
     private record GetWorkspaceResponse(List<Workspace> Value, string ContinuationToken, string ContinuationUri);
     private record GetLakehouseResponse(List<Lakehouse> Value, string ContinuationToken, string ContinuationUri);
-
-    //internal HttpMessage CreateLoadTableRequest(Guid workspaceId, Guid lakehouseId, string tableName, LoadTableRequest loadTableRequest)
-    //{
-    //    var message = _pipeline.CreateMessage();
-    //    var request = message.Request;
-    //    request.Method = RequestMethod.Post;
-    //    var uri = new RawRequestUriBuilder();
-    //    uri.Reset(_endpoint);
-    //    uri.AppendPath("/workspaces/", false);
-    //    uri.AppendPath(workspaceId, true);
-    //    uri.AppendPath("/lakehouses/", false);
-    //    uri.AppendPath(lakehouseId, true);
-    //    uri.AppendPath("/tables/", false);
-    //    uri.AppendPath(tableName, true);
-    //    uri.AppendPath("/load", false);
-    //    request.Uri = uri;
-    //    request.Headers.Add("Accept", "application/json");
-    //    request.Headers.Add("Content-Type", "application/json");
-    //    var content = new Utf8JsonRequestContent();
-    //    content.JsonWriter.WriteObjectValue<LoadTableRequest>(loadTableRequest);
-    //    request.Content = content;
-    //    return message;
-    //}
 }

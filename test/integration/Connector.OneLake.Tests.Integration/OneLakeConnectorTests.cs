@@ -4,11 +4,10 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
-using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
-using CluedIn.Connector.AzureDataLake.Connector;
+using CluedIn.Connector.OneLake.Connector;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
@@ -24,14 +23,16 @@ using Xunit;
 using Xunit.Abstractions;
 
 using Encoding = System.Text.Encoding;
+using Azure.Identity;
 
-namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
+namespace CluedIn.Connector.OneLake.Tests.Integration;
 
-public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataLakeConnector, AzureDataLakeJobDataFactory, IAzureDataLakeConstants>
+public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector, OneLakeJobDataFactory, IOneLakeConstants>
 {
-    protected override Guid DataLakeProviderId => AzureDataLakeConstants.DataLakeProviderId;
+    protected override Guid DataLakeProviderId => OneLakeConstants.DataLakeProviderId;
+    protected override bool IsFixedFileSystem => true;
 
-    public AzureDataLakeConnectorTests(ITestOutputHelper testOutputHelper)
+    public OneLakeConnectorTests(ITestOutputHelper testOutputHelper)
         : base(testOutputHelper)
     {
     }
@@ -40,7 +41,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyStoreData_EventStream()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new OneLakeConnectorJobData(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
@@ -61,7 +62,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async void VerifyStoreData_Sync_WithoutStreamCache()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new OneLakeConnectorJobData(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
@@ -92,7 +93,14 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatUnescaped()
     {
-        await VerifyStoreData_Sync_WithStreamCache("csv", AssertCsvResultUnescaped);
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultUnescaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), false);
+            });
     }
 
     [Fact]
@@ -111,7 +119,14 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatUnescaped()
     {
-        await VerifyStoreData_Sync_WithStreamCache("pArQuet", AssertParquetResultUnescaped);
+        await VerifyStoreData_Sync_WithStreamCache(
+            "pArQuet",
+            AssertParquetResultUnescaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), false);
+            });
     }
 
     [Fact]
@@ -135,7 +150,40 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             AssertParquetResultArrayColumnEnabled,
             configureAuthentication: (values) =>
             {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), false);
                 values.Add(nameof(DataLakeConstants.IsArrayColumnsEnabled), true);
+            });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetCanLoadToTable()
+    {
+        var tableName = Guid.NewGuid().ToString("N");
+        await VerifyStoreData_Sync_WithStreamCache(
+            "pArQuet",
+            async (fileClient, fileSystemClient, setupContainerResult) =>
+            {
+                await AssertParquetResultEscaped(fileClient, fileSystemClient, setupContainerResult);
+                var jobData = setupContainerResult.DataLakeJobData as OneLakeConnectorJobData;
+                var dataLakeClient = GetDataLakeClient(jobData);
+                var directoryName = $"{jobData.ItemName}.Lakehouse/Tables/{tableName}";
+
+                var tableFile = await WaitForFileToBeCreated(
+                    jobData.FileSystemName,
+                    directoryName,
+                    dataLakeClient,
+                    paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList());
+
+                Assert.NotNull(tableFile);
+                await fileSystemClient.DeleteDirectoryAsync(directoryName);
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(OneLakeConstants.ShouldLoadToTable), true);
+                values.Add(nameof(OneLakeConstants.TableName), tableName);
             });
     }
 
@@ -144,7 +192,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "csv",
-            AssertCsvResultUnescaped,
+            AssertCsvResultEscaped,
             async executeExportArg =>
             {
                 var jobArgs = new DataLakeJobArgs
@@ -190,7 +238,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         };
         await VerifyStoreData_Sync_WithStreamCache(
             "csv",
-            AssertCsvResultUnescaped,
+            AssertCsvResultEscaped,
             async executeExportArg =>
             {
                 var jobArgs = new DataLakeJobArgs
@@ -250,7 +298,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         };
         await VerifyStoreData_Sync_WithStreamCache(
             "csv",
-            AssertCsvResultUnescaped,
+            AssertCsvResultEscaped,
             async executeExportArg =>
             {
                 var jobArgs = new DataLakeJobArgs
@@ -298,46 +346,6 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             });
     }
 
-    [Fact]
-    public async Task GetContainers_InvalidParamsTest()
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
-
-        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
-        var connector = setupResult.ConnectorMock.Object;
-        var containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
-        Assert.Null(containers);
-
-        //This is an existing container in the Azure Data Lake account
-        //There are existing files in the directory
-        //Changing this or removing the files will cause the test to fail
-        configuration[AzureDataLakeConstants.FileSystemName] = "apac-container";
-        configuration[AzureDataLakeConstants.DirectoryName] = "TestExport01";
-
-        containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
-        Assert.NotNull(containers);
-    }
-
-    [Fact]
-    public async Task GetContainers_HasValuesTest()
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        //This is an existing container in the Azure Data Lake account
-        //There are existing files in the directory
-        //Changing this or removing the files will cause the test to fail
-        configuration[AzureDataLakeConstants.FileSystemName] = "apac-container";
-        configuration[AzureDataLakeConstants.DirectoryName] = "TestExport01";
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
-
-        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
-        var connector = setupResult.ConnectorMock.Object;
-        var containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
-
-        Assert.NotNull(containers);
-        Assert.NotEmpty(containers);
-    }
-
     private async Task VerifyStoreData_Sync_WithStreamCache(
         string format,
         Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
@@ -347,7 +355,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     {
         var configuration = CreateConfigurationWithStreamCache(format);
         configureAuthentication?.Invoke(configuration);
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new OneLakeConnectorJobData(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
         var connector = setupResult.ConnectorMock.Object;
@@ -368,48 +376,72 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
 
     private protected override DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
-        var azureDataLakeClient = new AzureDataLakeClient();
-        var exportJob = new AzureDataLakeExportEntitiesJob(
+        var logger = new Mock<ILogger<OneLakeClient>>();
+        var dataLakeClient = new OneLakeClient(logger.Object);
+        var exportJob = new OneLakeExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
-            azureDataLakeClient,
+            dataLakeClient,
             setupResult.ConstantsMock.Object,
             setupResult.JobDataFactoryMock.Object,
             setupResult.DateTimeOffsetProviderMock.Object);
         return exportJob;
     }
 
-
-
-    private static DataLakeServiceClient GetDataLakeClient(AzureDataLakeConnectorJobData jobData)
+    private static DataLakeServiceClient GetDataLakeClient(OneLakeConnectorJobData jobData)
     {
+        var sharedKeyCredential = GetCredential(jobData);
         return new DataLakeServiceClient(
-            new Uri($"https://{jobData.AccountName}.dfs.core.windows.net"),
-        new StorageSharedKeyCredential(jobData.AccountName, jobData.AccountKey));
+            new Uri("https://onelake.dfs.fabric.microsoft.com"),
+            sharedKeyCredential);
+    }
+
+    private static ClientSecretCredential GetCredential(OneLakeConnectorJobData jobData)
+    {
+        return new ClientSecretCredential(jobData.TenantId, jobData.ClientId, jobData.ClientSecret);
     }
 
     private Dictionary<string, object> CreateConfigurationWithoutStreamCache()
     {
-        var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
-        Assert.NotNull(accountName);
-        var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
-        Assert.NotNull(accountKey);
+        var tenantId = Environment.GetEnvironmentVariable("ONELAKE_TENANTID");
+        var clientId = Environment.GetEnvironmentVariable("ONELAKE_CLIENTID");
+        var clientSecretEncoded = Environment.GetEnvironmentVariable("ONELAKE_CLIENTSECRET");
+        var workspaceName = Environment.GetEnvironmentVariable("ONELAKE_WORKSPACENAME");
+        var itemName = Environment.GetEnvironmentVariable("ONELAKE_ITEMNAME");
 
-        var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}";
+        var clientSecretString = Encoding.UTF8.GetString(Convert.FromBase64String(clientSecretEncoded));
+        var maskedSecret = string.IsNullOrWhiteSpace(clientSecretEncoded) ? string.Empty
+            : $"{clientSecretEncoded[0..3]}{new string('*', Math.Max(clientSecretEncoded.Length - 3, 0))}";
+        TestOutputHelper.WriteLine(
+            "Using TenantId: '{0}', ClientId: '{1}', ClientSecret: '{2}', WorkspaceName: '{3}', ItemName: '{4}'.",
+            tenantId,
+            clientId,
+            maskedSecret,
+            workspaceName,
+            itemName);
+        Assert.NotNull(tenantId);
+        Assert.NotNull(clientId);
+        Assert.NotNull(clientSecretString);
+        Assert.NotNull(workspaceName);
+        Assert.NotNull(itemName);
+
         var directoryName = $"xunit-{DateTime.Now.Ticks}";
         return new Dictionary<string, object>()
         {
-            { nameof(AzureDataLakeConstants.AccountName), accountName },
-            { nameof(AzureDataLakeConstants.AccountKey), accountKey },
-            { nameof(AzureDataLakeConstants.FileSystemName), fileSystemName },
-            { nameof(AzureDataLakeConstants.DirectoryName), directoryName },
+            { nameof(OneLakeConstants.TenantId), tenantId },
+            { nameof(OneLakeConstants.ClientId), clientId },
+            { nameof(OneLakeConstants.ClientSecret), clientSecretString },
+            { nameof(OneLakeConstants.WorkspaceName), workspaceName },
+            { nameof(OneLakeConstants.ItemName), itemName },
+            { nameof(OneLakeConstants.ItemFolder), $"Files/{directoryName}" },
+            { nameof(OneLakeConstants.ItemType), "Lakehouse" },
         };
     }
 
     private Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
     {
         var baseConfiguration = CreateConfigurationWithoutStreamCache();
-        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ADL2_STREAMCACHE");
+        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ONELAKE_STREAMCACHE");
         var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
         Console.WriteLine(streamCacheConnectionString);
         Assert.NotNull(streamCacheConnectionString);
@@ -425,14 +457,15 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         return updatedConfiguration;
     }
 
-    protected override Mock<AzureDataLakeConnector> GetConnectorMock(
+    protected override Mock<OneLakeConnector> GetConnectorMock(
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
-        Mock<IAzureDataLakeConstants> constantsMock,
-        Mock<AzureDataLakeJobDataFactory> jobDataFactory)
+        Mock<IOneLakeConstants> constantsMock,
+        Mock<OneLakeJobDataFactory> jobDataFactory)
     {
-        var mockConnector = new Mock<AzureDataLakeConnector>(
-            new Mock<ILogger<AzureDataLakeConnector>>().Object,
-            new AzureDataLakeClient(),
+        var logger = new Mock<ILogger<OneLakeClient>>();
+        var mockConnector = new Mock<OneLakeConnector>(
+            new Mock<ILogger<OneLakeConnector>>().Object,
+            new OneLakeClient(logger.Object),
             constantsMock.Object,
             jobDataFactory.Object,
             mockDateTimeOffsetProvider.Object);

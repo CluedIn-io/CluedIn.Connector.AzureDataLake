@@ -6,6 +6,9 @@
     <IsCluedInServerComponent>true</IsCluedInServerComponent>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
+  </ItemGroup>
+  <ItemGroup>
     <None Remove="Resources\fabricOpenMirroring.svg" />
   </ItemGroup>
   <ItemGroup>
