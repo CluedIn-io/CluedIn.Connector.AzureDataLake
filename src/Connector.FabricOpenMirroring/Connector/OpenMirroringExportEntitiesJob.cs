@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -52,6 +52,11 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
         // This is because we are deleting empty files
         var newCount = LastExport.TotalRows > 0 ? lastCount + 1 : lastCount;
         return $"{newCount:D20}.{outputFormat.ToLowerInvariant()}";
+    }
+
+    private protected override bool ShouldSkipExport(ExportJobData exportJobData)
+    {
+        return LastExport?.DataTime == exportJobData.AsOfTime;
     }
 
     private protected override bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => false;

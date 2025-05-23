@@ -5,6 +5,19 @@
     <RootNamespace>CluedIn.Connector.DataLake.Common</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureAIStudio" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDatabricks" />
+    <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring" />
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake" />
+    <InternalsVisibleTo Include="CluedIn.Connector.SynapseDataEngineering" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Unit" />
+    <InternalsVisibleTo Include="CluedIn.Connector.DataLake.Common.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Azure.Storage.Files.DataLake" />
     <PackageReference Include="CluedIn.Core" />
     <PackageReference Include="CsvHelper" />

@@ -7,8 +7,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
 
-using Apache.Arrow;
-
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
@@ -17,10 +15,10 @@ using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
+using CsvHelper;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-
-using Parquet;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
@@ -69,6 +67,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var exportJobData = await GetJobDataAsync(context, args, "export");
         if (exportJobData == null)
         {
+            return;
+        }
+
+        if (ShouldSkipExport(exportJobData))
+        {
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required.", exportJobData.StreamId);
             return;
         }
 
@@ -151,7 +155,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
             .Select(reader.GetName)
             .ToList();
-
         var temporaryOutputFileName = outputFileName + TemporaryFileSuffix;
         using var loggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {
@@ -264,6 +267,11 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             var targetFileClient = directoryClient.GetFileClient(file);
             await targetFileClient.DeleteIfExistsAsync();
         }
+    }
+
+    private protected virtual bool ShouldSkipExport(ExportJobData exportJobData)
+    {
+        return false;
     }
 
     private protected virtual async Task<List<string>> GetFieldNamesAsync(

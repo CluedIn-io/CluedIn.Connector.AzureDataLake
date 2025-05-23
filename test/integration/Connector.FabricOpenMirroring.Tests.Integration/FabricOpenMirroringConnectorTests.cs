@@ -4,13 +4,11 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
-using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
-using CluedIn.Connector.AzureDataLake.Connector;
+using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Core;
 using CluedIn.Core.Data.Parts;
@@ -24,94 +22,26 @@ using Xunit;
 using Xunit.Abstractions;
 
 using Encoding = System.Text.Encoding;
+using Azure.Identity;
+using CluedIn.Connector.DataLake.Common.Connector;
 
-namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
+namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;
 
-public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataLakeConnector, AzureDataLakeJobDataFactory, IAzureDataLakeConstants>
+public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirroringConnector, OpenMirroringJobDataFactory, IOpenMirroringConstants>
 {
-    protected override Guid DataLakeProviderId => AzureDataLakeConstants.DataLakeProviderId;
+    protected override Guid DataLakeProviderId => OpenMirroringConstants.DataLakeProviderId;
+    protected override bool IsFixedFileSystem => true;
 
-    public AzureDataLakeConnectorTests(ITestOutputHelper testOutputHelper)
+    public OpenMirroringConnectorTests(ITestOutputHelper testOutputHelper)
         : base(testOutputHelper)
     {
     }
 
-    [Fact]
-    public async Task VerifyStoreData_EventStream()
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
-
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-
-        var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
-        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
-        await AssertImmediateOutputResult(
-            jobData.FileSystemName,
-            jobData.RootDirectoryPath,
-            GetDataLakeClient(jobData),
-            assertMethod: async (fileClient) =>
-            {
-                await AssertJsonResult(fileClient, StreamMode.EventStream, VersionChangeType.Added);
-            });
-    }
-
-    [Fact]
-    public async void VerifyStoreData_Sync_WithoutStreamCache()
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
-
-        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
-        var connector = setupResult.ConnectorMock.Object;
-
-        var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
-        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
-        await AssertImmediateOutputResult(
-            jobData.FileSystemName,
-            jobData.RootDirectoryPath,
-            GetDataLakeClient(jobData),
-            assertMethod: async (fileClient) =>
-            {
-                await AssertJsonResult(fileClient, StreamMode.Sync, VersionChangeType.Added, isSingleObject: true);
-            });
-    }
-
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndJsonFormat()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "JSON",
-            assertMethod: async (fileClient, _, _) =>
-            {
-                await AssertJsonResult(fileClient, StreamMode.Sync, VersionChangeType.Added);
-            });
-    }
-
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatUnescaped()
-    {
-        await VerifyStoreData_Sync_WithStreamCache("csv", AssertCsvResultUnescaped);
-    }
-
-    [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatEscaped()
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "csv",
-            AssertCsvResultEscaped,
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
-            });
-    }
-
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatUnescaped()
-    {
-        await VerifyStoreData_Sync_WithStreamCache("pArQuet", AssertParquetResultUnescaped);
+            AssertCsvResultEscaped);
     }
 
     [Fact]
@@ -119,32 +49,15 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "pArQuet",
-            AssertParquetResultEscaped,
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
-            });
-    }
-
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithArrayColumnsEnabled()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "pArQuet",
-            AssertParquetResultArrayColumnEnabled,
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(DataLakeConstants.IsArrayColumnsEnabled), true);
-            });
+            AssertParquetResultEscaped);
     }
 
     [Fact]
     public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndSameDataTime_CanSkip()
     {
         await VerifyStoreData_Sync_WithStreamCache(
-            "csv",
-            AssertCsvResultUnescaped,
+            "parquet",
+            AssertParquetResultEscaped,
             async executeExportArg =>
             {
                 var jobArgs = new DataLakeJobArgs
@@ -180,7 +93,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     }
 
     [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanOverwrite()
+    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanCreateNewFile()
     {
         var executionCount = 0;
         var dateTimeList = new List<DateTimeOffset>
@@ -189,8 +102,8 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
         };
         await VerifyStoreData_Sync_WithStreamCache(
-            "csv",
-            AssertCsvResultUnescaped,
+            "parquet",
+            AssertParquetResultEscapedWithRowMarker,
             async executeExportArg =>
             {
                 var jobArgs = new DataLakeJobArgs
@@ -249,8 +162,8 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
         };
         await VerifyStoreData_Sync_WithStreamCache(
-            "csv",
-            AssertCsvResultUnescaped,
+            "parquet",
+            AssertParquetResultEscapedWithRowMarker,
             async executeExportArg =>
             {
                 var jobArgs = new DataLakeJobArgs
@@ -299,43 +212,84 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     }
 
     [Fact]
-    public async Task GetContainers_InvalidParamsTest()
+    public async Task VerifyStoreData_Sync_WithStreamCacheFirstExportNoRowMarker()
     {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
-
-        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
-        var connector = setupResult.ConnectorMock.Object;
-        var containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
-        Assert.Null(containers);
-
-        //This is an existing container in the Azure Data Lake account
-        //There are existing files in the directory
-        //Changing this or removing the files will cause the test to fail
-        configuration[AzureDataLakeConstants.FileSystemName] = "apac-container";
-        configuration[AzureDataLakeConstants.DirectoryName] = "TestExport01";
-
-        containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
-        Assert.NotNull(containers);
+        await VerifyStoreData_Sync_WithStreamCache(
+            "pArQuet",
+            AssertParquetResultEscaped);
     }
 
     [Fact]
-    public async Task GetContainers_HasValuesTest()
+    public async Task VerifyStoreData_Sync_WithStreamCacheSubsequentExportHasRowMarker()
     {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        //This is an existing container in the Azure Data Lake account
-        //There are existing files in the directory
-        //Changing this or removing the files will cause the test to fail
-        configuration[AzureDataLakeConstants.FileSystemName] = "apac-container";
-        configuration[AzureDataLakeConstants.DirectoryName] = "TestExport01";
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var executionCount = 0;
+        var dateTimeList = new List<DateTimeOffset>
+        {
+            DefaultCurrentTime,
+            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+        };
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            AssertParquetResultEscapedWithRowMarker,
+            async executeExportArg =>
+            {
+                var jobArgs = new DataLakeJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0 1-31 * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
-        var connector = setupResult.ConnectorMock.Object;
-        var containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
+                executionCount++;
 
-        Assert.NotNull(containers);
-        Assert.NotEmpty(containers);
+                var firstPath = await WaitForFileToBeCreated(
+                    executeExportArg.FileSystemName,
+                    executeExportArg.DirectoryName,
+                executeExportArg.Client);
+
+                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                var secondPath = await WaitForFileToBeCreated(
+                    executeExportArg.FileSystemName,
+                    executeExportArg.DirectoryName,
+                    executeExportArg.Client,
+                    filterPaths: paths =>
+                    {
+                        return paths.Where(path => path.Name != firstPath.Name).ToList();
+                    });
+                var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
+
+                Assert.NotEqual(firstDataTime, secondDataTime);
+                return secondPath;
+            },
+            mockDateTimeOffsetProvider =>
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                    .Returns(() =>
+                    {
+                        return dateTimeList[executionCount];
+                    });
+            });
+    }
+
+    private async Task AssertParquetResultEscapedWithRowMarker(
+        DataLakeFileClient fileClient,
+        DataLakeFileSystemClient fileSystemClient,
+        SetupContainerResult setupContainerResult)
+    {
+        await base.AssertParquetResult(fileClient, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+        {
+            var result = original.ToList();
+            original.First().Columns["__rowMarker__"] = "4";
+            return result;
+        });
     }
 
     private async Task VerifyStoreData_Sync_WithStreamCache(
@@ -347,7 +301,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     {
         var configuration = CreateConfigurationWithStreamCache(format);
         configureAuthentication?.Invoke(configuration);
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new OpenMirroringConnectorJobData(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
         var connector = setupResult.ConnectorMock.Object;
@@ -368,48 +322,66 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
 
     private protected override DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
-        var azureDataLakeClient = new AzureDataLakeClient();
-        var exportJob = new AzureDataLakeExportEntitiesJob(
+        var logger = new Mock<ILogger<OpenMirroringClient>>();
+        var dataLakeClient = new OpenMirroringClient(logger.Object, setupResult.DateTimeOffsetProviderMock.Object);
+        var exportJob = new OpenMirroringExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
-            azureDataLakeClient,
+            dataLakeClient,
             setupResult.ConstantsMock.Object,
             setupResult.JobDataFactoryMock.Object,
             setupResult.DateTimeOffsetProviderMock.Object);
         return exportJob;
     }
 
-
-
-    private static DataLakeServiceClient GetDataLakeClient(AzureDataLakeConnectorJobData jobData)
+    private static DataLakeServiceClient GetDataLakeClient(OpenMirroringConnectorJobData jobData)
     {
+        var sharedKeyCredential = new ClientSecretCredential(jobData.TenantId, jobData.ClientId, jobData.ClientSecret);
         return new DataLakeServiceClient(
-            new Uri($"https://{jobData.AccountName}.dfs.core.windows.net"),
-        new StorageSharedKeyCredential(jobData.AccountName, jobData.AccountKey));
+            new Uri("https://onelake.dfs.fabric.microsoft.com"),
+            sharedKeyCredential);
     }
 
     private Dictionary<string, object> CreateConfigurationWithoutStreamCache()
     {
-        var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
-        Assert.NotNull(accountName);
-        var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
-        Assert.NotNull(accountKey);
+        var tenantId = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_TENANTID");
+        var clientId = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_CLIENTID");
+        var clientSecretEncoded = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_CLIENTSECRET");
+        var workspaceName = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_WORKSPACENAME");
+        var mirroredDatabaseName = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_MIRROREDDATABASENAME");
 
-        var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}";
+        var clientSecretString = Encoding.UTF8.GetString(Convert.FromBase64String(clientSecretEncoded));
+        var maskedSecret = string.IsNullOrWhiteSpace(clientSecretEncoded) ? string.Empty
+            : $"{clientSecretEncoded[0..3]}{new string('*', Math.Max(clientSecretEncoded.Length - 3, 0))}";
+        TestOutputHelper.WriteLine(
+            "Using TenantId: '{0}', ClientId: '{1}', ClientSecret: '{2}', WorkspaceName: '{3}', MirroredDatabaseName: '{4}'.",
+            tenantId,
+            clientId,
+            maskedSecret,
+            workspaceName,
+            mirroredDatabaseName);
+        Assert.NotNull(tenantId);
+        Assert.NotNull(clientId);
+        Assert.NotNull(clientSecretString);
+        Assert.NotNull(workspaceName);
+        Assert.NotNull(mirroredDatabaseName);
+
         var directoryName = $"xunit-{DateTime.Now.Ticks}";
         return new Dictionary<string, object>()
         {
-            { nameof(AzureDataLakeConstants.AccountName), accountName },
-            { nameof(AzureDataLakeConstants.AccountKey), accountKey },
-            { nameof(AzureDataLakeConstants.FileSystemName), fileSystemName },
-            { nameof(AzureDataLakeConstants.DirectoryName), directoryName },
+            { nameof(OpenMirroringConstants.TenantId), tenantId },
+            { nameof(OpenMirroringConstants.ClientId), clientId },
+            { nameof(OpenMirroringConstants.ClientSecret), clientSecretString },
+            { nameof(OpenMirroringConstants.WorkspaceName), workspaceName },
+            { nameof(OpenMirroringConstants.MirroredDatabaseName), mirroredDatabaseName },
+            { nameof(OpenMirroringConstants.ShouldCreateMirroredDatabase), false },
         };
     }
 
     private Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
     {
         var baseConfiguration = CreateConfigurationWithoutStreamCache();
-        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ADL2_STREAMCACHE");
+        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_STREAMCACHE");
         var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
         Console.WriteLine(streamCacheConnectionString);
         Assert.NotNull(streamCacheConnectionString);
@@ -425,18 +397,28 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         return updatedConfiguration;
     }
 
-    protected override Mock<AzureDataLakeConnector> GetConnectorMock(
+    protected override Mock<OpenMirroringConnector> GetConnectorMock(
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
-        Mock<IAzureDataLakeConstants> constantsMock,
-        Mock<AzureDataLakeJobDataFactory> jobDataFactory)
+        Mock<IOpenMirroringConstants> constantsMock,
+        Mock<OpenMirroringJobDataFactory> jobDataFactory)
     {
-        var mockConnector = new Mock<AzureDataLakeConnector>(
-            new Mock<ILogger<AzureDataLakeConnector>>().Object,
-            new AzureDataLakeClient(),
+        var logger = new Mock<ILogger<OpenMirroringClient>>();
+        var mockConnector = new Mock<OpenMirroringConnector>(
+            new Mock<ILogger<OpenMirroringConnector>>().Object,
+            new OpenMirroringClient(logger.Object, mockDateTimeOffsetProvider.Object),
             constantsMock.Object,
             jobDataFactory.Object,
             mockDateTimeOffsetProvider.Object);
         return mockConnector;
+    }
+
+    protected override Task<PathItem> WaitForFileToBeCreated(string fileSystemName, string directoryName, DataLakeServiceClient client, Func<IList<PathItem>, IList<PathItem>> filterPaths = null)
+    {
+        return base.WaitForFileToBeCreated(fileSystemName, directoryName, client, filterPaths: (paths) =>
+        {
+            var metadataFiltered = paths.Where(path => !path.Name.EndsWith("/_metadata.json") && !path.Name.EndsWith("_partnerEvents.json")).ToList();
+            return filterPaths?.Invoke(metadataFiltered) ?? metadataFiltered;
+        });
     }
 }
 

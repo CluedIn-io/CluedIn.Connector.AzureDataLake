@@ -24,16 +24,4 @@ public class SynapseDataEngineeringClient : DataLakeClient
             sharedKeyCredential);
         return dataLakeServiceClient;
     }
-
-    protected override string GetDirectory(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<SynapseDataEngineeringConnectorJobData>(configuration);
-        return $"{casted.ItemName}.{casted.ItemType}/{casted.ItemFolder}/"; //"jlalakehouse.Lakehouse/Files/";
-    }
-
-    protected override string GetFileSystemName(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<SynapseDataEngineeringConnectorJobData>(configuration);
-        return casted.WorkspaceName;
-    }
 }
