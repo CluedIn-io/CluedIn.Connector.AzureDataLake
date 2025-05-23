@@ -55,7 +55,11 @@ function Run-Setup() {
 	$port = ((docker inspect $containerName | convertfrom-json).NetworkSettings.Ports."1433/tcp" | Where-Object { $_.HostIp -eq '0.0.0.0'}).HostPort
 	$connectionString = "Data Source=$($databaseHost),$($port);Initial Catalog=$($databaseName);User Id=$($databaseUser);Password=$($databasePassword);connection timeout=0;Max Pool Size=200;Pooling=True;Encrypt=false"
 	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
+	
 	Set-Variable "ADL2_STREAMCACHE" $connectionStringEncoded
+	Set-Variable "ONELAKE_STREAMCACHE" $connectionStringEncoded
+	Set-Variable "FABRICOPENMIRRORING_STREAMCACHE" $connectionStringEncoded
+	
 	Write-Host "##[command]docker logs -f $($containerName)"
 	WaitFor { docker container logs --follow "datalaketest" } "SQL Server is now ready for client connections"
 	

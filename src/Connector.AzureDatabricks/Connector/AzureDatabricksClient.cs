@@ -24,16 +24,4 @@ public class AzureDatabricksClient : DataLakeClient
             sharedKeyCredential);
         return dataLakeServiceClient;
     }
-
-    protected override string GetDirectory(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<AzureDatabricksConnectorJobData>(configuration);
-        return $"{casted.ItemName}.{casted.ItemType}/{casted.ItemFolder}/"; //"jlalakehouse.Lakehouse/Files/";
-    }
-
-    protected override string GetFileSystemName(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<AzureDatabricksConnectorJobData>(configuration);
-        return casted.WorkspaceName;
-    }
 }
