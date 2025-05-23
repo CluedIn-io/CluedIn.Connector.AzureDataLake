@@ -24,6 +24,10 @@ internal class SynapseDataEngineeringConnectorJobData : DataLakeJobData
     public override bool ShouldWriteGuidAsString => true;
     public override bool ShouldEscapeVocabularyKeys => true;
 
+    public override string FileSystemName => WorkspaceName;
+
+    public override string RootDirectoryPath => $"{ItemName}.{ItemType}/{ItemFolder}/";
+
     protected override void AddToHashCode(HashCode hash)
     {
         hash.Add(WorkspaceName);

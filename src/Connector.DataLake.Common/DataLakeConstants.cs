@@ -12,6 +12,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     internal const string ProviderDefinitionIdKey = "__ProviderDefinitionId__";
     internal const string ChangeTypeKey = "__ChangeType__";
 
+    public const string ContainerName = nameof(ContainerName);
     public const string OutputFormat = nameof(OutputFormat);
     public const string IsStreamCacheEnabled = nameof(IsStreamCacheEnabled);
     public const string StreamCacheConnectionString = nameof(StreamCacheConnectionString);

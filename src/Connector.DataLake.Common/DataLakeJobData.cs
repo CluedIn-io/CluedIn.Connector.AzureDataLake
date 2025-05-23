@@ -24,6 +24,10 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
     public virtual bool IsOverwriteEnabled => GetConfigurationValue(DataLakeConstants.IsOverwriteEnabled) as bool? ?? true;
     public virtual bool IsArrayColumnsEnabled => GetConfigurationValue(DataLakeConstants.IsArrayColumnsEnabled) as bool? ?? false;
 
+    public abstract string FileSystemName { get; }
+
+    public abstract string RootDirectoryPath { get; }
+
     public override int GetHashCode()
     {
         var hash = new HashCode();

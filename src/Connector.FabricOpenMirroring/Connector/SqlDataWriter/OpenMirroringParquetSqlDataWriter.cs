@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;

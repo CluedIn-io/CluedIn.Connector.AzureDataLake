@@ -41,18 +41,6 @@ public class OneLakeClient : DataLakeClient
         return dataLakeServiceClient;
     }
 
-    protected override string GetDirectory(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OneLakeConnectorJobData>(configuration);
-        return  $"{casted.ItemName}.{casted.ItemType}/{casted.ItemFolder}/"; //"jlalakehouse.Lakehouse/Files/";
-    }
-
-    protected override string GetFileSystemName(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OneLakeConnectorJobData>(configuration);
-        return casted.WorkspaceName;
-    }
-
     internal async Task LoadToTableAsync(string sourceFileName, string targetTableName, IDataLakeJobData configuration)
     {
         var casted = CastJobData<OneLakeConnectorJobData>(configuration);

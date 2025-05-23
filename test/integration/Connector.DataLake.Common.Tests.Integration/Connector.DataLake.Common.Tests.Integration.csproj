@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="ParquetSharp" />
+    <PackageReference Include="CsvHelper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
+  </ItemGroup>
+
+</Project>
