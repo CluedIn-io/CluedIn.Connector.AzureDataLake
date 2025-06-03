@@ -83,7 +83,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "JSON",
-            assertMethod: async (fileClient) =>
+            assertMethod: async (fileClient, _, _) =>
             {
                 await AssertJsonResult(fileClient, StreamMode.Sync, VersionChangeType.Added);
             });
@@ -340,7 +340,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
 
     private async Task VerifyStoreData_Sync_WithStreamCache(
         string format,
-        Func<DataLakeFileClient, Task> assertMethod,
+        Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
         Action<Dictionary<string, object>> configureAuthentication = null)

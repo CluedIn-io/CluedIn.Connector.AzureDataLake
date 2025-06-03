@@ -244,6 +244,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             var fsClient = client.GetFileSystemClient(fileSystemName);
             var fileClient = fsClient.GetFileClient(path.Name);
 
+            await assertMethod(fileClient);
+
             await fsClient.GetDirectoryClient(directoryName).DeleteAsync();
             await WaitForFileToBeDeleted(fileSystemName, directoryName, client, path);
         }
@@ -308,7 +310,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         SetupContainerResult setupContainerResult,
         DataLakeServiceClient client,
         DataLakeExportEntitiesJobBase exportJob,
-        Func<DataLakeFileClient, Task> assertMethod,
+        Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null)
     {
         var context = setupContainerResult.Context;
@@ -336,7 +338,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
             var fileClient = fsClient.GetFileClient(path.Name);
 
-            await assertMethod(fileClient);
+            await assertMethod(fileClient, fsClient, setupContainerResult);
 
             await fsClient.GetDirectoryClient(directoryName).DeleteAsync();
         }
@@ -470,12 +472,12 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         }
     }
 
-    protected virtual async Task AssertCsvResultUnescaped(DataLakeFileClient fileClient)
+    private protected virtual async Task AssertCsvResultUnescaped(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
     {
         await AssertCsvResult(fileClient, ".");
     }
 
-    protected virtual async Task AssertCsvResultEscaped(DataLakeFileClient fileClient)
+    private protected virtual async Task AssertCsvResultEscaped(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
     {
         await AssertCsvResult(fileClient, "_");
     }
@@ -484,6 +486,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     {
         using var reader = new StreamReader(fileClient.Read().Value.Content);
         var contents = await reader.ReadToEndAsync();
+
         Assert.Equal(JsonExpectedOutput(streamMode, changeType, isSingleObject),
             contents.ToAlphabeticJsonString());
     }
@@ -561,17 +564,17 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         return [new DataRow() { Columns = columns }];
     }
 
-    protected virtual Task AssertParquetResultUnescaped(DataLakeFileClient fileClient)
+    private protected virtual Task AssertParquetResultUnescaped(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
     {
         return AssertParquetResult(fileClient, ".", false);
     }
 
-    protected virtual Task AssertParquetResultEscaped(DataLakeFileClient fileClient)
+    private protected virtual Task AssertParquetResultEscaped(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
     {
         return AssertParquetResult(fileClient, "_", false);
     }
 
-    protected virtual Task AssertParquetResultArrayColumnEnabled(DataLakeFileClient fileClient)
+    private protected virtual Task AssertParquetResultArrayColumnEnabled(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
     {
         return AssertParquetResult(fileClient, ".", true);
     }

@@ -84,7 +84,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "JSON",
-            assertMethod: async (fileClient) =>
+            assertMethod: async (fileClient, _, _) =>
             {
                 await AssertJsonResult(fileClient, StreamMode.Sync, VersionChangeType.Added);
             });
@@ -153,6 +153,29 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), false);
                 values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), false);
                 values.Add(nameof(DataLakeConstants.IsArrayColumnsEnabled), true);
+            });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetCanLoadToTable()
+    {
+        var tableName = Guid.NewGuid().ToString("N");
+        await VerifyStoreData_Sync_WithStreamCache(
+            "pArQuet",
+            async (fileClient, fileSystemClient, setupContainerResult) =>
+            {
+                await AssertParquetResultEscaped(fileClient, fileSystemClient, setupContainerResult);
+                var jobData = setupContainerResult.DataLakeJobData as OneLakeConnectorJobData;
+                var dataLakeClient = GetDataLakeClient(jobData);
+                var tableFile = await WaitForFileToBeCreated(jobData.FileSystemName, $"{jobData.ItemName}.Lakehouse/Tables/{tableName}", dataLakeClient);
+                Assert.NotNull(tableFile);
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(OneLakeConstants.ShouldLoadToTable), true);
+                values.Add(nameof(OneLakeConstants.TableName), tableName);
             });
     }
 
@@ -317,7 +340,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
 
     private async Task VerifyStoreData_Sync_WithStreamCache(
         string format,
-        Func<DataLakeFileClient, Task> assertMethod,
+        Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
         Action<Dictionary<string, object>> configureAuthentication = null)
@@ -358,10 +381,15 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
 
     private static DataLakeServiceClient GetDataLakeClient(OneLakeConnectorJobData jobData)
     {
-        var sharedKeyCredential = new ClientSecretCredential(jobData.TenantId, jobData.ClientId, jobData.ClientSecret);
+        var sharedKeyCredential = GetCredential(jobData);
         return new DataLakeServiceClient(
             new Uri("https://onelake.dfs.fabric.microsoft.com"),
             sharedKeyCredential);
+    }
+
+    private static ClientSecretCredential GetCredential(OneLakeConnectorJobData jobData)
+    {
+        return new ClientSecretCredential(jobData.TenantId, jobData.ClientId, jobData.ClientSecret);
     }
 
     private Dictionary<string, object> CreateConfigurationWithoutStreamCache()

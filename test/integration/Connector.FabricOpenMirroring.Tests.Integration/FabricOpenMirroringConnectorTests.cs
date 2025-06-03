@@ -214,7 +214,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
 
     private async Task VerifyStoreData_Sync_WithStreamCache(
         string format,
-        Func<DataLakeFileClient, Task> assertMethod,
+        Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
         Action<Dictionary<string, object>> configureAuthentication = null)
