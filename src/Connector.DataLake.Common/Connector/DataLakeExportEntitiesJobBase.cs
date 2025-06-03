@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -6,8 +6,6 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
-
-using Apache.Arrow;
 
 using Azure.Storage.Files.DataLake;
 
@@ -19,8 +17,6 @@ using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-
-using Parquet;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
