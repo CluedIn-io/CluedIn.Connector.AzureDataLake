@@ -1,11 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.IO;
-using System.IO.Pipes;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 using Azure.Storage.Files.DataLake;
@@ -14,7 +12,6 @@ using Azure.Storage.Files.DataLake.Models;
 using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
-using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
