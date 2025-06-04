@@ -6,6 +6,10 @@
     <IsCluedInServerComponent>true</IsCluedInServerComponent>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Unit" />
+  </ItemGroup>
+  <ItemGroup>
     <None Remove="Resources\azuredatalake.svg" />
   </ItemGroup>
   <ItemGroup>

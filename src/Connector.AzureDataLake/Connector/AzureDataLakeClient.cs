@@ -16,16 +16,4 @@ public class AzureDataLakeClient : DataLakeClient
             new Uri($"https://{casted.AccountName}.dfs.core.windows.net"),
             new StorageSharedKeyCredential(casted.AccountName, casted.AccountKey));
     }
-
-    protected override string GetDirectory(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<AzureDataLakeConnectorJobData>(configuration);
-        return casted.DirectoryName;
-    }
-
-    protected override string GetFileSystemName(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<AzureDataLakeConnectorJobData>(configuration);
-        return casted.FileSystemName;
-    }
 }
