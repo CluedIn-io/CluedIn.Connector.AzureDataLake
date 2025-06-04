@@ -117,7 +117,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var subDirectory = await GetSubDirectory(configuration, streamId);
         var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration, subDirectory);
-        await InitializeDirectoryAsync(configuration, streamId, directoryClient);
+        await InitializeDirectoryAsync(configuration, exportJobData, directoryClient);
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
@@ -282,7 +282,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return Task.FromResult(string.Empty);
     }
 
-    protected virtual Task InitializeDirectoryAsync(IDataLakeJobData configuration, Guid streamId, DataLakeDirectoryClient client)
+    private protected virtual Task InitializeDirectoryAsync(IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient client)
     {
         return Task.CompletedTask;
     }
