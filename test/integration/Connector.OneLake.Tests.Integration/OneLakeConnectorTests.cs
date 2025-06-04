@@ -167,8 +167,16 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 await AssertParquetResultEscaped(fileClient, fileSystemClient, setupContainerResult);
                 var jobData = setupContainerResult.DataLakeJobData as OneLakeConnectorJobData;
                 var dataLakeClient = GetDataLakeClient(jobData);
-                var tableFile = await WaitForFileToBeCreated(jobData.FileSystemName, $"{jobData.ItemName}.Lakehouse/Tables/{tableName}", dataLakeClient);
+                var directoryName = $"{jobData.ItemName}.Lakehouse/Tables/{tableName}";
+
+                var tableFile = await WaitForFileToBeCreated(
+                    jobData.FileSystemName,
+                    directoryName,
+                    dataLakeClient,
+                    paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList());
+
                 Assert.NotNull(tableFile);
+                await fileSystemClient.DeleteDirectoryAsync(directoryName);
             },
             configureAuthentication: (values) =>
             {
