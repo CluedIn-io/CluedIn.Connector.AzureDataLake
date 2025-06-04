@@ -489,7 +489,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         var contents = await reader.ReadToEndAsync();
 
         var expectedResult = GetExpectedResult(".", streamMode, changeType, ArrayType.ObjectArray, isStringIntegers: false);
-        object expectedObject = isSingleObject ? expectedResult.First() : expectedResult.Select(item => item.Columns).ToArray();
+        object expectedObject = isSingleObject ? expectedResult.First().Columns : expectedResult.Select(item => item.Columns).ToArray();
         var expectedJson = JsonConvert.SerializeObject(expectedObject);
         Assert.Equal(expectedJson.ToAlphabeticJsonString(), contents.ToAlphabeticJsonString());
     }
