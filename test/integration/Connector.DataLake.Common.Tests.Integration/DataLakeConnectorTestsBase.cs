@@ -34,6 +34,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Parquet;
 
@@ -487,8 +488,10 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         using var reader = new StreamReader(fileClient.Read().Value.Content);
         var contents = await reader.ReadToEndAsync();
 
-        Assert.Equal(JsonExpectedOutput(streamMode, changeType, isSingleObject),
-            contents.ToAlphabeticJsonString());
+        var expectedResult = GetExpectedResult(".", streamMode, changeType, ArrayType.ObjectArray, isStringIntegers: false);
+        object expectedObject = isSingleObject ? expectedResult.First() : expectedResult.Select(item => item.Columns).ToArray();
+        var expectedJson = JsonConvert.SerializeObject(expectedObject);
+        Assert.Equal(expectedJson.ToAlphabeticJsonString(), contents.ToAlphabeticJsonString());
     }
 
     protected virtual async Task AssertCsvResult(
@@ -503,7 +506,11 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         });
         csv.Context.RegisterClassMap<MyClassWithDictionaryMapper>();
 
-        var actualRows = csv.GetRecords<DataRow>().ToList();
+        var actualRows = csv.GetRecords<CsvDataRow>()
+            .Select(row => new DataRow()
+            {
+                Columns = row.Columns.ToDictionary(col => col.Key, col => (object)col.Value),
+            }).ToList();
 
         var unformattedExpectedResult = GetExpectedResult(separator);
         var formattedExpectedResult = formatResult?.Invoke(unformattedExpectedResult) ?? unformattedExpectedResult;
@@ -532,27 +539,61 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         }
     }
 
-    private static List<DataRow> GetExpectedResult(string separator)
+    protected enum ArrayType
     {
-        var columns = new Dictionary<string, string>
+        SerializedStringArray,
+        StringArray,
+        ObjectArray
+    }
+    private static List<DataRow> GetExpectedResult(
+        string separator,
+        StreamMode streamMode = StreamMode.Sync,
+        VersionChangeType versionChangeType = VersionChangeType.Added,
+        ArrayType arrayType = ArrayType.SerializedStringArray,
+        bool isStringIntegers = true,
+        bool isSimplifiedEdges = false)
+    {
+        var codesString = """
+                    ["/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"]
+                    """;
+        object codes = arrayType == ArrayType.SerializedStringArray ? codesString : JArray.Parse(codesString);
+
+        var incomingEdgesFullString = $$$"""
+            [{"FromReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"1234","Key":"/EntityA#Somewhere:1234","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityA"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
+            """;
+        var incomingEdgesShortString = $$$"""
+            ["EdgeType: /EntityA; From: §C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; To: §C:/EntityA#Somewhere:1234; Properties: 0"]
+            """;
+
+        object incomingEdges = arrayType == ArrayType.SerializedStringArray
+            ? incomingEdgesFullString
+            : isSimplifiedEdges ? JArray.Parse(incomingEdgesShortString) : JArray.Parse(incomingEdgesFullString);
+
+
+        var outgoingEdgesFullString = $$$"""
+            [{"FromReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"5678","Key":"/EntityB#Somewhere:5678","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityB"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
+            """;
+        var outgoingEdgesShortString = $$$"""
+            ["EdgeType: /EntityB; From: §C:/EntityB#Somewhere:5678; To: §C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; Properties: 0"]
+            """;
+
+        object outgoingEdges = arrayType == ArrayType.SerializedStringArray
+            ? outgoingEdgesFullString
+            : isSimplifiedEdges ? JArray.Parse(outgoingEdgesShortString) : JArray.Parse(outgoingEdgesFullString);
+
+        var columns = new Dictionary<string, object>
         {
             { "Id", "f55c66dc-7881-55c9-889f-344992e71cb8" },
-            { "Codes", """
-                    ["/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"]
-                    """ },
+            { "Codes", codes },
             { "ContainerName", "test" },
             { "EntityType", "/Person" },
-            { "Epoch", "1724192160000" },
-            { "IncomingEdges", $$$"""
-                [{"FromReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"1234","Key":"/EntityA#Somewhere:1234","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityA"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityA"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
-                """ },
+            { "Epoch", isStringIntegers ? 1724192160000.ToString() : 1724192160000 },
+            { "IncomingEdges", incomingEdges },
             { "Name", "Jean Luc Picard" },
             { "OriginEntityCode", "/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0" },
-            { "OutgoingEdges", $$$"""
-                [{"FromReference":{"Code":{"Origin":{"Code":"Somewhere","Id":null},"Value":"5678","Key":"/EntityB#Somewhere:5678","Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/EntityB"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"ToReference":{"Code":{"Origin":{"Code":"Acceptance","Id":null},"Value":"7c5591cf-861a-4642-861d-3b02485854a0","Key":"/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0","Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"}},"Type":{"IsEntityContainer":false,"Root":null,"Code":"/Person"},"Name":null,"Properties":null,"PropertyCount":null,"EntityId":null,"IsEmpty":false},"EdgeType":{"Root":null,"Code":"/EntityB"},"HasProperties":false,"Properties":{},"CreationOptions":0,"Weight":null,"Version":0}]
-                """ },
+            { "OutgoingEdges", outgoingEdges },
             { "PersistHash", "etypzcezkiehwq8vw4oqog==" },
-            { "PersistVersion", "1" },
+            { "PersistVersion", isStringIntegers ? 1.ToString() : 1 },
             { "ProviderDefinitionId", "c444cda8-d9b5-45cc-a82d-fef28e08d55c" },
             { "Timestamp", "2024-08-21T03:16:00.0000000+05:00" },
             { $"user{separator}age", "123" },
@@ -561,7 +602,53 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             { $"user{separator}lastName", "Picard" },
         };
 
-        return [new DataRow() { Columns = columns }];
+        if (streamMode == StreamMode.EventStream)
+        {
+            columns["ChangeType"] = versionChangeType.ToString();
+        }
+
+        var converted = ConvertJsonTokensToDictionary(columns, arrayType);
+        return [new DataRow() { Columns = converted }];
+    }
+
+    protected static Dictionary<string, object> ConvertJsonTokensToDictionary(Dictionary<string, object> toConvert, ArrayType arrayType)
+    {
+        var result = new Dictionary<string, object>();
+        foreach (var kvp in toConvert)
+        {
+            if (kvp.Value is JArray jArray)
+            {
+                if (jArray.First is JObject jObject)
+                {
+                    if (arrayType == ArrayType.StringArray)
+                    {
+                        var converted = jArray.ToObject<List<JObject>>();
+                        result.Add(kvp.Key, converted.Select(JsonConvert.SerializeObject).ToList());
+                    }
+                    else
+                    {
+                        var converted = jArray.ToObject<List<Dictionary<string, object>>>();
+                        result.Add(kvp.Key, converted.Select(item => ConvertJsonTokensToDictionary(item, arrayType)).ToList());
+                    }
+                }
+                else if (jArray.First is JToken jToken)
+                {
+                    result.Add(kvp.Key, jArray.ToObject<List<object>>());
+                }
+            }
+            else if (kvp.Value is JObject jObject)
+            {
+                var converted = jObject.ToObject<Dictionary<string, object>>();
+
+                result.Add(kvp.Key, ConvertJsonTokensToDictionary(converted, arrayType));
+            }
+            else
+            {
+                result.Add(kvp.Key, kvp.Value);
+            }
+        }
+
+        return result;
     }
 
     private protected virtual Task AssertParquetResultUnescaped(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
@@ -592,7 +679,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         for (var rowGroup = 0; rowGroup < parquetReader.RowGroupCount; rowGroup++)
         {
             using var rowGroupReader = parquetReader.OpenRowGroupReader(rowGroup);
-            var columns = new Dictionary<string, string>();
+            var columns = new Dictionary<string, object>();
             foreach (var dataField in parquetReader.Schema!.GetDataFields())
             {
                 var dataColumn = await rowGroupReader.ReadColumnAsync(dataField);
@@ -606,25 +693,17 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
         TestOutputHelper.WriteLine(JsonConvert.SerializeObject(actualRows, Formatting.Indented));
 
-        var unformattedExpectedResult = GetExpectedResult(separator);
-
-        if (isArrayColumnEnabled)
-        {
-            var firstRow = unformattedExpectedResult[0];
-
-            firstRow.Columns["IncomingEdges"] = """
-                ["EdgeType: /EntityA; From: §C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; To: §C:/EntityA#Somewhere:1234; Properties: 0"]
-                """;
-            firstRow.Columns["OutgoingEdges"] = """
-            ["EdgeType: /EntityB; From: §C:/EntityB#Somewhere:5678; To: §C:/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0; Properties: 0"]
-            """;
-        }
+        var unformattedExpectedResult = GetExpectedResult(
+            separator,
+            arrayType: isArrayColumnEnabled ? ArrayType.StringArray : ArrayType.SerializedStringArray,
+            isSimplifiedEdges: isArrayColumnEnabled,
+            isStringIntegers: false);
 
         var formattedExpectedResult = formatResult?.Invoke(unformattedExpectedResult) ?? unformattedExpectedResult;
 
         AssertResult(actualRows, formattedExpectedResult.ToList());
 
-        string GetValue(Parquet.Data.DataColumn dataColumn)
+        object GetValue(Parquet.Data.DataColumn dataColumn)
         {
             var type = dataColumn.Field.ClrType;
 
@@ -634,18 +713,18 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             }
             else if (type == typeof(int))
             {
-                return getValueDirectlyOrFromNullable<int>(dataColumn).ToString();
+                return getValueDirectlyOrFromNullable<int>(dataColumn);
             }
             else if (type == typeof(long))
             {
-                return getValueDirectlyOrFromNullable<long>(dataColumn).ToString();
+                return getValueDirectlyOrFromNullable<long>(dataColumn);
             }
             else if (type == typeof(string))
             {
                 var value = ((string[])dataColumn.Data);
 
                 if (dataColumn.Field.IsArray)
-                    return JsonConvert.SerializeObject(value);
+                    return value;
 
                 return value[0];
             }
@@ -831,7 +910,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             DataLakeServiceClient Client,
             DataLakeExportEntitiesJobBase ExportJob);
 
-    public class MyClassWithDictionaryMapper : ClassMap<DataRow>
+    public class MyClassWithDictionaryMapper : ClassMap<CsvDataRow>
     {
         public MyClassWithDictionaryMapper()
         {
@@ -845,6 +924,10 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     }
 
     public class DataRow
+    {
+        public Dictionary<string, object> Columns { get; set; }
+    }
+    public class CsvDataRow
     {
         public Dictionary<string, string> Columns { get; set; }
     }
