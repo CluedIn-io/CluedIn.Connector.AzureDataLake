@@ -24,6 +24,7 @@ internal class OpenMirroringParquetSqlDataWriter : ParquetSqlDataWriter
 
         return orderedFields;
     }
+
     protected override DataField GetParquetDataField(string fieldName, Type type, IDataLakeJobData configuration)
     {
         if (fieldName.Equals(DataLakeConstants.ChangeTypeKey, StringComparison.Ordinal))
