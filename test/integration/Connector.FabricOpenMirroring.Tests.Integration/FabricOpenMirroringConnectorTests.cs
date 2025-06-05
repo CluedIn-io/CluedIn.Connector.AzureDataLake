@@ -344,7 +344,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     {
         return base.AssertCsvResult(fileClient, separator, formatResult: (rows) =>
         {
-            rows.First().Columns["__rowMarker__"] = "3";
+            rows.First().Columns["__rowMarker__"] = "4";
             return rows;
         });
     }
@@ -357,7 +357,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     {
         return base.AssertParquetResult(fileClient, separator, isArrayColumnEnabled, formatResult: (rows) =>
         {
-            rows.First().Columns["__rowMarker__"] = "3";
+            rows.First().Columns["__rowMarker__"] = "4";
             return rows;
         });
     }
