@@ -27,9 +27,10 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         await using var csv = new CsvWriter(writer, csvConfig);
         foreach (var fieldName in fieldNames)
         {
-            var fieldNameToUse = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
+            var fieldNameToUse = GetFieldName(configuration, fieldName);
             csv.WriteField(fieldNameToUse);
         }
+
         await csv.NextRecordAsync();
 
         var totalProcessed = 0L;
@@ -51,5 +52,10 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         }
 
         return totalProcessed;
+    }
+
+    protected virtual string GetFieldName(IDataLakeJobData configuration, string fieldName)
+    {
+        return configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
     }
 }
