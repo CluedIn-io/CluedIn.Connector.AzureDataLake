@@ -16,15 +16,6 @@ internal class OpenMirroringParquetSqlDataWriter : ParquetSqlDataWriter
 {
     private const string RowMarkerKey = "__rowMarker__";
 
-    protected override ICollection<string> OrderFields(ExecutionContext context, IDataLakeJobData configuration, ICollection<string> fieldNames)
-    {
-        var orderedFields = new List<string>(fieldNames);
-        orderedFields.Remove(DataLakeConstants.ChangeTypeKey);
-        orderedFields.Add(DataLakeConstants.ChangeTypeKey);
-
-        return orderedFields;
-    }
-
     protected override DataField GetParquetDataField(string fieldName, Type type, IDataLakeJobData configuration)
     {
         if (fieldName.Equals(DataLakeConstants.ChangeTypeKey, StringComparison.Ordinal))
