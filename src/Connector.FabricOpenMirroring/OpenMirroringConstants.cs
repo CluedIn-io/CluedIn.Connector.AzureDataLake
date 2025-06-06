@@ -9,6 +9,7 @@ using System.Collections.Generic;
 namespace CluedIn.Connector.FabricOpenMirroring;
 public class OpenMirroringConstants : DataLakeConstants, IOpenMirroringConstants
 {
+    internal const string RowMarkerKey = "__rowMarker__";
     internal static readonly Guid DataLakeProviderId = Guid.Parse("75CD5880-0537-4C6D-AE14-511C273ACD68");
 
     public const string WorkspaceName = nameof(WorkspaceName);
