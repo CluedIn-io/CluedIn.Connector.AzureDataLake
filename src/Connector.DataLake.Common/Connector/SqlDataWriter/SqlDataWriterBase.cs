@@ -35,15 +35,9 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
     {
         context.Log.LogInformation("Begin writing output.");
 
-        var orderedFieldNames = OrderFields(context, configuration, fieldNames);
-        var totalProcessed = await WriteOutputAsync(context, configuration, outputStream, orderedFieldNames, reader);
+        var totalProcessed = await WriteOutputAsync(context, configuration, outputStream, fieldNames, reader);
         context.Log.LogInformation("End writing output. Total processed: {TotalProcessed}.", totalProcessed);
         return totalProcessed;
-    }
-
-    protected virtual ICollection<string> OrderFields(ExecutionContext context, IDataLakeJobData configuration, ICollection<string> fieldNames)
-    {
-        return fieldNames;
     }
 
     public abstract Task<long> WriteOutputAsync(
