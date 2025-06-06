@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -62,6 +63,28 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                 """));
             await outputStream.FlushAsync();
         }
+    }
+
+    private protected override async Task<List<string>> GetFieldNamesAsync(
+        ExecutionContext context,
+        ExportJobData exportJobData,
+        IDataLakeJobData configuration,
+        List<string> fieldNames)
+    {
+        var baseFieldNames = await base.GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
+
+        // We need to make sure DataLakeConstants.ChangeTypeKey is the last field in the list (if we need it)
+        var isRemoved = baseFieldNames.Remove(DataLakeConstants.ChangeTypeKey);
+        var isFirstFile = LastExport == null;
+
+        if (isRemoved && !isFirstFile)
+        {
+            // DataLakeConstants.ChangeTypeKey needs to be the last field in the list
+            // And it needs to be added only if the file is not the first one
+            baseFieldNames.Add(DataLakeConstants.ChangeTypeKey);
+        }
+
+        return baseFieldNames;
     }
 
     private protected override async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, Guid streamId, IDataLakeJobData configuration)

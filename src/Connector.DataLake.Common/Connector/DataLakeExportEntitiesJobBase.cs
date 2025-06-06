@@ -148,10 +148,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             .Select(reader.GetName)
             .ToList();
 
-        var fieldNamesToUse = configuration.IsDeltaMode
-            ? fieldNames
-            : fieldNames.Where(fieldName => fieldName != DataLakeConstants.ChangeTypeKey).ToList();
-
         var temporaryOutputFileName = outputFileName + TemporaryFileSuffix;
         using var loggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {
@@ -210,6 +206,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         async Task<long> writeFileContentsAsync()
         {
+            var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
             await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
@@ -264,6 +261,18 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             await targetFileClient.DeleteIfExistsAsync();
         }
     }
+
+    private protected virtual async Task<List<string>> GetFieldNamesAsync(
+        ExecutionContext context,
+        ExportJobData exportJobData,
+        IDataLakeJobData configuration,
+        List<string> fieldNames)
+    {
+        return configuration.IsDeltaMode
+                ? fieldNames
+                : fieldNames.Where(fieldName => fieldName != DataLakeConstants.ChangeTypeKey).ToList();
+    }
+
     private protected ExportHistory LastExport { get; private set; }
 
     private protected virtual bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => true;
