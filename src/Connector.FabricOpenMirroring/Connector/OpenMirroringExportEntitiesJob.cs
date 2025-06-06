@@ -148,6 +148,10 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
     protected override ISqlDataWriter GetSqlDataWriter(string outputFormat)
     {
         var format = outputFormat.Trim();
+        if (format.Equals(DataLakeConstants.OutputFormats.Csv, StringComparison.OrdinalIgnoreCase))
+        {
+            return new OpenMirroringCsvSqlDataWriter();
+        }
         if (format.Equals(DataLakeConstants.OutputFormats.Parquet, StringComparison.OrdinalIgnoreCase))
         {
             return new OpenMirroringParquetSqlDataWriter();
