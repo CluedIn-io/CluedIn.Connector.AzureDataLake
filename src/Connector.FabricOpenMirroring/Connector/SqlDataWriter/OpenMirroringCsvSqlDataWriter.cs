@@ -5,20 +5,18 @@ using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 
 using Microsoft.Data.SqlClient;
 
-using Parquet.Schema;
-
 namespace CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;
 
-internal class OpenMirroringParquetSqlDataWriter : ParquetSqlDataWriter
+internal class OpenMirroringCsvSqlDataWriter : CsvSqlDataWriter
 {
-    protected override DataField GetParquetDataField(string fieldName, Type type, IDataLakeJobData configuration)
+    protected override string GetFieldName(IDataLakeJobData configuration, string fieldName)
     {
         if (fieldName.Equals(DataLakeConstants.ChangeTypeKey, StringComparison.Ordinal))
         {
-            return new DataField(OpenMirroringConstants.RowMarkerKey, typeof(string));
+            return OpenMirroringConstants.RowMarkerKey;
         }
 
-        return base.GetParquetDataField(fieldName, type, configuration);
+        return base.GetFieldName(configuration, fieldName);
     }
 
     protected override object GetValue(string key, SqlDataReader reader, IDataLakeJobData configuration)
