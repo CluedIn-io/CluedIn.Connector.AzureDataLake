@@ -6,6 +6,9 @@
     <IsCluedInServerComponent>true</IsCluedInServerComponent>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
+  </ItemGroup>
+  <ItemGroup>
     <None Remove="Resources\onelake.svg" />
   </ItemGroup>
   <ItemGroup>

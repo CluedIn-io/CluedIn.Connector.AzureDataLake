@@ -7,8 +7,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
 
-using Apache.Arrow;
-
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
@@ -17,10 +15,10 @@ using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
+using CsvHelper;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-
-using Parquet;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
@@ -72,6 +70,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return;
         }
 
+        if (ShouldSkipExport(exportJobData))
+        {
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required.", exportJobData.StreamId);
+            return;
+        }
+
         var (streamId, streamModel, provider, configuration, asOfTime, outputFormat, outputFileName) = exportJobData;
 
         var tableName = CacheTableHelper.GetCacheTableName(streamId);
@@ -117,7 +121,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var subDirectory = await GetSubDirectory(configuration, streamId);
         var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration, subDirectory);
-        await InitializeDirectoryAsync(configuration, streamId, directoryClient);
+        await InitializeDirectoryAsync(configuration, exportJobData, directoryClient);
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
@@ -151,11 +155,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
             .Select(reader.GetName)
             .ToList();
-
-        var fieldNamesToUse = configuration.IsDeltaMode
-            ? fieldNames
-            : fieldNames.Where(fieldName => fieldName != DataLakeConstants.ChangeTypeKey).ToList();
-
         var temporaryOutputFileName = outputFileName + TemporaryFileSuffix;
         using var loggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {
@@ -214,6 +213,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         async Task<long> writeFileContentsAsync()
         {
+            var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
             await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
@@ -268,6 +268,23 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             await targetFileClient.DeleteIfExistsAsync();
         }
     }
+
+    private protected virtual bool ShouldSkipExport(ExportJobData exportJobData)
+    {
+        return false;
+    }
+
+    private protected virtual async Task<List<string>> GetFieldNamesAsync(
+        ExecutionContext context,
+        ExportJobData exportJobData,
+        IDataLakeJobData configuration,
+        List<string> fieldNames)
+    {
+        return configuration.IsDeltaMode
+                ? fieldNames
+                : fieldNames.Where(fieldName => fieldName != DataLakeConstants.ChangeTypeKey).ToList();
+    }
+
     private protected ExportHistory LastExport { get; private set; }
 
     private protected virtual bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => true;
@@ -282,7 +299,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return Task.FromResult(string.Empty);
     }
 
-    protected virtual Task InitializeDirectoryAsync(IDataLakeJobData configuration, Guid streamId, DataLakeDirectoryClient client)
+    private protected virtual Task InitializeDirectoryAsync(IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient client)
     {
         return Task.CompletedTask;
     }

@@ -15,4 +15,8 @@ public interface IDataLakeJobData
     bool IsDeltaMode { get; }
     bool IsOverwriteEnabled { get; }
     bool IsArrayColumnsEnabled { get; }
+
+    string FileSystemName { get; }
+
+    string RootDirectoryPath { get; }
 }
