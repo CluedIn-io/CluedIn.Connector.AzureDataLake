@@ -16,6 +16,7 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         IDataLakeJobData configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
+        bool isInitialExport,
         SqlDataReader reader)
     {
         await using var stringWriter = new StreamWriter(outputStream);
@@ -26,10 +27,15 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         await writer.WriteStartArrayAsync();
         while (await reader.ReadAsync())
         {
+            if (ShouldSkip(configuration, isInitialExport, reader))
+            {
+                continue;
+            }
+
             await writer.WriteStartObjectAsync();
 
             foreach(var field in fieldNames)
-            { 
+            {
                 await writer.WritePropertyNameAsync(field);
                 var value = GetValue(field, reader, configuration);
                 if (value is JArray jArray)
