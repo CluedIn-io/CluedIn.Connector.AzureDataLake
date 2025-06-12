@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -22,6 +23,8 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 {
     private static readonly AssemblyName _connectorAssemblyName = typeof(OpenMirroringExportEntitiesJob).Assembly.GetName();
     private static readonly AssemblyName _cluedInCoreAssemblyName = typeof(IDateTimeOffsetProvider).Assembly.GetName();
+    private static readonly FileVersionInfo _connectorFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(OpenMirroringExportEntitiesJob).Assembly.Location);
+    private static readonly FileVersionInfo _cluedInCoreFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(IDateTimeOffsetProvider).Assembly.Location);
     private static readonly string _partnerName = "CluedIn ApS";
 
     private IDateTimeOffsetProvider DateTimeOffsetProvider { get; }
@@ -93,7 +96,9 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                     "sourceType": "{{_connectorAssemblyName.Name}}",
                     "sourceVersion": "{{_connectorAssemblyName.Version}}",
                     "additionalInformation": {
+                      "sourceFileVersion": "{{_connectorFileVersionInfo.ProductVersion}}",
                       "cluedInServerVersion": "{{_cluedInCoreAssemblyName.Version}}" ,
+                      "cluedInServerFileVersion": "{{_cluedInCoreFileVersionInfo.ProductVersion}}",
                       "organizationId": "{{exportJobData.StreamModel.OrganizationId:N}}",
                       "providerDefinitionId": "{{exportJobData.ProviderDefinition.Id:N}}",
                       "streamId": "{{exportJobData.StreamId:N}}",
