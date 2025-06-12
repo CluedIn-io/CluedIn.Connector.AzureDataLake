@@ -214,7 +214,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
             await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
-            return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, reader);
+            return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
         }
 
         async Task setFilePropertiesAsync()
@@ -278,6 +278,8 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     }
 
     private protected ExportHistory LastExport { get; private set; }
+
+    protected virtual bool IsInitialExport => LastExport == null;
 
     private protected virtual bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => true;
 
