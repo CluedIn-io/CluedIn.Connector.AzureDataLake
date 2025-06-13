@@ -149,7 +149,6 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                       "cluedInServerFileVersion": "{{_cluedInCoreFileVersionInfo.ProductVersion}}",
                       "organizationId": "{{exportJobData.StreamModel.OrganizationId:N}}",
                       "providerDefinitionId": "{{exportJobData.ProviderDefinition.Id:N}}",
-                      "streamId": "{{exportJobData.StreamId:N}}",
                       "createdAt": "{{DateTimeOffsetProvider.GetCurrentUtcTime().ToString("o")}}"
                     }
                   }
