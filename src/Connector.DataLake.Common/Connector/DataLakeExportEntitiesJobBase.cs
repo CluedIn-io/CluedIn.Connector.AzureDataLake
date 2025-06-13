@@ -7,8 +7,6 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
 
-using Apache.Arrow;
-
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
@@ -19,8 +17,6 @@ using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
-
-using Parquet;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
@@ -117,7 +113,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var subDirectory = await GetSubDirectory(configuration, streamId);
         var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration, subDirectory);
-        await InitializeDirectoryAsync(configuration, exportJobData, directoryClient);
+        await InitializeDirectoryAsync(context, connection, configuration, exportJobData, directoryClient);
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
@@ -293,7 +289,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return Task.FromResult(string.Empty);
     }
 
-    private protected virtual Task InitializeDirectoryAsync(IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient client)
+    private protected virtual Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient client)
     {
         return Task.CompletedTask;
     }
