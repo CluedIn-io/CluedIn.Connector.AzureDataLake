@@ -34,6 +34,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         IDataLakeJobData configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
+        bool isInitialExport,
         SqlDataReader reader)
     {
         var fields = new List<Field>();
@@ -51,6 +52,11 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
 
         while (await reader.ReadAsync())
         {
+            if (ShouldSkip(configuration, isInitialExport, reader))
+            {
+                continue;
+            }
+
             var fieldValues = fieldNames.Select(key => {
                 var value = GetValue(key, reader, configuration);
                 return value;

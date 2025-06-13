@@ -13,5 +13,6 @@ internal interface ISqlDataWriter
         IDataLakeJobData configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
+        bool isInitialExport,
         SqlDataReader reader);
 }
