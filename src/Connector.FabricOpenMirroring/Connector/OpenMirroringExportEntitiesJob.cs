@@ -96,7 +96,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                            "rowSeparator": "\n",
                            "columnSeparator": ",",
                            "quoteCharacter": "\"",
-                           "escapeCharacter": "\\",
+                           "escapeCharacter": "\"",
                            "nullValue": "",
                            "encoding": "UTF-8"
                        }
