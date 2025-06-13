@@ -18,6 +18,7 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         IDataLakeJobData configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
+        bool isInitialExport,
         SqlDataReader reader)
     {
         context.Log.LogInformation("Begin writing output.");
@@ -36,6 +37,11 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         var totalProcessed = 0L;
         while (await reader.ReadAsync())
         {
+            if (ShouldSkip(configuration, isInitialExport, reader))
+            {
+                continue;
+            }
+
             var fieldValues = fieldNames.Select(name => GetValue(name, reader, configuration));
             foreach (var field in fieldValues)
             {
