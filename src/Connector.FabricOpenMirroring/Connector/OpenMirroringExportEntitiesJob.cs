@@ -68,7 +68,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
         async Task EnsureMetadataJsonExists(DataLakeDirectoryClient directoryClient)
         {
-            if (configuration.OutputFormat == DataLakeConstants.OutputFormats.Csv)
+            if (DataLakeConstants.OutputFormats.Csv.Equals(configuration.OutputFormat, StringComparison.OrdinalIgnoreCase))
             {
                 await EnsureCsvMetadataJsonExists(directoryClient);
             }
