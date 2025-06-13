@@ -63,8 +63,8 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private protected override async Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient directoryClient)
     {
-        await CreatePartnerEventsJsonIfNotExists(directoryClient);
         await EnsureMetadataJsonExists(directoryClient);
+        await CreatePartnerEventsJsonIfNotExists();
 
         async Task EnsureMetadataJsonExists(DataLakeDirectoryClient directoryClient)
         {
@@ -123,9 +123,15 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
             }
         }
 
-        async Task CreatePartnerEventsJsonIfNotExists(DataLakeDirectoryClient directoryClient)
+        async Task CreatePartnerEventsJsonIfNotExists()
         {
-            var fileClient = directoryClient.GetFileClient("_partnerEvents.json");
+            if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"{exportJobData.ProviderDefinition}_PartnerEvents", PartnerEventsJsonLockInMilliseconds))
+            {
+                context.Log.LogDebug("Unable to acquire lock to partner events for ProviderDefinition '{ProviderDefinitionId}'.", exportJobData.ProviderDefinition.Id);
+                return;
+            }
+            var landingZoneDirectoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
+            var fileClient = landingZoneDirectoryClient.GetFileClient("_partnerEvents.json");
 
             if (!await fileClient.ExistsAsync())
             {
