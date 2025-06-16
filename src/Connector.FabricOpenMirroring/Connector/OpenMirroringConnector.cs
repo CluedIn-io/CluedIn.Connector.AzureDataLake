@@ -14,6 +14,8 @@ namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
 public class OpenMirroringConnector : DataLakeConnector
 {
+    private readonly ILogger<OpenMirroringConnector> _logger;
+
     public OpenMirroringConnector(
         ILogger<OpenMirroringConnector> logger,
         OpenMirroringClient client,
@@ -22,6 +24,7 @@ public class OpenMirroringConnector : DataLakeConnector
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected override async Task<bool> VerifyDataLakeConnection(IDataLakeJobData jobData)
@@ -43,6 +46,7 @@ public class OpenMirroringConnector : DataLakeConnector
         }
         catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to check if directory exists.");
             return false;
         }
     }
@@ -61,4 +65,6 @@ public class OpenMirroringConnector : DataLakeConnector
     {
         return new[] { StreamMode.Sync };
     }
+
+    protected override Type ExportJobType => typeof(OpenMirroringExportEntitiesJob);
 }

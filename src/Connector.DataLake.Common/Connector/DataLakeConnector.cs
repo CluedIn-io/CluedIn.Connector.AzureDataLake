@@ -22,7 +22,7 @@ using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.DataLake.Common.Connector
 {
-    public abstract class DataLakeConnector : ConnectorBaseV2
+    public abstract partial class DataLakeConnector : ConnectorBaseV2
     {
         private const string JsonMimeType = "application/json";
         private const int TableCreationLockTimeoutInMillliseconds = 100;

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common;
@@ -21,6 +22,8 @@ public class OneLakeConnector : DataLakeConnector
         : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
+
+    protected override Type ExportJobType => typeof(OneLakeExportEntitiesJob);
 
     protected override async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData)
     {

@@ -1,4 +1,6 @@
-﻿using CluedIn.Connector.DataLake.Common.Connector;
+﻿using System;
+
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 
 using Microsoft.Extensions.Logging;
@@ -16,4 +18,6 @@ public class AzureDataLakeConnector : DataLakeConnector
         : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
+
+    protected override Type ExportJobType => typeof(AzureDataLakeExportEntitiesJob);
 }
