@@ -16,11 +16,13 @@ using CluedIn.Core;
 using CluedIn.Core.Streams;
 
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
 internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 {
+    private const int PartnerEventsJsonLockInMilliseconds = 100;
     private static readonly AssemblyName _connectorAssemblyName = typeof(OpenMirroringExportEntitiesJob).Assembly.GetName();
     private static readonly AssemblyName _cluedInCoreAssemblyName = typeof(IDateTimeOffsetProvider).Assembly.GetName();
     private static readonly FileVersionInfo _connectorFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(OpenMirroringExportEntitiesJob).Assembly.Location);
@@ -59,16 +61,56 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private protected override bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => false;
 
-    private protected override async Task InitializeDirectoryAsync(IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient directoryClient)
+    private protected override async Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient directoryClient)
     {
-        await CreateMetadataJsonIfNotExists(directoryClient);
-        await CreatePartnerEventsJsonIfNotExists(directoryClient);
+        await EnsureMetadataJsonExists(directoryClient);
+        await CreatePartnerEventsJsonIfNotExists();
 
-        static async Task CreateMetadataJsonIfNotExists(DataLakeDirectoryClient directoryClient)
+        async Task EnsureMetadataJsonExists(DataLakeDirectoryClient directoryClient)
+        {
+            if (DataLakeConstants.OutputFormats.Csv.Equals(configuration.OutputFormat, StringComparison.OrdinalIgnoreCase))
+            {
+                await EnsureCsvMetadataJsonExists(directoryClient);
+            }
+            else
+            {
+                await EnsureGenericMetadataJsonExists(directoryClient);
+            }
+        }
+
+        async Task EnsureCsvMetadataJsonExists(DataLakeDirectoryClient directoryClient)
         {
             var fileClient = directoryClient.GetFileClient("_metadata.json");
 
-            if (!await fileClient.ExistsAsync())
+            if (IsInitialExport || !await fileClient.ExistsAsync())
+            {
+                await using var outputStream = await fileClient.OpenWriteAsync(true);
+                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
+                    $$"""
+                    {
+                       "keyColumns": ["Id"],
+                       "fileExtension": "csv",
+                       "fileFormat": "csv",
+                       "fileFormatTypeProperties": {
+                           "firstRowAsHeader": true,
+                           "rowSeparator": "\n",
+                           "columnSeparator": ",",
+                           "quoteCharacter": "\"",
+                           "escapeCharacter": "\"",
+                           "nullValue": "",
+                           "encoding": "UTF-8"
+                       }
+                    }
+                    """));
+                await outputStream.FlushAsync();
+            }
+        }
+
+        async Task EnsureGenericMetadataJsonExists(DataLakeDirectoryClient directoryClient)
+        {
+            var fileClient = directoryClient.GetFileClient("_metadata.json");
+
+            if (IsInitialExport || !await fileClient.ExistsAsync())
             {
                 await using var outputStream = await fileClient.OpenWriteAsync(true);
                 await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
@@ -81,9 +123,15 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
             }
         }
 
-        async Task CreatePartnerEventsJsonIfNotExists(DataLakeDirectoryClient directoryClient)
+        async Task CreatePartnerEventsJsonIfNotExists()
         {
-            var fileClient = directoryClient.GetFileClient("_partnerEvents.json");
+            if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"{exportJobData.ProviderDefinition}_PartnerEvents", PartnerEventsJsonLockInMilliseconds))
+            {
+                context.Log.LogDebug("Unable to acquire lock to partner events for ProviderDefinition '{ProviderDefinitionId}'.", exportJobData.ProviderDefinition.Id);
+                return;
+            }
+            var landingZoneDirectoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
+            var fileClient = landingZoneDirectoryClient.GetFileClient("_partnerEvents.json");
 
             if (!await fileClient.ExistsAsync())
             {
@@ -101,7 +149,6 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                       "cluedInServerFileVersion": "{{_cluedInCoreFileVersionInfo.ProductVersion}}",
                       "organizationId": "{{exportJobData.StreamModel.OrganizationId:N}}",
                       "providerDefinitionId": "{{exportJobData.ProviderDefinition.Id:N}}",
-                      "streamId": "{{exportJobData.StreamId:N}}",
                       "createdAt": "{{DateTimeOffsetProvider.GetCurrentUtcTime().ToString("o")}}"
                     }
                   }
