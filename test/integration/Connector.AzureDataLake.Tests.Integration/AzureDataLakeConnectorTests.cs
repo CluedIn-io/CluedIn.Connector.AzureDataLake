@@ -37,6 +37,83 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     }
 
     [Fact]
+    public async Task VerifyConnection_WhenValid_ReturnsSuccess()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        var jobData = new AzureDataLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    [InlineData("ALLCAPS")]
+    [InlineData("someCaps")]
+    [InlineData("some space")]
+    [InlineData("1 2")]
+    public async Task VerifyConnection_WhenInvalidAccountName_ReturnInvalidAccountNameErrorMessage(string accountName)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(AzureDataLakeConstants.AccountName)] = accountName;
+        var jobData = new AzureDataLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(AzureDataLakeConnector.InvalidAccountNameErrorMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenInexistentAccountName_ReturnInvalidAccountNameErrorMessage()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(AzureDataLakeConstants.AccountName)] = "1";
+        var jobData = new AzureDataLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(AzureDataLakeConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    [InlineData("notbase64")]
+    public async Task VerifyConnection_WhenInvalidAccountKey_ReturnInvalidAccountKeyErrorMessage(string accountKey)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(AzureDataLakeConstants.AccountKey)] = accountKey;
+        var jobData = new AzureDataLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(AzureDataLakeConnector.InvalidAccountKeyErrorMessage, result.ErrorMessage);
+    }
+
+    [Fact]
     public async Task VerifyStoreData_EventStream()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
@@ -420,6 +497,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
             { nameof(DataLakeConstants.OutputFormat), format },
             { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
+            { nameof(DataLakeConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
             { nameof(DataLakeConstants.ContainerName), "test" },
         };
         return updatedConfiguration;
