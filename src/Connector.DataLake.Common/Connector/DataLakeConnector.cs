@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -24,6 +24,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 {
     public abstract class DataLakeConnector : ConnectorBaseV2
     {
+        protected static readonly ConnectionVerificationResult SuccessfulConnectionVerification = new ConnectionVerificationResult(true);
         private const string JsonMimeType = "application/json";
         private const int TableCreationLockTimeoutInMillliseconds = 100;
         private readonly ILogger<DataLakeConnector> _logger;
@@ -493,16 +494,17 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected virtual async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData)
         {
-            if (!await VerifyDataLakeConnection(jobData))
+            var verifyConnectionResult = await VerifyDataLakeConnection(jobData);
+            if (!verifyConnectionResult.Success)
             {
-                return new ConnectionVerificationResult(false, "Data Lake connection cannot be established.");
+                return verifyConnectionResult;
             }
 
             if (jobData.IsStreamCacheEnabled)
             {
                 if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
                 {
-                    return new ConnectionVerificationResult(false, $"Stream cache connection string must be valid when buffer is enabled.");
+                    return CreateFailedConnectionVerification($"Stream cache connection string must be valid when buffer is enabled.");
                 }
 
                 await VerifyTableOperations(jobData.StreamCacheConnectionString);
@@ -511,20 +513,20 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 {
                     var supported = string.Join(',', DataLakeConstants.OutputFormats.AllSupportedFormats);
                     var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
-                    return new ConnectionVerificationResult(false, errorMessage);
+                    return CreateFailedConnectionVerification(errorMessage);
                 }
 
                 var cronOrScheduleName = jobData.GetCronOrScheduleName();
                 if (string.IsNullOrWhiteSpace(cronOrScheduleName))
                 {
-                    return new ConnectionVerificationResult(false, "Schedule name cannot be empty.");
+                    return CreateFailedConnectionVerification("Schedule name cannot be empty.");
                 }
 
                 if (!CronSchedules.TryGetCronSchedule(cronOrScheduleName, out _))
                 {
                     var supported = string.Join(',', CronSchedules.SupportedCronScheduleNames);
                     var errorMessage = $"Schedule '{jobData.Schedule}' with cron '{jobData.CustomCron}' is not supported. Supported schedules are {supported} and valid cron expression.";
-                    return new ConnectionVerificationResult(false, errorMessage);
+                    return CreateFailedConnectionVerification(errorMessage);
                 }
 
                 if (!string.IsNullOrWhiteSpace(jobData.FileNamePattern))
@@ -533,22 +535,27 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     var invalidCharacters = new[] { '/', '\\', '?', '%' };
                     if (trimmed.StartsWith("."))
                     {
-                        return new ConnectionVerificationResult(false, "File name pattern cannot start with a period.");
+                        return CreateFailedConnectionVerification("File name pattern cannot start with a period.");
                     }
                     else if (trimmed.IndexOfAny(invalidCharacters) != -1)
                     {
-                        return new ConnectionVerificationResult(false, "File name contains invalid characters.");
+                        return CreateFailedConnectionVerification("File name contains invalid characters.");
                     }
                 }
             }
 
-            return new ConnectionVerificationResult(true);
+            return SuccessfulConnectionVerification;
         }
 
-        protected virtual async Task<bool> VerifyDataLakeConnection(IDataLakeJobData jobData)
+        protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
         {
             await Client.EnsureDataLakeDirectoryExist(jobData);
-            return true;
+            return SuccessfulConnectionVerification;
+        }
+
+        protected virtual ConnectionVerificationResult CreateFailedConnectionVerification(string message)
+        {
+            return new ConnectionVerificationResult(false, message);
         }
 
         private async Task VerifyTableOperations(string connectionString)

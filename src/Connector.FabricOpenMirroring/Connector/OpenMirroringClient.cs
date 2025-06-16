@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -42,6 +42,12 @@ public class OpenMirroringClient : DataLakeClient
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+    }
+
+    public async Task<bool> HasValidWorkspaceAsync(IDataLakeJobData configuration)
+    {
+        var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: false);
+        return await fileSystemClient.ExistsAsync();
     }
 
     protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
