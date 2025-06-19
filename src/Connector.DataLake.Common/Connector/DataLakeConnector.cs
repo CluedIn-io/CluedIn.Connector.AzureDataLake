@@ -27,6 +27,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         protected static readonly ConnectionVerificationResult SuccessfulConnectionVerification = new ConnectionVerificationResult(true);
         private const string JsonMimeType = "application/json";
         private const int TableCreationLockTimeoutInMillliseconds = 100;
+        private static readonly char[] InvalidFileNameCharacters = ['/', '\\', '?', '%'];
+        private static readonly string InvalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", InvalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
+        private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<DataLakeConnector> _logger;
         private readonly IDataLakeClient _client;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
@@ -532,14 +535,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 if (!string.IsNullOrWhiteSpace(jobData.FileNamePattern))
                 {
                     var trimmed = jobData.FileNamePattern.Trim();
-                    var invalidCharacters = new[] { '/', '\\', '?', '%' };
                     if (trimmed.StartsWith("."))
                     {
-                        return CreateFailedConnectionVerification("File name pattern cannot start with a period.");
+                        return CreateFailedConnectionVerification(InvalidFileNameStartsWithPeriodErrorMessage);
                     }
-                    else if (trimmed.IndexOfAny(invalidCharacters) != -1)
+                    else if (trimmed.IndexOfAny(InvalidFileNameCharacters) != -1)
                     {
-                        return CreateFailedConnectionVerification("File name contains invalid characters.");
+                        return CreateFailedConnectionVerification(InvalidFileNameHasInvalidCharacters);
                     }
                 }
             }
