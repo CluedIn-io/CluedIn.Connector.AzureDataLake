@@ -16,6 +16,8 @@ using CluedIn.Core;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
+using Hangfire.Storage;
+
 using Microsoft.Extensions.Logging;
 
 using Moq;
@@ -42,13 +44,27 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         var configuration = CreateConfigurationWithoutStreamCache();
         var jobData = new AzureDataLakeConnectorJobData(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
-        var result = await connector.VerifyConnection(setupResult.Context, configuration);
-        Assert.NotNull(result);
-        Assert.True(result.Success);
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.True(result.Success);
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
+    }
+
+    private static void DeleteFileSystemIfExists(AzureDataLakeConnectorJobData jobData)
+    {
+        var client = GetDataLakeClient(jobData);
+        client.GetFileSystemClient(jobData.FileSystemName).DeleteIfExists();
     }
 
     [Theory]
@@ -61,18 +77,26 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     [InlineData("1 2")]
     public async Task VerifyConnection_WhenInvalidAccountName_ReturnInvalidAccountNameErrorMessage(string accountName)
     {
+
         var configuration = CreateConfigurationWithoutStreamCache();
         configuration[nameof(AzureDataLakeConstants.AccountName)] = accountName;
         var jobData = new AzureDataLakeConnectorJobData(configuration);
-
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
-        var result = await connector.VerifyConnection(setupResult.Context, configuration);
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Equal(AzureDataLakeConnector.InvalidAccountNameErrorMessage, result.ErrorMessage);
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.Equal(AzureDataLakeConnector.InvalidAccountNameErrorMessage, result.ErrorMessage);
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
     }
 
     [Fact]
@@ -82,14 +106,22 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         configuration[nameof(AzureDataLakeConstants.AccountName)] = "1";
         var jobData = new AzureDataLakeConnectorJobData(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
-        var result = await connector.VerifyConnection(setupResult.Context, configuration);
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Equal(AzureDataLakeConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.Equal(AzureDataLakeConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
     }
 
     [Theory]
@@ -103,14 +135,113 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         configuration[nameof(AzureDataLakeConstants.AccountKey)] = accountKey;
         var jobData = new AzureDataLakeConnectorJobData(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
-        var result = await connector.VerifyConnection(setupResult.Context, configuration);
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Equal(AzureDataLakeConnector.InvalidAccountKeyErrorMessage, result.ErrorMessage);
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.Equal(AzureDataLakeConnector.InvalidAccountKeyErrorMessage, result.ErrorMessage);
+
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    [InlineData("ALLCAPS")]
+    [InlineData("someCaps")]
+    [InlineData("some space")]
+    [InlineData("1 2")]
+    public async Task VerifyConnection_WhenInvalidFileSystemName_ReturnInvalidFileSystemNameErrorMessage(string fileSystemName)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(AzureDataLakeConstants.FileSystemName)] = fileSystemName;
+        var jobData = new AzureDataLakeConnectorJobData(configuration);
+
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.Equal(AzureDataLakeConnector.InvalidFileSystemNameErrorMessage, result.ErrorMessage);
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    [InlineData("File/one/two.")]
+    [InlineData("File/one//two")]
+    [InlineData("File./one/two")]
+    public async Task VerifyConnection_WhenInvalidDirectoryName_ReturnInvalidFileSystemNameErrorMessage(string directoryName)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(AzureDataLakeConstants.DirectoryName)] = directoryName;
+        var jobData = new AzureDataLakeConnectorJobData(configuration);
+
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.Equal(AzureDataLakeConnector.InvalidDirectoryNameErrorMessage, result.ErrorMessage);
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
+    }
+
+    [Theory]
+    [InlineData("Files")]
+    [InlineData("Files/one")]
+    [InlineData("Files/one/two")]
+    public async Task VerifyConnection_WhenValidDirectoryName_ReturnSuccess(string directoryName)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(AzureDataLakeConstants.DirectoryName)] = directoryName;
+        var jobData = new AzureDataLakeConnectorJobData(configuration);
+
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.True(result.Success);
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
     }
 
     [Fact]
