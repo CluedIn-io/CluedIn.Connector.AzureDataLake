@@ -93,7 +93,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                        "fileFormat": "csv",
                        "fileFormatTypeProperties": {
                            "firstRowAsHeader": true,
-                           "rowSeparator": "\n",
+                           "rowSeparator": "\r\n",
                            "columnSeparator": ",",
                            "quoteCharacter": "\"",
                            "escapeCharacter": "\"",
