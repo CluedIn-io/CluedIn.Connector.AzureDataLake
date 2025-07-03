@@ -18,6 +18,7 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         IDataLakeJobData configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
+        bool isInitialExport,
         SqlDataReader reader)
     {
         context.Log.LogInformation("Begin writing output.");
@@ -27,14 +28,20 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         await using var csv = new CsvWriter(writer, csvConfig);
         foreach (var fieldName in fieldNames)
         {
-            var fieldNameToUse = configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
+            var fieldNameToUse = GetFieldName(configuration, fieldName);
             csv.WriteField(fieldNameToUse);
         }
+
         await csv.NextRecordAsync();
 
         var totalProcessed = 0L;
         while (await reader.ReadAsync())
         {
+            if (ShouldSkip(configuration, isInitialExport, reader))
+            {
+                continue;
+            }
+
             var fieldValues = fieldNames.Select(name => GetValue(name, reader, configuration));
             foreach (var field in fieldValues)
             {
@@ -51,5 +58,10 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         }
 
         return totalProcessed;
+    }
+
+    protected virtual string GetFieldName(IDataLakeJobData configuration, string fieldName)
+    {
+        return configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
     }
 }

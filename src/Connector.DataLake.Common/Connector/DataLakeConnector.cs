@@ -359,7 +359,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                         BEGIN
                             UPDATE [{tableName}]
                             SET
-                                [{DataLakeConstants.ChangeTypeKey}] = {syncItem.ChangeType.ToString()}
+                                [{DataLakeConstants.ChangeTypeKey}] = @ChangeType,
+                                [Timestamp] = @Timestamp,
+                                [Epoch] = @Epoch
                             WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};
                         END
                         """;
@@ -368,6 +370,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     CommandType = CommandType.Text
                 };
                 command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
+                command.Parameters.Add(new SqlParameter($"@ChangeType", syncItem.ChangeType.ToString()));
+                command.Parameters.Add(new SqlParameter($"@Timestamp", syncItem.Data["Timestamp"]));
+                command.Parameters.Add(new SqlParameter($"@Epoch", syncItem.Data["Epoch"]));
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
                 if (rowsAffected != 1)
