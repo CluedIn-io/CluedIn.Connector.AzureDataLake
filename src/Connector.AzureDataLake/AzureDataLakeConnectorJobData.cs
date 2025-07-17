@@ -17,7 +17,9 @@ internal class AzureDataLakeConnectorJobData : DataLakeJobData
     public string AccountName => GetConfigurationValue(AzureDataLakeConstants.AccountName) as string;
     public string AccountKey => GetConfigurationValue(AzureDataLakeConstants.AccountKey) as string;
     public string DirectoryName => GetConfigurationValue(AzureDataLakeConstants.DirectoryName) as string;
-    public string FileSystemName => GetConfigurationValue(AzureDataLakeConstants.FileSystemName) as string;
+
+    public override string FileSystemName => GetConfigurationValue(AzureDataLakeConstants.FileSystemName) as string;
+    public override string RootDirectoryPath => DirectoryName;
 
     protected override void AddToHashCode(HashCode hash)
     {
@@ -40,7 +42,7 @@ internal class AzureDataLakeConnectorJobData : DataLakeJobData
             AccountName == other.AccountName &&
             AccountKey == other.AccountKey &&
             FileSystemName == other.FileSystemName &&
-            DirectoryName == other.DirectoryName &&
+            RootDirectoryPath == other.RootDirectoryPath &&
             base.Equals(other);
     }
 

@@ -59,18 +59,6 @@ public class OpenMirroringClient : DataLakeClient
         return dataLakeServiceClient;
     }
 
-    protected override string GetDirectory(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OpenMirroringConnectorJobData>(configuration);
-        return  $"{casted.MirroredDatabaseName}.MountedRelationalDatabase/Files/LandingZone";
-    }
-
-    protected override string GetFileSystemName(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OpenMirroringConnectorJobData>(configuration);
-        return casted.WorkspaceName;
-    }
-
     public virtual async Task UpdateOrCreateMirroredDatabaseAsync(IDataLakeJobData dataLakeJobData, bool isEnabled)
     {
         var jobData = CastJobData<OpenMirroringConnectorJobData>(dataLakeJobData);
