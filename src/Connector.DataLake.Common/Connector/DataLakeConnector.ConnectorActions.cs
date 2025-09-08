@@ -13,12 +13,15 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
 {
     private const string RunExportActionName = "RunExport";
 
-    public virtual Task<GetConnectorActionsResult> GetActions(
+    public virtual async Task<GetConnectorActionsResult> GetActions(
         ExecutionContext executionContext,
         IReadOnlyStreamModel streamModel)
     {
+        var containerName = streamModel.ContainerName;
+        var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
         var action = new ConnectorAction(RunExportActionName, "Export", "Run export now", [], []);
-        return Task.FromResult(new GetConnectorActionsResult(streamModel?.Id ?? Guid.Empty, [action]));
+        return new GetConnectorActionsResult(streamModel?.Id ?? Guid.Empty, configuration.IsStreamCacheEnabled ? [action] : []);
     }
 
     public virtual async Task<ExecuteConnectorActionResult> ExecuteAction(
