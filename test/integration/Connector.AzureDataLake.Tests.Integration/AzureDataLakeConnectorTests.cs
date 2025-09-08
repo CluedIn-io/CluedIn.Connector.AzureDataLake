@@ -162,6 +162,11 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     [InlineData("someCaps")]
     [InlineData("some space")]
     [InlineData("1 2")]
+    [InlineData("invalid_file_system")]
+    [InlineData("ab")] // too short
+    [InlineData("abc012345678901234567890123456789012345678901234567890123456789z")] // too long
+    [InlineData("-invalidstart")]
+    [InlineData("invalidend-")]
     public async Task VerifyConnection_WhenInvalidFileSystemName_ReturnInvalidFileSystemNameErrorMessage(string fileSystemName)
     {
         var configuration = CreateConfigurationWithoutStreamCache();

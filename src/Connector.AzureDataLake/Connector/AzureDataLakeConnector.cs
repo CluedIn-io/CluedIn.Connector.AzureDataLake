@@ -16,7 +16,7 @@ public class AzureDataLakeConnector : DataLakeConnector
 {
     private readonly ILogger<AzureDataLakeConnector> _logger;
     internal static readonly Regex AccountNameRegex = new("^[a-z0-9]+$", RegexOptions.Compiled);
-    internal static readonly Regex FileSystemNameRegex = new(@"^[a-z0-9][a-z0-9\-]+[a-z0-9]$", RegexOptions.Compiled);
+    internal static readonly Regex FileSystemNameRegex = new("^(?=.{3,63}$)[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.Compiled);
     internal const string InvalidAccountNameErrorMessage = "Invalid storage account name. It can only contain numbers and lowercase characters.";
     internal const string InvalidAccountKeyErrorMessage = "Invalid account key. It must be a valid base64 string.";
     internal const string InvalidCredentialsErrorMessage = "Invalid storage account credentials.";
