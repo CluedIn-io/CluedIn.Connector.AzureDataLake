@@ -20,8 +20,8 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         var containerName = streamModel.ContainerName;
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
-        var action = new ConnectorAction(RunExportActionName, "Export", "Run export now", [], []);
-        return new GetConnectorActionsResult(streamModel?.Id ?? Guid.Empty, configuration.IsStreamCacheEnabled ? [action] : []);
+        var action = new ConnectorAction(RunExportActionName, "Run Export", "Run export now", [], []);
+        return new GetConnectorActionsResult(streamModel?.Id ?? Guid.Empty, configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync ? [action] : []);
     }
 
     public virtual async Task<ExecuteConnectorActionResult> ExecuteAction(
