@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 
 using CluedIn.Core.Connectors.ExtendedOperations;
 using CluedIn.Core.Jobs;
+using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
@@ -21,7 +22,11 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
         var action = new ConnectorAction(RunExportActionName, "Run Export", "Run export now", [], []);
-        return new GetConnectorActionsResult(streamModel?.Id ?? Guid.Empty, configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync ? [action] : []);
+        var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
+
+        var stream = await streamRepository.GetStream(streamModel.Id);
+        var shouldShowAction = configuration.IsStreamCacheEnabled && stream.Mode == StreamMode.Sync && stream.Status != StreamStatus.Started;
+        return new GetConnectorActionsResult(streamModel.Id, shouldShowAction ? [action] : []);
     }
 
     public virtual async Task<ExecuteConnectorActionResult> ExecuteAction(
