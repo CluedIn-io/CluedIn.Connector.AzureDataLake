@@ -24,11 +24,11 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 {
     public abstract class DataLakeConnector : ConnectorBaseV2
     {
-        protected static readonly ConnectionVerificationResult SuccessfulConnectionVerification = new ConnectionVerificationResult(true);
+        protected static readonly ConnectionVerificationResult SuccessfulConnectionVerification = new (true);
         private const string JsonMimeType = "application/json";
-        private const int TableCreationLockTimeoutInMillliseconds = 100;
-        private static readonly char[] InvalidFileNameCharacters = ['/', '\\', '?', '%'];
-        private static readonly string InvalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", InvalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
+        private const int TableCreationLockTimeoutInMilliseconds = 100;
+        private static readonly char[] _invalidFileNameCharacters = ['/', '\\', '?', '%'];
+        private static readonly string _invalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", _invalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
         private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<DataLakeConnector> _logger;
         private readonly IDataLakeClient _client;
@@ -281,7 +281,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return DistributedLockHelper.TryAcquireExclusiveLock(
                 connection,
                 $"{typeName}_{tableName}",
-                TableCreationLockTimeoutInMillliseconds);
+                TableCreationLockTimeoutInMilliseconds);
         }
 
         private async Task WriteToCacheTable(
@@ -507,7 +507,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             {
                 if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
                 {
-                    return CreateFailedConnectionVerification($"Stream cache connection string must be valid when buffer is enabled.");
+                    return CreateFailedConnectionVerification("Stream cache connection string must be valid when buffer is enabled.");
                 }
 
                 await VerifyTableOperations(jobData.StreamCacheConnectionString);
@@ -539,9 +539,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     {
                         return CreateFailedConnectionVerification(InvalidFileNameStartsWithPeriodErrorMessage);
                     }
-                    else if (trimmed.IndexOfAny(InvalidFileNameCharacters) != -1)
+
+                    if (trimmed.IndexOfAny(_invalidFileNameCharacters) != -1)
                     {
-                        return CreateFailedConnectionVerification(InvalidFileNameHasInvalidCharacters);
+                        return CreateFailedConnectionVerification(_invalidFileNameHasInvalidCharacters);
                     }
                 }
             }

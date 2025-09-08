@@ -15,8 +15,8 @@ namespace CluedIn.Connector.AzureDataLake.Connector;
 public class AzureDataLakeConnector : DataLakeConnector
 {
     private readonly ILogger<AzureDataLakeConnector> _logger;
-    internal static readonly Regex _accountNameRegex = new Regex("^[a-z0-9]+$", RegexOptions.Compiled);
-    internal static readonly Regex _fileSystemNameRegex = new Regex(@"^[a-z0-9][a-z0-9\-]+[a-z0-9]$", RegexOptions.Compiled);
+    internal static readonly Regex AccountNameRegex = new("^[a-z0-9]+$", RegexOptions.Compiled);
+    internal static readonly Regex FileSystemNameRegex = new(@"^[a-z0-9][a-z0-9\-]+[a-z0-9]$", RegexOptions.Compiled);
     internal const string InvalidAccountNameErrorMessage = "Invalid storage account name. It can only contain numbers and lowercase characters.";
     internal const string InvalidAccountKeyErrorMessage = "Invalid account key. It must be a valid base64 string.";
     internal const string InvalidCredentialsErrorMessage = "Invalid storage account credentials.";
@@ -73,7 +73,7 @@ public class AzureDataLakeConnector : DataLakeConnector
 
         bool IsValidAccountName()
         {
-            return !string.IsNullOrWhiteSpace(casted.AccountName) && _accountNameRegex.IsMatch(casted.AccountName);
+            return !string.IsNullOrWhiteSpace(casted.AccountName) && AccountNameRegex.IsMatch(casted.AccountName);
         }
 
         bool IsValidAccountKey()
@@ -83,7 +83,7 @@ public class AzureDataLakeConnector : DataLakeConnector
 
         bool IsValidFileSystemName()
         {
-            return !string.IsNullOrWhiteSpace(casted.FileSystemName) && _fileSystemNameRegex.IsMatch(casted.FileSystemName);
+            return !string.IsNullOrWhiteSpace(casted.FileSystemName) && FileSystemNameRegex.IsMatch(casted.FileSystemName);
         }
 
         bool IsValidDirectoryName()
@@ -101,6 +101,6 @@ public class AzureDataLakeConnector : DataLakeConnector
     private static bool IsBase64String(string base64)
     {
         var buffer = new Span<byte>(new byte[base64.Length]);
-        return Convert.TryFromBase64String(base64, buffer, out int bytesParsed);
+        return Convert.TryFromBase64String(base64, buffer, out _);
     }
 }

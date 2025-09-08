@@ -163,7 +163,7 @@ dotnet_naming_rule.class_naming.symbols = class_symbol
 dotnet_naming_rule.class_naming.style = pascal_case_style
 dotnet_naming_rule.class_naming.severity = suggestion
 
-dotnet_naming_symbols.class_symbol.applicable_kinds = class, struct, enum, property, method, event, namespace
+dotnet_naming_symbols.class_symbol.applicable_kinds = class, struct, enum, property, method, event, namespace, local_function
 dotnet_naming_symbols.class_symbol.applicable_accessibilities = *
 
 # Type Parameters

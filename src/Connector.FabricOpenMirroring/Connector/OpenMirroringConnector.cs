@@ -65,10 +65,8 @@ public class OpenMirroringConnector : DataLakeConnector
             {
                 return SuccessfulConnectionVerification;
             }
-            else
-            {
-                return CreateFailedConnectionVerification(InvalidWorkspaceErrorMessage);
-            }
+
+            return CreateFailedConnectionVerification(InvalidWorkspaceErrorMessage);
         }
 
         try
@@ -88,7 +86,7 @@ public class OpenMirroringConnector : DataLakeConnector
         catch (RequestFailedException ex) when (WorkspaceNotFoundErrorCode.Equals(ex.ErrorCode))
         {
             var errorMessage = WorkspaceNotFoundErrorMessageFormat.FormatWith(casted.WorkspaceName);
-            _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted?.WorkspaceName);
+            _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted.WorkspaceName);
             return CreateFailedConnectionVerification(errorMessage);
         }
         catch (Exception ex)
@@ -98,7 +96,7 @@ public class OpenMirroringConnector : DataLakeConnector
 
         static bool IsHealthCheckVerification(OpenMirroringConnectorJobData castedJobData)
         {
-            return castedJobData.Configurations.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out var _);
+            return castedJobData.Configurations.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out _);
         }
     }
 
