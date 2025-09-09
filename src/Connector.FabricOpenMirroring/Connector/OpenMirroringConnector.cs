@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -91,6 +91,7 @@ public class OpenMirroringConnector : DataLakeConnector
         }
         catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failed to check if directory exists.");
             return CreateFailedConnectionVerification(ex.Message);
         }
 
@@ -114,4 +115,6 @@ public class OpenMirroringConnector : DataLakeConnector
     {
         return new[] { StreamMode.Sync };
     }
+
+    protected override Type ExportJobType => typeof(OpenMirroringExportEntitiesJob);
 }

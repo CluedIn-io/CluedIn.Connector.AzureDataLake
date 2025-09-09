@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -73,6 +73,8 @@ public class OneLakeConnector : DataLakeConnector
             return CreateFailedConnectionVerification(ex.Message);
         }
     }
+
+    protected override Type ExportJobType => typeof(OneLakeExportEntitiesJob);
 
     protected override async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData)
     {

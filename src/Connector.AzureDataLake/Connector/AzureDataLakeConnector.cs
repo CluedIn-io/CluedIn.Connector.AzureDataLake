@@ -1,4 +1,4 @@
-using CluedIn.Connector.DataLake.Common;
+﻿using CluedIn.Connector.DataLake.Common;
 using System.Threading.Tasks;
 using System;
 
@@ -33,6 +33,8 @@ public class AzureDataLakeConnector : DataLakeConnector
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
+    protected override Type ExportJobType => typeof(AzureDataLakeExportEntitiesJob);
 
     protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
     {
