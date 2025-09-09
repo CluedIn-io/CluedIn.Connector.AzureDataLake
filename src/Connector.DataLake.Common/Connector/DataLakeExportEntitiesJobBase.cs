@@ -813,7 +813,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
     private static string GetExportHistoryTableName(Guid streamId)
     {
-        return CacheTableHelper.GetCacheTableName(streamId) + "_ExportHistory";
+        return CacheTableHelper.GetExportHistoryTableName(streamId) + "_ExportHistory";
     }
 
     private record FileMetadata(Guid StreamId, DateTimeOffset DataTime);
