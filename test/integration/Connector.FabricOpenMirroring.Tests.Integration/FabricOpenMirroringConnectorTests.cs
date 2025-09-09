@@ -37,6 +37,111 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     {
     }
 
+    [Fact]
+    public async Task VerifyConnection_WhenValidCredentials_ReturnSuccess()
+    {
+        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
+        var jobData = new OpenMirroringConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenInvalidTenantId_ReturnInvalidCredentialsErrorMessage()
+    {
+        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConstants.TenantId)] = "1";
+        var jobData = new OpenMirroringConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OpenMirroringConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenInvalidClientId_ReturnInvalidCredentialsErrorMessage()
+    {
+        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConstants.ClientId)] = "1";
+        var jobData = new OpenMirroringConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OpenMirroringConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenInvalidClientSecret_ReturnInvalidCredentialsErrorMessage()
+    {
+        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConstants.ClientSecret)] = "1";
+        var jobData = new OpenMirroringConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OpenMirroringConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("  ")]
+    public async Task VerifyConnection_WhenWorkspaceNameInvalid_ReturnWorkspaceNameInvalidErrorMessage(string workspaceName)
+    {
+        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConstants.WorkspaceName)] = workspaceName;
+        var jobData = new OpenMirroringConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OpenMirroringConnector.InvalidWorkspaceErrorMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenWorkspaceNotFound_ReturnWorkspaceNotFoundErrorMessage()
+    {
+        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConstants.WorkspaceName)] = "1";
+        var jobData = new OpenMirroringConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OpenMirroringConnector.WorkspaceNotFoundErrorMessageFormat.FormatWith("1"), result.ErrorMessage);
+    }
+
+    [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatEscaped()
     {
         await VerifyStoreData_Sync_WithStreamCache(
@@ -312,7 +417,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
 
         await AssertExportJobOutputFileContents(
             jobData.FileSystemName,
-            jobData.RootDirectoryPath,
+            $"{jobData.RootDirectoryPath}/{setupResult.StreamModel.Id:N}",
             setupResult,
             GetDataLakeClient(jobData),
             exportJob,
@@ -392,6 +497,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
             { nameof(DataLakeConstants.OutputFormat), format },
             { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
+            { nameof(DataLakeConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
             { nameof(DataLakeConstants.ContainerName), "test" },
         };
         return updatedConfiguration;

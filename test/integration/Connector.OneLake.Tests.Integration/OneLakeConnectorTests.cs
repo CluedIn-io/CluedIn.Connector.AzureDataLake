@@ -4,13 +4,14 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Azure.Identity;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
-using CluedIn.Connector.OneLake.Connector;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
+using CluedIn.Connector.OneLake.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
@@ -23,7 +24,6 @@ using Xunit;
 using Xunit.Abstractions;
 
 using Encoding = System.Text.Encoding;
-using Azure.Identity;
 
 namespace CluedIn.Connector.OneLake.Tests.Integration;
 
@@ -35,6 +35,154 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public OneLakeConnectorTests(ITestOutputHelper testOutputHelper)
         : base(testOutputHelper)
     {
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenValidCredentials_ReturnSuccess()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenInvalidTenantId_ReturnInvalidCredentialsErrorMessage()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConstants.TenantId)] = "1";
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OneLakeConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenInvalidClientId_ReturnInvalidCredentialsErrorMessage()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConstants.ClientId)] = "1";
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OneLakeConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenInvalidClientSecret_ReturnInvalidCredentialsErrorMessage()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConstants.ClientSecret)] = "1";
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OneLakeConnector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("  ")]
+    public async Task VerifyConnection_WhenWorkspaceNameInvalid_ReturnWorkspaceNameInvalidErrorMessage(string workspaceName)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConstants.WorkspaceName)] = workspaceName;
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OneLakeConnector.InvalidWorkspaceErrorMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenWorkspaceNotFound_ReturnWorkspaceNotFoundErrorMessage()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConstants.WorkspaceName)] = "1";
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OneLakeConnector.WorkspaceNotFoundErrorMessageFormat.FormatWith("1"), result.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData("NotFiles/")]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("File")]
+    [InlineData("File/")]
+    [InlineData(null)]
+    public async Task VerifyConnection_WhenItemFolderInvalid_ReturnInvalidFolderErrorMessage(string itemFolder)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConstants.ItemFolder)] = itemFolder;
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OneLakeConnector.InvalidFolderErrorMessage, result.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData("Files/")]
+    [InlineData("Files")]
+    [InlineData("Files/path")]
+    [InlineData("Files/path with space")]
+    [InlineData("Files/クルード・イン")]
+    public async Task VerifyConnection_WhenItemFolderValid_ReturnInvalidFolderErrorMessage(string itemFolder)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConstants.ItemFolder)] = itemFolder;
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.True(result.Success);
     }
 
     [Fact]
@@ -452,6 +600,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
             { nameof(DataLakeConstants.OutputFormat), format },
             { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
+            { nameof(DataLakeConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
             { nameof(DataLakeConstants.ContainerName), "test" },
         };
         return updatedConfiguration;

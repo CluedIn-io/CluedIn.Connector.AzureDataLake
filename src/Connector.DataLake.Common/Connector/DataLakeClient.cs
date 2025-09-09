@@ -1,4 +1,4 @@
-﻿using Azure.Storage.Files.DataLake;
+using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 using CluedIn.Core.Connectors;
 using System;
@@ -167,7 +167,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return directoryClient;
         }
 
-        private async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(
+        protected async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(
             IDataLakeJobData configuration,
             bool ensureExists)
         {
