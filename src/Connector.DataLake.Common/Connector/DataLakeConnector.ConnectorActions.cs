@@ -62,7 +62,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
     {
         _logger.LogError(ex, "Failed to execute action {ActionName} for stream {StreamId}", request.ActionName, streamModel.Id);
         var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
-        var failedResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, $"Failed: {ex.Message}", "Connector", string.Empty);
+        var failedResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, $"Failed: {ex.Message}{Environment.NewLine}{ex.StackTrace}", "Connector", string.Empty);
         return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: false, IsCompleted: true, now, now, [failedResult]);
     }
 
