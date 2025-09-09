@@ -206,7 +206,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         };
         command.Parameters.Add(new SqlParameter("@AsOfTime", asOfTime));
         command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", entityId));
-        var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync();
 
         var entityData = await reader.ReadAsync()
             ? Enumerable.Range(0, reader.FieldCount).ToDictionary(reader.GetName, reader.GetValue)
@@ -250,7 +250,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         {
             CommandType = CommandType.Text
         };
-        var reader = await command.ExecuteReaderAsync();
+        await using var reader = await command.ExecuteReaderAsync();
         var result = new List<Dictionary<string, object>>();
         while (await reader.ReadAsync())
         {
