@@ -25,7 +25,9 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
 
         var stream = await streamRepository.GetStream(streamModel.Id);
-        var shouldShowAction = configuration.IsStreamCacheEnabled && stream.Mode == StreamMode.Sync && stream.Status != StreamStatus.Started;
+        var shouldShowAction = configuration.IsStreamCacheEnabled // only for streams with cache enabled
+            && stream.Mode == StreamMode.Sync // only for sync streams
+            && (stream.Status == StreamStatus.Started || stream.Status == StreamStatus.Paused); // only for started or paused streams
         return new GetConnectorActionsResult(streamModel.Id, shouldShowAction ? [action] : []);
     }
 
