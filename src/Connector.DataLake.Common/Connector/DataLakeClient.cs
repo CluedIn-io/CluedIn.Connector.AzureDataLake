@@ -1,4 +1,4 @@
-﻿using Azure.Storage.Files.DataLake;
+using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 using CluedIn.Core.Connectors;
 using System;
@@ -63,8 +63,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
         }
 
-        protected abstract string GetDirectory(IDataLakeJobData configuration);
-        protected abstract string GetFileSystemName(IDataLakeJobData configuration);
         protected abstract DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration);
 
         protected static TJobData CastJobData<TJobData>(IDataLakeJobData jobData) where TJobData : class, IDataLakeJobData
@@ -152,7 +150,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             string subDirectory,
             bool ensureExists)
         {
-            var directory = GetDirectory(configuration);
+            var directory = configuration.RootDirectoryPath;
             var directoryClient = fileSystemClient.GetDirectoryClient(directory);
             if (string.IsNullOrWhiteSpace(subDirectory))
             {
@@ -169,12 +167,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return directoryClient;
         }
 
-        private async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(
+        protected async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(
             IDataLakeJobData configuration,
             bool ensureExists)
         {
             var dataLakeServiceClient = GetDataLakeServiceClient(configuration);
-            var fileSystemName = GetFileSystemName(configuration);
+            var fileSystemName = configuration.FileSystemName;
             var dataLakeFileSystemClient = dataLakeServiceClient.GetFileSystemClient(fileSystemName);
             if (ensureExists && !await dataLakeFileSystemClient.ExistsAsync())
             {
@@ -187,7 +185,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         public async Task<IEnumerable<IConnectorContainer>> GetFilesInDirectory(IDataLakeJobData configuration, string subDirectory = null)
         {
             var serviceClient = GetDataLakeServiceClient(configuration);
-            var fileSystemName = GetFileSystemName(configuration);
+            var fileSystemName = configuration.FileSystemName;
             var fileSystemClient = serviceClient.GetFileSystemClient(fileSystemName);
 
             if (!await fileSystemClient.ExistsAsync())
@@ -195,7 +193,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 return null;
             }
 
-            var directory = GetDirectory(configuration);
+            var directory = configuration.RootDirectoryPath;
             if (!string.IsNullOrEmpty(subDirectory))
                 directory = Path.Combine(directory, subDirectory);
 

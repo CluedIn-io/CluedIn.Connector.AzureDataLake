@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -44,6 +44,12 @@ public class OpenMirroringClient : DataLakeClient
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
+    public async Task<bool> HasValidWorkspaceAsync(IDataLakeJobData configuration)
+    {
+        var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: false);
+        return await fileSystemClient.ExistsAsync();
+    }
+
     protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
     {
         var casted = CastJobData<OpenMirroringConnectorJobData>(configuration);
@@ -57,18 +63,6 @@ public class OpenMirroringClient : DataLakeClient
             new Uri(dfsUri),
             sharedKeyCredential);
         return dataLakeServiceClient;
-    }
-
-    protected override string GetDirectory(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OpenMirroringConnectorJobData>(configuration);
-        return  $"{casted.MirroredDatabaseName}.MountedRelationalDatabase/Files/LandingZone";
-    }
-
-    protected override string GetFileSystemName(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OpenMirroringConnectorJobData>(configuration);
-        return casted.WorkspaceName;
     }
 
     public virtual async Task UpdateOrCreateMirroredDatabaseAsync(IDataLakeJobData dataLakeJobData, bool isEnabled)

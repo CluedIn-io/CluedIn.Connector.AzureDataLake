@@ -8,4 +8,9 @@ internal class CacheTableHelper
     {
         return $"Stream_{streamId}";
     }
+
+    public static string GetExportHistoryTableName(Guid streamId)
+    {
+        return GetCacheTableName(streamId) + "_ExportHistory";
+    }
 }

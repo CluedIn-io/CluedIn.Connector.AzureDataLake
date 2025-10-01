@@ -26,6 +26,10 @@ internal class OneLakeConnectorJobData : DataLakeJobData
     public virtual bool ShouldLoadToTable => GetConfigurationValue(OneLakeConstants.ShouldLoadToTable) as bool? ?? false;
     public string TableName => GetConfigurationValue(OneLakeConstants.TableName) as string;
 
+    public override string FileSystemName => WorkspaceName;
+
+    public override string RootDirectoryPath => $"{ItemName}.{ItemType}/{ItemFolder}";
+
     protected override void AddToHashCode(HashCode hash)
     {
         hash.Add(WorkspaceName);

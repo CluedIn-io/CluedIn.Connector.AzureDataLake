@@ -27,6 +27,10 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
     public override bool IsArrayColumnsEnabled => false;
     public virtual bool ShouldCreateMirroredDatabase => GetConfigurationValue(OpenMirroringConstants.ShouldCreateMirroredDatabase) as bool? ?? false;
 
+    public override string FileSystemName => WorkspaceName;
+
+    public override string RootDirectoryPath => $"{MirroredDatabaseName}.MountedRelationalDatabase/Files/LandingZone";
+
     protected override void AddToHashCode(HashCode hash)
     {
         hash.Add(WorkspaceName);
