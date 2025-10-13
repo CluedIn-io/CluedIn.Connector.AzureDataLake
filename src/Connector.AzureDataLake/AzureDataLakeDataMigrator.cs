@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Core;
-using CluedIn.Core.Accounts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities;
 using CluedIn.Core.Streams;
@@ -68,23 +67,21 @@ internal class AzureDataLakeDataMigrator : DataLakeDataMigrator
                     await Task.Delay(1000);
                 }
             }
-
-            var streams = streamRepository.GetAllStreams().ToList();
-
-            var organizationIds = streams.Select(s => s.OrganizationId).Distinct().ToArray();
-
-            foreach (var orgId in organizationIds)
+            var orgDataStore = _applicationContext.System.Organization.DataStores.GetDataStore<OrganizationProfile>();
+            var organizationProfiles = await orgDataStore.SelectAsync(_applicationContext.System.CreateExecutionContext(), _ => true);
+            foreach (var organizationProfile in organizationProfiles)
             {
-                var org = new Organization(_applicationContext, orgId);
+                var executionContext = _applicationContext.CreateExecutionContext(organizationProfile.Id);
+                var streams = await streamRepository.GetAllStreams(executionContext).ToList();
 
-                foreach (var provider in org.Providers.AllProviderDefinitions.Where(x =>
+
+                foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>
                              x.ProviderId == _dataLakeConstants.ProviderId))
                 {
                     foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))
                     {
                         if (stream.Mode != StreamMode.EventStream)
                         {
-                            var executionContext = _applicationContext.CreateExecutionContext(orgId);
 
                             var model = new SetupConnectorModel
                             {
@@ -92,7 +89,7 @@ internal class AzureDataLakeDataMigrator : DataLakeDataMigrator
                                 Mode = StreamMode.EventStream,
                                 ContainerName = stream.ContainerName,
                                 DataTypes =
-                                    (await streamRepository.GetStreamMappings(stream.Id))
+                                    (await streamRepository.GetStreamMappings(executionContext, stream.Id))
                                     .Select(x => new DataTypeEntry
                                     {
                                         Key = x.SourceDataType,
@@ -106,7 +103,7 @@ internal class AzureDataLakeDataMigrator : DataLakeDataMigrator
 
                             _logger.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{{StreamName}}' ({{StreamId}})", stream.Name, stream.Id);
 
-                            await streamRepository.SetupConnector(stream.Id, model, executionContext);
+                            await streamRepository.SetupConnector(executionContext, stream.Id, model);
                         }
                     }
                 }

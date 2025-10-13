@@ -86,7 +86,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             .ReturnsAsync(jobData);
         connectorMock.CallBase = true;
 
-        var (streamModel, streamRepositoryMock) = SetupStreamModel(streamMode, providerDefinitionId, container);
+        var (streamModel, streamRepositoryMock) = SetupStreamModel(organization, streamMode, providerDefinitionId, container);
         return Task.FromResult(
             new SetupContainerResult(
                 context,
@@ -102,11 +102,15 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                 providerDefinition));
     }
 
-    private (StreamModel StreamModel, Mock<IStreamRepository> StreamRepositoryMock) SetupStreamModel(StreamMode streamMode, Guid providerDefinitionId, WindsorContainer container)
+    private (StreamModel StreamModel, Mock<IStreamRepository> StreamRepositoryMock) SetupStreamModel(
+        Organization organization,
+        StreamMode streamMode,
+        Guid providerDefinitionId,
+        WindsorContainer container)
     {
         var streamRepository = new Mock<IStreamRepository>();
-        var streamModel = CreateStreamModel(providerDefinitionId, streamMode);
-        streamRepository.Setup(x => x.GetStream(streamModel.Id)).ReturnsAsync(streamModel);
+        var streamModel = CreateStreamModel(organization, providerDefinitionId, streamMode);
+        streamRepository.Setup(x => x.GetStream(It.IsAny<ExecutionContext>(), streamModel.Id)).ReturnsAsync(streamModel);
         container.Register(Component.For<IStreamRepository>().Instance(streamRepository.Object));
         return (streamModel, streamRepository);
     }
@@ -207,7 +211,10 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         return dataFactoryMock;
     }
 
-    protected virtual StreamModel CreateStreamModel(Guid providerDefinitionId, StreamMode streamMode)
+    protected virtual StreamModel CreateStreamModel(
+        Organization organization,
+        Guid providerDefinitionId,
+        StreamMode streamMode)
     {
         var streamModel = new StreamModel
         {
@@ -218,6 +225,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             ExportIncomingEdges = true,
             ExportOutgoingEdges = true,
             Status = StreamStatus.Started,
+            OrganizationId = organization.Id,
         };
         return streamModel;
     }
