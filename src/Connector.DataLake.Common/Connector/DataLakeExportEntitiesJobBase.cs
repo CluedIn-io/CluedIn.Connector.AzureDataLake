@@ -316,7 +316,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
 
         var streamId = new Guid(args.Message);
-        var streamModel = await _streamRepository.GetStream(streamId);
+        var streamModel = await _streamRepository.GetStream(context, streamId);
 
         if (streamModel == null)
         {
