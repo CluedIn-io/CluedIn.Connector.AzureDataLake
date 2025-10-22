@@ -6,7 +6,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
-
+using Azure;
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
@@ -178,11 +178,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
 
         context.Log.LogInformation(
-            "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}).",
+            "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}) IsOverwriteEnabled={IsOverwriteEnabled}.",
             outputFileName,
             asOfTime,
             temporaryOutputFileName,
-            temporaryFileClient.Uri);
+            temporaryFileClient.Uri,
+            configuration.IsOverwriteEnabled);
 
         var totalRows = await writeFileContentsAsync();
         if (configuration.IsDeltaMode && totalRows == 0 && !GetIsEmptyFileAllowed(exportJobData))
@@ -227,9 +228,29 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
-            await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
-            using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
-            return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
+            await directoryClient.CreateIfNotExistsAsync();
+
+            try
+            {
+                await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
+                using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
+                return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
+            }
+            catch (RequestFailedException e)
+            {
+                context.Log.LogInformation("Request failed");
+                if (e.Status == 404)
+                {
+                    context.Log.LogInformation("Request failed 404 - creating file");
+
+                    await temporaryFileClient.CreateAsync();
+
+                    await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
+                    using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
+                    return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
+                }
+                throw new ApplicationException($"Failed to write to {temporaryFileClient.Uri}", e);
+            }
         }
 
         async Task setFilePropertiesAsync()
