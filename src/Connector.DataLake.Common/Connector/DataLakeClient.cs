@@ -203,6 +203,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
                         if (response == null)
                         {
+                            Log.Logger.Information("Null response received for: {CurrentPath}", currentPath);
                             // weird behaviour where null is being returned for
                             // - XXXXXX.MountedRelationalDatabase/Files
                             // - XXXXXX.MountedRelationalDatabase/Files/LandingZone
@@ -243,7 +244,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                         }
                     }
                 }
-                Log.Logger.Information("Recursive path creation complete. Full path is guaranteed to exist.");
+                Log.Logger.Information("Recursive path creation complete. Full path is guaranteed to exist. {FullPath}", fullRelativePath);
             }
             // --- END OF REPLACEMENT LOGIC ---
 
