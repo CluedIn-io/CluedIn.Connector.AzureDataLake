@@ -6,7 +6,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
-
+using Azure;
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
@@ -229,9 +229,28 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
             await directoryClient.CreateIfNotExistsAsync();
-            await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
-            using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
-            return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
+
+            try
+            {
+                await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
+                using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
+                return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
+            }
+            catch (RequestFailedException e)
+            {
+                context.Log.LogInformation("Request failed");
+                if (e.Status == 404)
+                {
+                    context.Log.LogInformation("Request failed 404 - creating file");
+
+                    await temporaryFileClient.CreateIfNotExistsAsync();
+
+                    await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
+                    using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
+                    return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
+                }
+                throw new ApplicationException($"Failed to write to {temporaryFileClient.Uri}", e);
+            }
         }
 
         async Task setFilePropertiesAsync()
