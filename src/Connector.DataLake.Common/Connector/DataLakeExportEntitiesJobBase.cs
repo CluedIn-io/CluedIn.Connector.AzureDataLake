@@ -228,6 +228,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
+            await directoryClient.CreateIfNotExistsAsync();
             await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
             return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
