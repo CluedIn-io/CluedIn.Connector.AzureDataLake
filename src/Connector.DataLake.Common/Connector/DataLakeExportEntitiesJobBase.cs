@@ -178,11 +178,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
 
         context.Log.LogInformation(
-            "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}).",
+            "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}) IsOverwriteEnabled={IsOverwriteEnabled}.",
             outputFileName,
             asOfTime,
             temporaryOutputFileName,
-            temporaryFileClient.Uri);
+            temporaryFileClient.Uri,
+            configuration.IsOverwriteEnabled);
 
         var totalRows = await writeFileContentsAsync();
         if (configuration.IsDeltaMode && totalRows == 0 && !GetIsEmptyFileAllowed(exportJobData))
