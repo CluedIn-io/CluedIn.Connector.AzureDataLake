@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace CluedIn.Connector.DataLake.Common.Connector
 {
@@ -150,6 +151,8 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             string subDirectory,
             bool ensureExists)
         {
+            Log.Logger.Information("GetDirectoryClientAsync - '{RootDirectoryPath}', '{SubDirectory}', '{EnsureExists}'", configuration.RootDirectoryPath, subDirectory, ensureExists);
+
             var directory = configuration.RootDirectoryPath;
             var directoryClient = fileSystemClient.GetDirectoryClient(directory);
             if (string.IsNullOrWhiteSpace(subDirectory))
@@ -161,6 +164,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             if (ensureExists && !await directoryClient.ExistsAsync())
             {
+                Log.Logger.Information("GetDirectoryClientAsync - Calling CreateDirectoryAsync '{Path}'", directoryClient.Path);
                 directoryClient = await fileSystemClient.CreateDirectoryAsync(directoryClient.Path);
             }
 
