@@ -218,6 +218,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             ExportIncomingEdges = true,
             ExportOutgoingEdges = true,
             Status = StreamStatus.Started,
+            OrganizationId = Guid.NewGuid(),    // can't be Guid.Empty
         };
         return streamModel;
     }
