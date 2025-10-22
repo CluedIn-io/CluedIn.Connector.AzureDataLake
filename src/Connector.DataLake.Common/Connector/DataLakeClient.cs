@@ -1,10 +1,11 @@
-using Azure.Storage.Files.DataLake;
-using Azure.Storage.Files.DataLake.Models;
-using CluedIn.Core.Connectors;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Azure;
+using Azure.Storage.Files.DataLake;
+using Azure.Storage.Files.DataLake.Models;
+using CluedIn.Core.Connectors;
 using Serilog;
 
 namespace CluedIn.Connector.DataLake.Common.Connector
@@ -151,22 +152,71 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             string subDirectory,
             bool ensureExists)
         {
-            Log.Logger.Information("GetDirectoryClientAsync - '{RootDirectoryPath}', '{SubDirectory}', '{EnsureExists}'", configuration.RootDirectoryPath, subDirectory, ensureExists);
-
             var directory = configuration.RootDirectoryPath;
             var directoryClient = fileSystemClient.GetDirectoryClient(directory);
-            if (string.IsNullOrWhiteSpace(subDirectory))
+
+            // Log the initial directory calculation
+            Log.Logger.Information("Requested directory path relative to file system: {RootDirectory} with subdirectory {SubDirectory}.",
+                directory, subDirectory);
+
+            if (!string.IsNullOrWhiteSpace(subDirectory))
             {
-                return directoryClient;
+                directoryClient = directoryClient.GetSubDirectoryClient(subDirectory);
             }
 
-            directoryClient = directoryClient.GetSubDirectoryClient(subDirectory);
-
-            if (ensureExists && !await directoryClient.ExistsAsync())
+            // --- START OF REPLACEMENT LOGIC ---
+            if (ensureExists)
             {
-                Log.Logger.Information("GetDirectoryClientAsync - Calling CreateDirectoryAsync '{Path}'", directoryClient.Path);
-                directoryClient = await fileSystemClient.CreateDirectoryAsync(directoryClient.Path);
+                var fullRelativePath = directoryClient.Path;
+
+                Log.Logger.Information("Starting recursive path creation for full path: {FullPath}", fullRelativePath);
+
+                if (!string.IsNullOrWhiteSpace(fullRelativePath))
+                {
+                    var pathSegments = fullRelativePath.Split('/');
+                    var currentPath = "";
+
+                    foreach (var segment in pathSegments)
+                    {
+                        if (string.IsNullOrWhiteSpace(segment))
+                            continue;
+
+                        currentPath = string.IsNullOrEmpty(currentPath) ? segment : $"{currentPath}/{segment}";
+
+                        // Get a client for the CURRENT segment (A, then A/B, then A/B/C)
+                        var segmentClient = fileSystemClient.GetDirectoryClient(currentPath);
+
+                        Log.Logger.Information("Checking/creating directory segment: {CurrentPath}", currentPath);
+
+                        var response = await segmentClient.CreateIfNotExistsAsync();
+                        var statusCode = response.GetRawResponse().Status;
+
+                        // Log the outcome based on the status code
+                        if (statusCode == 201)
+                        {
+                            Log.Logger.Information("Successfully CREATED directory segment: {CurrentPath}", currentPath);
+                        }
+                        else if (statusCode == 409 || statusCode == 200)
+                        {
+                            Log.Logger.Information("Directory segment already exists: {CurrentPath}", currentPath);
+                        }
+                        else
+                        {
+                            // For any unexpected status code, log the failure and throw.
+                            Log.Logger.Error("Failed to ensure directory segment exists. Path: {CurrentPath}, Status Code: {StatusCode}",
+                                currentPath, statusCode);
+
+                            throw new RequestFailedException(response.GetRawResponse());
+                        }
+                    }
+                }
+
+                Log.Logger.Information("Recursive path creation complete. Full path is guaranteed to exist.");
             }
+            // --- END OF REPLACEMENT LOGIC ---
+
+            // Final check for debugging purposes—this URL is where the OpenWriteAsync will target.
+            Log.Logger.Information("Returning directory client for URI: {DirectoryUri}", directoryClient.Uri);
 
             return directoryClient;
         }
