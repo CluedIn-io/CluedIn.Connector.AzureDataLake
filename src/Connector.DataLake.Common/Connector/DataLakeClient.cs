@@ -186,7 +186,29 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
                         Log.Logger.Information("Checking/creating directory segment: {CurrentPath}", currentPath);
 
-                        var response = await segmentClient.CreateIfNotExistsAsync();
+                        Response<PathInfo> response;
+                        try
+                        {
+                            response = await segmentClient.CreateIfNotExistsAsync();
+                        }
+                        catch(RequestFailedException ex)
+                        {
+                            if (ex.ErrorCode == "OperationNotAllowedOnThePath")
+                            {
+                                continue;
+                            }
+
+                            throw;
+                        }
+
+                        if (response == null)
+                        {
+                            // weird behaviour where null is being returned for
+                            // - XXXXXX.MountedRelationalDatabase/Files
+                            // - XXXXXX.MountedRelationalDatabase/Files/LandingZone
+                            continue;
+                        }
+
                         var rawResponse = response.GetRawResponse();
                         var statusCode = rawResponse.Status;
 
