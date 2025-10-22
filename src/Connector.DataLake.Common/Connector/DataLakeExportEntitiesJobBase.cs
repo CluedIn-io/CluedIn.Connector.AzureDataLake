@@ -164,12 +164,26 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             [DataTimeKey] = asOfTime,
         });
 
+        DataLakeFileClient temporaryFileClient;
+        try
+        {
+            temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
+        }
+        catch
+        {
+            context.Log.LogInformation(
+                "Error creating file client for {TemporaryOutputFileName}.",
+                temporaryOutputFileName);
+            throw;
+        }
+
         context.Log.LogInformation(
-            "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName}.",
+            "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}).",
             outputFileName,
             asOfTime,
-            temporaryOutputFileName);
-        var temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
+            temporaryOutputFileName,
+            temporaryFileClient.Uri);
+
         var totalRows = await writeFileContentsAsync();
         if (configuration.IsDeltaMode && totalRows == 0 && !GetIsEmptyFileAllowed(exportJobData))
         {
