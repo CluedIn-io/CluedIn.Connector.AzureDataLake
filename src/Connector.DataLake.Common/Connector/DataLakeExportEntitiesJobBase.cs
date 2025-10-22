@@ -243,7 +243,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 {
                     context.Log.LogInformation("Request failed 404 - creating file");
 
-                    await temporaryFileClient.CreateIfNotExistsAsync();
+                    await temporaryFileClient.CreateAsync();
 
                     await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
                     using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
