@@ -152,6 +152,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             string subDirectory,
             bool ensureExists)
         {
+            // ... (Initialization and logging remain the same)
             var directory = configuration.RootDirectoryPath;
             var directoryClient = fileSystemClient.GetDirectoryClient(directory);
 
@@ -168,7 +169,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             if (ensureExists)
             {
                 var fullRelativePath = directoryClient.Path;
-
                 Log.Logger.Information("Starting recursive path creation for full path: {FullPath}", fullRelativePath);
 
                 if (!string.IsNullOrWhiteSpace(fullRelativePath))
@@ -182,42 +182,50 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                             continue;
 
                         currentPath = string.IsNullOrEmpty(currentPath) ? segment : $"{currentPath}/{segment}";
-
-                        // Get a client for the CURRENT segment (A, then A/B, then A/B/C)
                         var segmentClient = fileSystemClient.GetDirectoryClient(currentPath);
 
                         Log.Logger.Information("Checking/creating directory segment: {CurrentPath}", currentPath);
 
                         var response = await segmentClient.CreateIfNotExistsAsync();
-                        var statusCode = response.GetRawResponse().Status;
+                        var rawResponse = response.GetRawResponse();
+                        var statusCode = rawResponse.Status;
 
-                        // Log the outcome based on the status code
                         if (statusCode == 201)
                         {
                             Log.Logger.Information("Successfully CREATED directory segment: {CurrentPath}", currentPath);
                         }
-                        else if (statusCode == 409 || statusCode == 200)
+                        else if (statusCode == 409) // Most common "already exists" for this operation
                         {
-                            Log.Logger.Information("Directory segment already exists: {CurrentPath}", currentPath);
+                            Log.Logger.Information("Directory segment already exists (409 Conflict): {CurrentPath}", currentPath);
+                        }
+                        else if (statusCode == 400 &&
+                                 rawResponse.Headers.TryGetValue("x-ms-error-code", out var errorCode) &&
+                                 errorCode == "OperationNotAllowedOnThePath")
+                        {
+                            // This specifically indicates the directory *is* there, but the operation 
+                            // (which includes setting default properties) failed because of an existing state.
+                            Log.Logger.Information("OperationNotAllowedOnThePath: Path exists or is immutable: {CurrentPath}", currentPath);
+                        }
+                        else if (statusCode == 200) // Less common "already exists" (as discussed)
+                        {
+                            Log.Logger.Information("Directory segment already exists (200 OK): {CurrentPath}", currentPath);
                         }
                         else
                         {
-                            // For any unexpected status code, log the failure and throw.
+                            // All other unexpected failures (Auth, Internal Server Error, etc.)
                             Log.Logger.Error("Failed to ensure directory segment exists. Path: {CurrentPath}, Status Code: {StatusCode}",
                                 currentPath, statusCode);
 
-                            throw new RequestFailedException(response.GetRawResponse());
+                            // Use RequestFailedException(rawResponse) to capture the full error details
+                            throw new RequestFailedException(rawResponse);
                         }
                     }
                 }
-
                 Log.Logger.Information("Recursive path creation complete. Full path is guaranteed to exist.");
             }
             // --- END OF REPLACEMENT LOGIC ---
 
-            // Final check for debugging purposes—this URL is where the OpenWriteAsync will target.
             Log.Logger.Information("Returning directory client for URI: {DirectoryUri}", directoryClient.Uri);
-
             return directoryClient;
         }
 
