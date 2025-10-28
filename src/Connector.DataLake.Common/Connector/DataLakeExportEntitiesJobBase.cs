@@ -10,6 +10,7 @@ using System.Transactions;
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
+using CluedIn.Connector.DataLake.Common.Extensions;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Streams;
@@ -164,12 +165,26 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             [DataTimeKey] = asOfTime,
         });
 
+        DataLakeFileClient temporaryFileClient;
+        try
+        {
+            temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
+        }
+        catch
+        {
+            context.Log.LogInformation(
+                "Error creating file client for {TemporaryOutputFileName}.",
+                temporaryOutputFileName);
+            throw;
+        }
+
         context.Log.LogInformation(
-            "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName}.",
+            "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}).",
             outputFileName,
             asOfTime,
-            temporaryOutputFileName);
-        var temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
+            temporaryOutputFileName,
+            temporaryFileClient.Uri);
+
         var totalRows = await writeFileContentsAsync();
         if (configuration.IsDeltaMode && totalRows == 0 && !GetIsEmptyFileAllowed(exportJobData))
         {
@@ -213,7 +228,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
-            await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
+            await using var outputStream = await temporaryFileClient.OpenWriteExAsync(configuration.IsOverwriteEnabled);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
             return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
         }
