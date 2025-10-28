@@ -45,13 +45,6 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                 DisplayName = "Workspace Name",
                 Type = "input",
                 IsRequired = true,
-                ValidationRules = new List<Dictionary<string, string>>()
-                {
-                    new() {
-                        { "regex", "\\s" },
-                        { "message", "Spaces are not allowed" }
-                    }
-                },
             },
             new ()
             {
