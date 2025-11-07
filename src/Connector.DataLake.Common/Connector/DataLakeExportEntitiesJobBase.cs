@@ -309,7 +309,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return Task.CompletedTask;
     }
 
-    private protected virtual Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobData exportJobData)
+    private protected virtual Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
         return Task.FromResult(string.Empty);
     }
@@ -386,19 +386,26 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         var asOfTime = GetAsOfTime(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
-        var outputFileName = await GetOutputFileNameAsync(context, configuration, streamId, containerName, asOfTime, outputFormat);
-        var exportJobData = new ExportJobData(
+        var exportJobDataBase = new ExportJobDataBase(
             streamId,
+            streamModel,
+            provider,
+            configuration,
+            asOfTime,
+            OutputFormat: outputFormat);
+        var lastExport = await GetLastExport(context, connection, configuration, exportJobDataBase);
+        LastExport = lastExport;
+
+        var outputFileName = await GetOutputFileNameAsync(context, configuration, streamId, containerName, asOfTime, outputFormat);
+
+
+        var exportJobData = new ExportJobData(streamId,
             streamModel,
             provider,
             configuration,
             asOfTime,
             OutputFormat: outputFormat,
             OutputFileName: outputFileName);
-
-        var lastExport = await GetLastExport(context, connection, configuration, exportJobData);
-        LastExport = lastExport;
-
         return exportJobData;
     }
 
@@ -652,7 +659,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             }
         }
     }
-    private protected virtual async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData)
+    private protected virtual async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
         var streamId = exportJobData.StreamId;
         var tableName = GetExportHistoryTableName(streamId);
@@ -835,6 +842,13 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     }
 
     private record FileMetadata(Guid StreamId, DateTimeOffset DataTime);
+    private protected record ExportJobDataBase(
+        Guid StreamId,
+        StreamModel StreamModel,
+        ProviderDefinition ProviderDefinition,
+        IDataLakeJobData DataLakeJobData,
+        DateTimeOffset AsOfTime,
+        string OutputFormat);
 
     private protected record ExportJobData(
         Guid StreamId,
@@ -843,7 +857,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         IDataLakeJobData DataLakeJobData,
         DateTimeOffset AsOfTime,
         string OutputFormat,
-        string OutputFileName);
+        string OutputFileName) : ExportJobDataBase(StreamId,
+        StreamModel,
+        ProviderDefinition,
+        DataLakeJobData,
+        AsOfTime,
+        OutputFormat);
 
     private protected record ExportHistory(
         Guid StreamId,

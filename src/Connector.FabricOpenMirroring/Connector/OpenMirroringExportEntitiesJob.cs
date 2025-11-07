@@ -189,7 +189,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
         return baseFieldNames;
     }
 
-    private protected override async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData)
+    private protected override async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
         var subDirectory = await GetSubDirectory(context, configuration, exportJobData);
         if (!await _dataLakeClient.FileInPathExists(configuration, "_metadata.json", subDirectory))
@@ -200,7 +200,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
         return await base.GetLastExport(context, connection, configuration, exportJobData);
     }
 
-    private protected override Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobData exportJobData)
+    private protected override Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
         if (configuration is OpenMirroringConnectorJobData casted &&
             !string.IsNullOrWhiteSpace(casted.TableName))
