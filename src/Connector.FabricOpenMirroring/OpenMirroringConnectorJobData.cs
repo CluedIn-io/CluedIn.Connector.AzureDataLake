@@ -26,6 +26,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
     public override bool IsOverwriteEnabled => false;
     public override bool IsArrayColumnsEnabled => false;
     public virtual bool ShouldCreateMirroredDatabase => GetConfigurationValue(OpenMirroringConstants.ShouldCreateMirroredDatabase) as bool? ?? false;
+    public string TableName => GetConfigurationValue(OpenMirroringConstants.TableName) as string;
 
     public override string FileSystemName => WorkspaceName;
 
@@ -39,6 +40,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
         hash.Add(ClientSecret);
         hash.Add(TenantId);
         hash.Add(ShouldCreateMirroredDatabase);
+        hash.Add(TableName);
 
         base.AddToHashCode(hash);
     }
@@ -57,6 +59,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
             ClientSecret == other.ClientSecret &&
             TenantId == other.TenantId &&
             ShouldCreateMirroredDatabase == other.ShouldCreateMirroredDatabase &&
+            TableName == other.TableName &&
             base.Equals(other);
     }
 
