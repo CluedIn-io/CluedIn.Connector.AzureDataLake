@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -33,7 +33,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         var action = new ConnectorAction(RunExportActionName, "Run Export", "Run export now", [], []);
         var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
 
-        var stream = await streamRepository.GetStream(streamModel.Id);
+        var stream = await streamRepository.GetStream(executionContext, streamModel.Id);
         var shouldShowAction = configuration.IsStreamCacheEnabled // only for streams with cache enabled
             && stream.Mode == StreamMode.Sync // only for sync streams
             && (stream.Status == StreamStatus.Started || stream.Status == StreamStatus.Paused); // only for started or paused streams
