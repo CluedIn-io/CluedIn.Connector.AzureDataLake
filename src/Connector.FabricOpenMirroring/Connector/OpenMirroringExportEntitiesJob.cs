@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -14,9 +14,12 @@ using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 using CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
+using CluedIn.Core.Streams.Models;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
+using static CluedIn.Connector.DataLake.Common.DataLakeConstants;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
@@ -186,20 +189,32 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
         return baseFieldNames;
     }
 
-    private protected override async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, Guid streamId, IDataLakeJobData configuration)
+    private protected override async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
-        var subDirectory = await GetSubDirectory(configuration, streamId);
+        var subDirectory = await GetSubDirectory(context, configuration, exportJobData);
         if (!await _dataLakeClient.FileInPathExists(configuration, "_metadata.json", subDirectory))
         {
             return null;
         }
 
-        return await base.GetLastExport(context, connection, streamId, configuration);
+        return await base.GetLastExport(context, connection, configuration, exportJobData);
     }
 
-    protected override Task<string> GetSubDirectory(IDataLakeJobData configuration, Guid streamId)
+    private protected override Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
-        return Task.FromResult(streamId.ToString("N"));
+        if (configuration is OpenMirroringConnectorJobData casted &&
+            !string.IsNullOrWhiteSpace(casted.TableName))
+        {
+            return ReplaceNameUsingPatternAsync(
+                executionContext,
+                casted.TableName,
+                exportJobData.StreamId,
+                exportJobData.StreamModel.ContainerName,
+                exportJobData.AsOfTime,
+                exportJobData.OutputFormat);
+        }
+
+        return Task.FromResult(exportJobData.StreamId.ToString("N"));
     }
 
     protected override ISqlDataWriter GetSqlDataWriter(string outputFormat)
