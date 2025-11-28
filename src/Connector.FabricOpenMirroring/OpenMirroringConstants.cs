@@ -18,6 +18,7 @@ public class OpenMirroringConstants : DataLakeConstants, IOpenMirroringConstants
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
     public const string ShouldCreateMirroredDatabase = nameof(ShouldCreateMirroredDatabase);
+    public const string TableName = nameof(TableName);
 
     public OpenMirroringConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
         providerName: "Fabric Open Mirroring Connector",
@@ -86,6 +87,19 @@ public class OpenMirroringConstants : DataLakeConstants, IOpenMirroringConstants
                 DisplayName = "Tenant Id",
                 Type = "input",
                 IsRequired = true,
+            },
+            new()
+            {
+                Name = TableName,
+                DisplayName = "Table Name",
+                Type = "input",
+                 Help = """
+                       Specify a table name pattern for the table name that will be created in Mirrored Database, e.g. {ContainerName}_{OutputFormat}.
+                       Available variables are {StreamId}, {DataTime}, {OutputFormat} and {ContainerName}.
+                       Variables can also be formatted using formatString modifier. For more information, please refer to the documentation.
+                       When left blank, the table name will default to {StreamId}.
+                       """,
+                IsRequired = false,
             },
         };
 
