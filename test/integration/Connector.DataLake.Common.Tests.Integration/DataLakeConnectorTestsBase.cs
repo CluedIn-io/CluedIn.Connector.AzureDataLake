@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Azure;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
@@ -756,7 +757,14 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     {
         var fsClient = client.GetFileSystemClient(fileSystemName);
         var directoryClient = fsClient.GetDirectoryClient(directoryName);
-        await directoryClient.DeleteIfExistsAsync();
+
+        try
+        {
+            await directoryClient.DeleteIfExistsAsync();
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+        }
     }
 
     protected virtual async Task<PathItem> WaitForFileToBeCreated(
