@@ -202,19 +202,13 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private protected override Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
-        if (configuration is OpenMirroringConnectorJobData casted &&
-            !string.IsNullOrWhiteSpace(casted.TableName))
-        {
-            return ReplaceNameUsingPatternAsync(
-                executionContext,
-                casted.TableName,
-                exportJobData.StreamId,
-                exportJobData.StreamModel.ContainerName,
-                exportJobData.AsOfTime,
-                exportJobData.OutputFormat);
-        }
-
-        return Task.FromResult(exportJobData.StreamId.ToString("N"));
+        return OutputDirectoryHelper.GetSubDirectory(
+            executionContext,
+            configuration,
+            exportJobData.StreamModel.Id,
+            exportJobData.StreamModel.ContainerName,
+            exportJobData.AsOfTime,
+            exportJobData.OutputFormat);
     }
 
     protected override ISqlDataWriter GetSqlDataWriter(string outputFormat)

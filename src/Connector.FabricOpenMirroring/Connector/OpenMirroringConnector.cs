@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -25,6 +25,7 @@ public class OpenMirroringConnector : DataLakeConnector
 
     private readonly ILogger<OpenMirroringConnector> _logger;
     private readonly OpenMirroringClient _client;
+    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
 
     public OpenMirroringConnector(
         ILogger<OpenMirroringConnector> logger,
@@ -36,6 +37,7 @@ public class OpenMirroringConnector : DataLakeConnector
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _client = client ?? throw new ArgumentNullException(nameof(client));
+        _dateTimeOffsetProvider = dateTimeOffsetProvider;
     }
 
     protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
@@ -106,8 +108,9 @@ public class OpenMirroringConnector : DataLakeConnector
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var containerName = streamModel.ContainerName;
 
-        var jobData = await DataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName) as OpenMirroringConnectorJobData;
-        await Client.DeleteDirectory(jobData, streamModel.Id.ToString("N"));
+        var jobData = await DataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+        var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, jobData, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), jobData.OutputFormat);
+        await Client.DeleteDirectory(jobData, subDirectory);
         await base.ArchiveContainer(executionContext, streamModel);
     }
 
