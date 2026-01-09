@@ -343,7 +343,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
             await assertMethod(fileClient, fsClient, setupContainerResult);
 
-            await fsClient.GetDirectoryClient(directoryName).DeleteAsync();
+            await fsClient.GetDirectoryClient(directoryName).DeleteIfExistsAsync();
         }
         finally
         {
@@ -758,13 +758,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         var fsClient = client.GetFileSystemClient(fileSystemName);
         var directoryClient = fsClient.GetDirectoryClient(directoryName);
 
-        try
-        {
-            await directoryClient.DeleteIfExistsAsync();
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-        }
+        await directoryClient.DeleteIfExistsAsync();
     }
 
     protected virtual async Task<PathItem> WaitForFileToBeCreated(

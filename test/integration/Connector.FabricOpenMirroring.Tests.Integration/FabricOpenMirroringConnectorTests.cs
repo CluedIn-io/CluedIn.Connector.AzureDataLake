@@ -412,6 +412,8 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 await connector.ArchiveContainer(setupContainerResult.Context, setupContainerResult.StreamModel);
 
                 var fsClient = dataLakeFileSystemClient.GetDirectoryClient($"{setupContainerResult.DataLakeJobData.RootDirectoryPath}/ToBeArchived");
+                var exists = await fsClient.ExistsAsync();
+                Assert.False(exists);
             },
             configureDirectoryName: (jobData, setupResult) =>
             {
