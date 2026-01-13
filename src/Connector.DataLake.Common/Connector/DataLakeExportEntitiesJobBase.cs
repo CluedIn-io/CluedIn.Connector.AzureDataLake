@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Net;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Transactions;
 
@@ -490,7 +489,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     {
         if (HasCustomFileNamePattern(configuration))
         {
-            return ReplaceNameUsingPatternAsync(context, configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
+            return PatternHelper.ReplaceNameUsingPatternAsync(context, configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
         }
 
         return GetDefaultOutputFileNameAsync(context, configuration, streamId, containerName, asOfTime, outputFormat);
@@ -507,53 +506,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var streamIdFormatted = streamId.ToString(StreamIdDefaultStringFormat);
 
         return Task.FromResult($"{streamIdFormatted}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}");
-    }
-
-    protected static Task<string> ReplaceNameUsingPatternAsync(ExecutionContext context, string pattern, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
-    {
-        var timeRegexPattern = @"\{(DataTime)(\:[a-zA-Z0-9\-\._]+)?\}";
-        var streamIdRegexPattern = @"\{(StreamId)(\:[a-zA-Z0-9\-\._]+)?\}";
-        var containerNameRegexPattern = @"\{(ContainerName)(\:[a-zA-Z0-9\-\._]+)?\}";
-        var outputFormatRegexPattern = @"\{(OutputFormat)(\:[a-zA-Z0-9\-\._]+)?\}";
-
-        var timeReplaced = Replace(timeRegexPattern, pattern, (match, format) => asOfTime.ToString(format ?? "o"));
-        var streamIdReplaced = Replace(streamIdRegexPattern, timeReplaced, (match, format) => streamId.ToString(format ?? "D"));
-        var containerNameReplaced = Replace(containerNameRegexPattern, streamIdReplaced, (match, format) => containerName);
-        var outputFormatReplaced = Replace(outputFormatRegexPattern, containerNameReplaced, (match, format) =>
-        {
-            return format?.ToLowerInvariant() switch
-            {
-                "toupper" => outputFormat.ToUpperInvariant(),
-                "toupperinvariant" => outputFormat.ToUpperInvariant(),
-                "tolower" => outputFormat.ToLowerInvariant(),
-                "tolowerinvariant" => outputFormat.ToLowerInvariant(),
-                null => outputFormat,
-                _ => throw new NotSupportedException($"Format '{format}' is not supported"),
-            };
-        });
-
-        return Task.FromResult(outputFormatReplaced);
-    }
-
-    private static string Replace(string pattern, string input, Func<Match, string, string> formatter)
-    {
-        var regex = new Regex(pattern);
-        var matches = regex.Matches(input);
-        var result = input;
-        foreach (var match in matches.Reverse())
-        {
-            if (match.Groups.Count != 3 || !match.Groups[1].Success)
-            {
-                continue;
-            }
-            var format = match.Groups[2].Success
-                ? match.Groups[2].Captures.Single().Value[1..]
-                : null;
-            var formatted = formatter(match, format);
-            result = $"{result[0..match.Index]}{formatted}{result[(match.Index + match.Length)..]}";
-        }
-
-        return result;
     }
 
     protected virtual string GetFileExtension(string outputFormat)

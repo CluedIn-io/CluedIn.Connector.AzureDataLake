@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Azure;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
@@ -342,7 +343,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
             await assertMethod(fileClient, fsClient, setupContainerResult);
 
-            await fsClient.GetDirectoryClient(directoryName).DeleteAsync();
+            await fsClient.GetDirectoryClient(directoryName).DeleteIfExistsAsync();
         }
         finally
         {
@@ -756,6 +757,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     {
         var fsClient = client.GetFileSystemClient(fileSystemName);
         var directoryClient = fsClient.GetDirectoryClient(directoryName);
+
         await directoryClient.DeleteIfExistsAsync();
     }
 

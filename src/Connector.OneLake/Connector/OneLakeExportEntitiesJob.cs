@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common.Connector;
@@ -40,7 +40,7 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
             return;
         }
 
-        var replacedTableName = await ReplaceNameUsingPatternAsync(
+        var replacedTableName = await PatternHelper.ReplaceNameUsingPatternAsync(
             context,
             jobData.TableName,
             exportJobData.StreamId,
