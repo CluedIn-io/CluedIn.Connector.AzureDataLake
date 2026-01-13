@@ -4,12 +4,14 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Azure.Identity;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
-using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
+using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
@@ -22,8 +24,6 @@ using Xunit;
 using Xunit.Abstractions;
 
 using Encoding = System.Text.Encoding;
-using Azure.Identity;
-using CluedIn.Connector.DataLake.Common.Connector;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;
 
@@ -384,6 +384,48 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             });
     }
 
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheCanUseTableName()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            AssertParquetResultEscaped,
+            configureDirectoryName: (jobData, setupResult) =>
+            {
+                return $"{jobData.RootDirectoryPath}/MyTable";
+            },
+            configureAuthentication: (dictionary) =>
+            {
+                dictionary[nameof(OpenMirroringConstants.TableName)] = "MyTable";
+            });
+    }
+
+    [Fact]
+    public async Task Archive_Sync_CanDeleteDirectoryWhenUseTableName()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            async (fileClient, dataLakeFileSystemClient, setupContainerResult) =>
+            {
+                await AssertParquetResultEscaped(fileClient, dataLakeFileSystemClient, setupContainerResult);
+                var connector = setupContainerResult.ConnectorMock.Object;
+                await connector.ArchiveContainer(setupContainerResult.Context, setupContainerResult.StreamModel);
+
+                var fsClient = dataLakeFileSystemClient.GetDirectoryClient($"{setupContainerResult.DataLakeJobData.RootDirectoryPath}/ToBeArchived");
+                var exists = await fsClient.ExistsAsync();
+                Assert.False(exists);
+            },
+            configureDirectoryName: (jobData, setupResult) =>
+            {
+                return $"{jobData.RootDirectoryPath}/ToBeArchived";
+            },
+            configureAuthentication: (dictionary) =>
+            {
+                dictionary[nameof(OpenMirroringConstants.TableName)] = "ToBeArchived";
+            });
+
+    }
+
     private async Task AssertParquetResultEscapedWithRowMarker(
         DataLakeFileClient fileClient,
         DataLakeFileSystemClient fileSystemClient,
@@ -402,7 +444,8 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
-        Action<Dictionary<string, object>> configureAuthentication = null)
+        Action<Dictionary<string, object>> configureAuthentication = null,
+        Func<OpenMirroringConnectorJobData, SetupContainerResult, string> configureDirectoryName = null)
     {
         var configuration = CreateConfigurationWithStreamCache(format);
         configureAuthentication?.Invoke(configuration);
@@ -415,9 +458,12 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
         var exportJob = CreateExportJob(setupResult);
 
+        var directoryName = configureDirectoryName == null
+            ? $"{jobData.RootDirectoryPath}/{setupResult.StreamModel.Id:N}"
+            : configureDirectoryName(jobData, setupResult);
         await AssertExportJobOutputFileContents(
             jobData.FileSystemName,
-            $"{jobData.RootDirectoryPath}/{setupResult.StreamModel.Id:N}",
+            directoryName,
             setupResult,
             GetDataLakeClient(jobData),
             exportJob,
