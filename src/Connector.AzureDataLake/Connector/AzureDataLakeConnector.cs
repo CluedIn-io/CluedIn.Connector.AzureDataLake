@@ -40,9 +40,6 @@ public class AzureDataLakeConnector : DataLakeConnector
 
     protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
     {
-
-        var options = new DataLakeClientOptions();
-        this._logger.LogCritical("VERSION!!!!!!!!  {Version} {VersionInt}", options.Version.ToString(), options.Version);
         if (jobData is not AzureDataLakeConnectorJobData casted)
         {
             throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(AzureDataLakeConnectorJobData)}.");
