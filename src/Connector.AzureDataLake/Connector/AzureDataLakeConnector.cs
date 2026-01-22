@@ -1,14 +1,16 @@
-﻿using CluedIn.Connector.DataLake.Common;
-using System.Threading.Tasks;
 using System;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
+using Azure.Storage.Files.DataLake;
+
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 
 using Microsoft.Extensions.Logging;
-using System.Text.RegularExpressions;
-using System.Linq;
 
 namespace CluedIn.Connector.AzureDataLake.Connector;
 
