@@ -1,14 +1,16 @@
-﻿using CluedIn.Connector.DataLake.Common;
-using System.Threading.Tasks;
 using System;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
+using Azure.Storage.Files.DataLake;
+
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 
 using Microsoft.Extensions.Logging;
-using System.Text.RegularExpressions;
-using System.Linq;
 
 namespace CluedIn.Connector.AzureDataLake.Connector;
 
@@ -38,6 +40,9 @@ public class AzureDataLakeConnector : DataLakeConnector
 
     protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
     {
+
+        var options = new DataLakeClientOptions();
+        this._logger.LogCritical("VERSION!!!!!!!!  {Version} {VersionInt}", options.Version.ToString(), options.Version);
         if (jobData is not AzureDataLakeConnectorJobData casted)
         {
             throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(AzureDataLakeConnectorJobData)}.");
