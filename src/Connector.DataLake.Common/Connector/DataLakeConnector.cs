@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -611,7 +611,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
         }
 
-        private void Flush(IDataLakeJobData configuration, string[] entityData)
+        private async Task Flush(IDataLakeJobData configuration, string[] entityData)
         {
             if (entityData == null)
             {
@@ -630,7 +630,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-            Client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
+            await Client.SaveData(configuration, content, fileName, JsonMimeType);
         }
 
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
