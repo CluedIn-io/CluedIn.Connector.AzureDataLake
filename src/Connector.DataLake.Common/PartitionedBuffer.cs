@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -8,10 +8,10 @@ namespace CluedIn.Connector.DataLake.Common
     {
         private readonly int _maxSize;
         private readonly int _timeout;
-        private readonly Action<TPartition, TItem[]> _bulkAction;
+        private readonly Func<TPartition, TItem[], Task> _bulkAction;
         private readonly Dictionary<TPartition, Buffer<TItem>> _buffers;
 
-        public PartitionedBuffer(int maxSize, int timeout, Action<TPartition, TItem[]> bulkAction)
+        public PartitionedBuffer(int maxSize, int timeout, Func<TPartition, TItem[], Task> bulkAction)
         {
             _maxSize = maxSize;
             _timeout = timeout;

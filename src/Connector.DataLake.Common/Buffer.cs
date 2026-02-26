@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ namespace CluedIn.Connector.DataLake.Common
 
         private readonly int _timeout;
 
-        private readonly Action<T[]> _bulkAction;
+        private readonly Func<T[], Task> _bulkAction;
 
         private readonly T[] _items;
 
@@ -42,7 +42,7 @@ namespace CluedIn.Connector.DataLake.Common
 
         private DateTime _autoMaxSizeSetAt;
 
-        public Buffer(int maxSize, int timeout, Action<T[]> bulkAction)
+        public Buffer(int maxSize, int timeout, Func<T[], Task> bulkAction)
         {
             _initialMaxSize = maxSize;
             _maxSize = maxSize;
