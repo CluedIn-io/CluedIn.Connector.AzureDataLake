@@ -4,9 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 
-namespace CluedIn.Connector.DataLake.Common
+namespace CluedIn.Connector.DataLake.Common.Buffers
 {
-    internal class Buffer<T> : IDisposable
+    internal class Buffer<T> : IDisposable, IBuffer<T>
     {
         private readonly int _initialMaxSize;
 
@@ -178,10 +178,21 @@ namespace CluedIn.Connector.DataLake.Common
         {
             await _flushSemaphore.WaitAsync();
 
-            var count = _currentCount;
             try
             {
-                if (count == 0)
+                T[] flushItems;
+                var count = 0;
+                lock (this)
+                {
+                    count = _currentCount;
+                    if (count == 0)
+                    {
+                        return;
+                    }
+                    flushItems = _items.Take(count).ToArray();
+                }
+
+                if (flushItems == null)
                 {
                     return;
                 }
@@ -190,7 +201,7 @@ namespace CluedIn.Connector.DataLake.Common
                 {
                     var flushStartedAt = DateTime.Now;
 
-                    _bulkAction(_items.Take(count).ToArray());
+                    await _bulkAction(flushItems);
 
                     AutoAdjustMaxSize(idle, flushStartedAt);
                 }
@@ -218,7 +229,10 @@ namespace CluedIn.Connector.DataLake.Common
                     }
 
                     _bulkException = null;
-                    _currentCount = 0;
+                    lock (this)
+                    {
+                        _currentCount = 0;
+                    }
                     _addingSemaphore.Release(count);
                 }
             }
