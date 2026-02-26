@@ -98,9 +98,12 @@ namespace CluedIn.Connector.DataLake.Common.Buffers
                         acquiredCount++;
                     }
 
-                    if (_currentCount == 0)
+                    lock (this)
                     {
-                        return;
+                        if (_currentCount == 0)
+                        {
+                            return;
+                        }
                     }
 
                     await Flush(true);
@@ -203,7 +206,7 @@ namespace CluedIn.Connector.DataLake.Common.Buffers
 
                     await _bulkAction(flushItems);
 
-                    AutoAdjustMaxSize(idle, flushStartedAt);
+                    AutoAdjustMaxSize(count, idle, flushStartedAt);
                 }
                 catch (Exception ex)
                 {
@@ -251,11 +254,11 @@ namespace CluedIn.Connector.DataLake.Common.Buffers
         /// </summary>
         /// <param name="idle"></param>
         /// <param name="flushStartedAt"></param>
-        private void AutoAdjustMaxSize(bool idle, DateTime flushStartedAt)
+        private void AutoAdjustMaxSize(int count, bool idle, DateTime flushStartedAt)
         {
             if (idle)
             {
-                _idleFlushHistory.Add((_currentCount, flushStartedAt, DateTime.Now.Subtract(flushStartedAt)));
+                _idleFlushHistory.Add((count, flushStartedAt, DateTime.Now.Subtract(flushStartedAt)));
 
                 if (_idleFlushHistory.Count > _autoMaxSizeDetectionSampleSize)
                 {
@@ -271,7 +274,7 @@ namespace CluedIn.Connector.DataLake.Common.Buffers
                         (_idleFlushHistory.Count - 1) * _timeout +
                         _idleFlushHistory.Take(_idleFlushHistory.Count - 1)
                             .Sum(x => x.flushDuration.TotalMilliseconds) +
-                        _currentCount *
+                        count *
                         20; // time is needed to populate the items between flushes so lets pick an arbitrary 20ms per item
 
                     if (allIdleFlushesExecutedInMinimumTime)
