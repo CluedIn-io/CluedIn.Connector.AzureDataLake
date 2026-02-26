@@ -75,9 +75,16 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
+            var cacheStrategyValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
+
+            if (!Enum.TryParse(cacheStrategyValue, out BufferStrategy cacheBufferStrategy))
+            {
+                logger.LogWarning("Invalid value for buffer {CacheBufferKeyName}. Using default {CacheBufferDefaultValue}", constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
+                cacheBufferStrategy = Enum.Parse<BufferStrategy>(constants.CacheBufferStrategyDefaultValue);
+            }
 
             _buffer = new PartitionedBuffer<IDataLakeJobData, string>(cacheRecordsThreshold,
-                backgroundFlushMaxIdleDefaultValue, Flush);
+                backgroundFlushMaxIdleDefaultValue, Flush, dateTimeOffsetProvider, cacheBufferStrategy);
         }
 
         ~DataLakeConnector()
