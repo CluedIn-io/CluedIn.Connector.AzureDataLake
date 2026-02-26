@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.DataLake.Common.Buffers;
 using Xunit;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Unit
@@ -18,6 +18,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Unit
             var buffer = new Buffer<string>(10, idleTimeout, x =>
             {
                 actionHistory.Add((DateTime.Now, x));
+                return Task.CompletedTask;
             });
 
             // act
