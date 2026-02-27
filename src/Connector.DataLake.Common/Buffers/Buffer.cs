@@ -1,12 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 
-namespace CluedIn.Connector.DataLake.Common
+namespace CluedIn.Connector.DataLake.Common.Buffers
 {
-    internal class Buffer<T> : IDisposable
+    internal class Buffer<T> : IDisposable, IBuffer<T>
     {
         private readonly int _initialMaxSize;
 
@@ -14,7 +14,7 @@ namespace CluedIn.Connector.DataLake.Common
 
         private readonly int _timeout;
 
-        private readonly Action<T[]> _bulkAction;
+        private readonly Func<T[], Task> _bulkAction;
 
         private readonly T[] _items;
 
@@ -42,7 +42,7 @@ namespace CluedIn.Connector.DataLake.Common
 
         private DateTime _autoMaxSizeSetAt;
 
-        public Buffer(int maxSize, int timeout, Action<T[]> bulkAction)
+        public Buffer(int maxSize, int timeout, Func<T[], Task> bulkAction)
         {
             _initialMaxSize = maxSize;
             _maxSize = maxSize;
@@ -98,9 +98,12 @@ namespace CluedIn.Connector.DataLake.Common
                         acquiredCount++;
                     }
 
-                    if (_currentCount == 0)
+                    lock (this)
                     {
-                        return;
+                        if (_currentCount == 0)
+                        {
+                            return;
+                        }
                     }
 
                     await Flush(true);
@@ -178,10 +181,21 @@ namespace CluedIn.Connector.DataLake.Common
         {
             await _flushSemaphore.WaitAsync();
 
-            var count = _currentCount;
             try
             {
-                if (count == 0)
+                T[] flushItems;
+                var count = 0;
+                lock (this)
+                {
+                    count = _currentCount;
+                    if (count == 0)
+                    {
+                        return;
+                    }
+                    flushItems = _items.Take(count).ToArray();
+                }
+
+                if (flushItems == null)
                 {
                     return;
                 }
@@ -190,9 +204,9 @@ namespace CluedIn.Connector.DataLake.Common
                 {
                     var flushStartedAt = DateTime.Now;
 
-                    _bulkAction(_items.Take(count).ToArray());
+                    await _bulkAction(flushItems);
 
-                    AutoAdjustMaxSize(idle, flushStartedAt);
+                    AutoAdjustMaxSize(count, idle, flushStartedAt);
                 }
                 catch (Exception ex)
                 {
@@ -218,7 +232,10 @@ namespace CluedIn.Connector.DataLake.Common
                     }
 
                     _bulkException = null;
-                    _currentCount = 0;
+                    lock (this)
+                    {
+                        _currentCount = 0;
+                    }
                     _addingSemaphore.Release(count);
                 }
             }
@@ -237,11 +254,11 @@ namespace CluedIn.Connector.DataLake.Common
         /// </summary>
         /// <param name="idle"></param>
         /// <param name="flushStartedAt"></param>
-        private void AutoAdjustMaxSize(bool idle, DateTime flushStartedAt)
+        private void AutoAdjustMaxSize(int count, bool idle, DateTime flushStartedAt)
         {
             if (idle)
             {
-                _idleFlushHistory.Add((_currentCount, flushStartedAt, DateTime.Now.Subtract(flushStartedAt)));
+                _idleFlushHistory.Add((count, flushStartedAt, DateTime.Now.Subtract(flushStartedAt)));
 
                 if (_idleFlushHistory.Count > _autoMaxSizeDetectionSampleSize)
                 {
@@ -257,7 +274,7 @@ namespace CluedIn.Connector.DataLake.Common
                         (_idleFlushHistory.Count - 1) * _timeout +
                         _idleFlushHistory.Take(_idleFlushHistory.Count - 1)
                             .Sum(x => x.flushDuration.TotalMilliseconds) +
-                        _currentCount *
+                        count *
                         20; // time is needed to populate the items between flushes so lets pick an arbitrary 20ms per item
 
                     if (allIdleFlushesExecutedInMinimumTime)
