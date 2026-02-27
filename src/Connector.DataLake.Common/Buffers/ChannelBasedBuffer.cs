@@ -1,15 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
-
-using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.DataLake.Common.Buffers;
 
@@ -432,7 +428,7 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
             items[i] = batch[i].Item;
 
         // Record metrics: scheduled
-        _metrics.OnBatchScheduled(count, _maxBatchSize, _pendingFlushBatches is null ? -1 : -1);
+        _metrics.OnBatchScheduled(count, _maxBatchSize, _pendingFlushBatches is null ? -1 : _pendingFlushBatches.CurrentCount);
 
         await _flushConcurrency.WaitAsync(_cts.Token).ConfigureAwait(false);
         var started = _dateTimeOffsetProvider.GetCurrentUtcTime();
