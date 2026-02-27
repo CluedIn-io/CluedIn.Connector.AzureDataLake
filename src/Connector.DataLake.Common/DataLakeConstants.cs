@@ -98,6 +98,10 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     /// </summary>
     public int CacheRecordsThresholdDefaultValue => 50;
 
+    public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
+
+    public string CacheBufferStrategyDefaultValue => nameof(BufferStrategy.Safe);
+
     public string EnableCustomCronKeyName => $"Streams.{CacheKeyword}.Scheduling.CustomCron.Enabled";
 
     public bool EnableCustomCronDefaultValue => false;
