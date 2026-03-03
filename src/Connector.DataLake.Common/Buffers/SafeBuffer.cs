@@ -68,9 +68,17 @@ internal sealed class SafeBuffer<TItem, TResult> : IDisposable, IBuffer<TItem>
         return Add(item, default);
     }
 
-    Task IBuffer<TItem>.Flush()
+    async Task IBuffer<TItem>.Flush()
     {
-        return Task.CompletedTask;
+        lock (_gate)
+        {
+            if (_isDisposed || _currentBatch.Count == 0)
+            {
+                return;
+            }
+        }
+
+        await ExecuteBatchCore(_currentBatch);
     }
 
     public async Task<TResult> Add(TItem item, CancellationToken ct = default)
