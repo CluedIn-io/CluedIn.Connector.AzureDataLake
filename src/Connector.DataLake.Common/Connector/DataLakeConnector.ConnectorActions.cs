@@ -3,15 +3,12 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
 using CluedIn.Core.Connectors.ExtendedOperations;
-using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Events;
 using CluedIn.Core.Jobs;
-using CluedIn.Core.Providers;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
@@ -31,6 +28,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
     private const string GetEntityActionName = "GetEntity";
     private const string GetExportHistoryActionName = "GetExportHistory";
     private const string GetBufferStatusActionName = "GetBufferStatus";
+    private const string GetConnectorVersionActionName = "GetConnectorVersion";
     private const int MaximumGetBufferTimeOutInMilliseconds = 10_000;
     private IDisposable _bufferStatusSubscription;
 
@@ -108,6 +106,11 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
                 return await GetBufferStatus(executionContext, streamModel, request);
             }
 
+            if (request.ActionName == GetConnectorVersionActionName)
+            {
+                return GetConnectorVersion(executionContext, streamModel, request);
+            }
+
             var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
             var notFoundResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "Not Found", "Connector", string.Empty);
             return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, false, false, now, null, [notFoundResult]);
@@ -116,6 +119,32 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         {
             return GetFailedResult(streamModel, request, ex);
         }
+    }
+
+    private ExecuteConnectorActionResult GetConnectorVersion(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, ExecuteConnectorActionRequest request)
+    {
+        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        return new ExecuteConnectorActionResult(
+            streamModel.Id,
+            request.ActionName,
+            IsSuccessful: true,
+            IsCompleted: true,
+            StartedAt: start,
+            CompletedAt: start,
+            [
+                new ExtendedOperationResultEntry(
+                    "ConnectorVersion",
+                    ExtendedOperationResultEntryType.String,
+                    GetType().Assembly.FullName,
+                    "Connector",
+                    string.Empty),
+                new ExtendedOperationResultEntry(
+                    "CommonVersion",
+                    ExtendedOperationResultEntryType.String,
+                    typeof(DataLakeConnector).Assembly.FullName,
+                    "Connector",
+                    string.Empty)
+            ]);
     }
 
     private async Task<ExecuteConnectorActionResult> GetBufferStatus(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, ExecuteConnectorActionRequest request)
