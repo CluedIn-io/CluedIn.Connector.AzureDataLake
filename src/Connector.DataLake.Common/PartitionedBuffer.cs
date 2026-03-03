@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common.Buffers;
@@ -37,6 +38,14 @@ namespace CluedIn.Connector.DataLake.Common
             _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
             _bufferStrategy = bufferStrategy;
             _buffers = new Dictionary<TPartition, IBuffer<TItem>>();
+        }
+
+        public bool TryGet(TPartition partition, out IBuffer<TItem?> item)
+        {
+            lock (_buffers)
+            {
+                return _buffers.TryGetValue(partition, out item);
+            }
         }
 
         public async Task Add(TPartition partition, TItem item)

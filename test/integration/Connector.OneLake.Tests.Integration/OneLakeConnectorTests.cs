@@ -607,6 +607,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     }
 
     protected override Mock<OneLakeConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<IOneLakeConstants> constantsMock,
         Mock<OneLakeJobDataFactory> jobDataFactory)
@@ -614,6 +615,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         var logger = new Mock<ILogger<OneLakeClient>>();
         var mockConnector = new Mock<OneLakeConnector>(
             new Mock<ILogger<OneLakeConnector>>().Object,
+            applicationContext,
             new OneLakeClient(logger.Object),
             constantsMock.Object,
             jobDataFactory.Object,

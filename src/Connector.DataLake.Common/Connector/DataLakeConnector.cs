@@ -31,6 +31,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private static readonly string _invalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", _invalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
         private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<DataLakeConnector> _logger;
+        private readonly ApplicationContext _applicationContext;
         private readonly IDataLakeClient _client;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
@@ -62,6 +63,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
+            ApplicationContext applicationContext,
             IDataLakeClient client,
             IDataLakeConstants constants,
             IDataLakeJobDataFactory dataLakeJobDataFactory,
@@ -69,6 +71,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             : base(constants.ProviderId, false)
         {
             _logger = logger;
+            _applicationContext = applicationContext;
             _client = client;
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
@@ -85,11 +88,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             _buffer = new PartitionedBuffer<IDataLakeJobData, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush, dateTimeOffsetProvider, cacheBufferStrategy);
+            SetupBufferStatusSubscription();
         }
 
         ~DataLakeConnector()
         {
             _buffer.Dispose();
+            _bufferStatusSubscription?.Dispose();
         }
 
         public override Task VerifyExistingContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)

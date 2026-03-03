@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -26,11 +26,12 @@ public class OneLakeConnector : DataLakeConnector
 
     public OneLakeConnector(
         ILogger<OneLakeConnector> logger,
+        ApplicationContext applicationContext,
         OneLakeClient client,
         IOneLakeConstants constants,
         OneLakeJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
