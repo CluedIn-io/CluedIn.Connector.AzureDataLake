@@ -70,15 +70,24 @@ internal sealed class SafeBuffer<TItem, TResult> : IDisposable, IBuffer<TItem>
 
     async Task IBuffer<TItem>.Flush()
     {
+        BatchContext batchToFlush = null;
+        var shouldStartExecute = false;
         lock (_gate)
         {
             if (_isDisposed || _currentBatch.Count == 0)
             {
                 return;
             }
+
+            batchToFlush = _currentBatch;
+            batchToFlush.IsClosed = true;
+            shouldStartExecute = batchToFlush.TryBeginExecute();
         }
 
-        await ExecuteBatchCore(_currentBatch);
+        if (shouldStartExecute)
+        {
+            await ExecuteBatchCore(batchToFlush);
+        }
     }
 
     public async Task<TResult> Add(TItem item, CancellationToken ct = default)
