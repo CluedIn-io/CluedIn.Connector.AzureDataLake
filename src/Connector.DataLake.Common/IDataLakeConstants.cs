@@ -1,4 +1,4 @@
-﻿
+
 namespace CluedIn.Connector.DataLake.Common
 {
     public interface IDataLakeConstants : IConfigurationConstants
@@ -22,5 +22,15 @@ namespace CluedIn.Connector.DataLake.Common
         /// Default value for Cache records threshold
         /// </summary>
         int CacheRecordsThresholdDefaultValue { get; }
+
+        /// <summary>
+        /// Environment key name for Cache buffer strategy
+        /// </summary>
+        string CacheBufferStrategyKeyName { get; }
+
+        /// <summary>
+        /// Default value for Cache buffer strategy
+        /// </summary>
+        string CacheBufferStrategyDefaultValue { get; }
     }
 }
