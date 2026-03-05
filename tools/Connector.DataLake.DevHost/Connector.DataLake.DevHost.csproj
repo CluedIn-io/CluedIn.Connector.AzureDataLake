@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Connector.AzureAIStudio\Connector.AzureAIStudio.csproj" />
+    <ProjectReference Include="..\..\src\Connector.AzureDatabricks\Connector.AzureDatabricks.csproj" />
+    <ProjectReference Include="..\..\src\Connector.AzureDataLake\Connector.AzureDataLake.csproj" />
+    <ProjectReference Include="..\..\src\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
+    <ProjectReference Include="..\..\src\Connector.FabricOpenMirroring\Connector.FabricOpenMirroring.csproj" />
+    <ProjectReference Include="..\..\src\Connector.OneLake\Connector.OneLake.csproj" />
+    <ProjectReference Include="..\..\src\Connector.SynapseDataEngineering\Connector.SynapseDataEngineering.csproj" />
+  </ItemGroup>
+</Project>
