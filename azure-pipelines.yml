@@ -40,6 +40,9 @@ variables:
     value: true
   - name: buildConfiguration
     value: Release
+  - group: AzureDataLakeConnector_BuildLock
+
+lockBehavior: sequential
 
 steps:
   - task: UseDotNet@2
