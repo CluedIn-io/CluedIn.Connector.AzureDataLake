@@ -41,7 +41,10 @@ variables:
   - name: buildConfiguration
     value: Release
   - group: AzureDataLakeConnector_BuildLock
+    # Requires variable group 'AzureDataLakeConnector_BuildLock' to exist and be authorized for this pipeline.
+    # Configure an 'Exclusive lock' check on this variable group in Azure DevOps; the lockBehavior below relies on it for serialization.
 
+# Serialize all runs for this pipeline; change to 'runLatest' if only the latest queued run should proceed.
 lockBehavior: sequential
 
 steps:
