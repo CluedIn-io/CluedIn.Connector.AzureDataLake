@@ -144,6 +144,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             CommandType = CommandType.Text
         };
+
         if (shouldProduceDelta)
         {
             command.Parameters.Add(new SqlParameter("@ValidFrom", LastExport.DataTime));

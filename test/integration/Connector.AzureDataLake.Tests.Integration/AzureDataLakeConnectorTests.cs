@@ -13,6 +13,7 @@ using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Core;
+using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
@@ -551,12 +552,14 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         Assert.NotEmpty(containers);
     }
 
-    private async Task VerifyStoreData_Sync_WithStreamCache(
+    private protected override async Task VerifyStoreData_Sync_WithStreamCache(
         string format,
         Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
-        Action<Dictionary<string, object>> configureAuthentication = null)
+        Action<Dictionary<string, object>> configureAuthentication = null,
+        Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
+        Func<IDataLakeJobData, SetupContainerResult, string> configureDirectoryName = null)
     {
         var configuration = CreateConfigurationWithStreamCache(format);
         configureAuthentication?.Invoke(configuration);
@@ -565,8 +568,13 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
         var connector = setupResult.ConnectorMock.Object;
 
-        var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
-        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        var connectorEntityData = getConnectorEntityData == null
+            ? [CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added)]
+            : getConnectorEntityData();
+        foreach (var data in connectorEntityData)
+        {
+            await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        }
         var exportJob = CreateExportJob(setupResult);
 
         await AssertExportJobOutputFileContents(

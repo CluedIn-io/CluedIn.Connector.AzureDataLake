@@ -11,6 +11,9 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
 {
     internal const string ProviderDefinitionIdKey = "__ProviderDefinitionId__";
     internal const string ChangeTypeKey = "__ChangeType__";
+    internal const string PersistVersionKey = "PersistVersion";
+    internal const string TimestampKey = "Timestamp";
+    internal const string EpochKey = "Epoch";
 
     public const string ContainerName = nameof(ContainerName);
     public const string OutputFormat = nameof(OutputFormat);

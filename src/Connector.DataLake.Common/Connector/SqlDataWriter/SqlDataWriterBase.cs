@@ -63,8 +63,16 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
 
     protected virtual bool ShouldSkip(IDataLakeJobData configuration, bool isInitialExport, SqlDataReader reader)
     {
-        return configuration.IsDeltaMode
-            && isInitialExport
-            && GetValueInternal(DataLakeConstants.ChangeTypeKey, reader).Equals(VersionChangeType.Removed.ToString());
+        if (configuration.IsDeltaMode)
+        {
+            return isInitialExport && IsRowRemoved(reader);
+        }
+
+        return IsRowRemoved(reader);
+
+        static bool IsRowRemoved(SqlDataReader reader)
+        {
+            return GetValueInternal(DataLakeConstants.ChangeTypeKey, reader).Equals(VersionChangeType.Removed.ToString());
+        }
     }
 }

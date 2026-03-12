@@ -125,7 +125,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             AddToData(DataLakeConstants.IdKey, connectorEntityData.EntityId);
             AddToData("PersistHash", connectorEntityData.PersistInfo?.PersistHash);
-            AddToData("PersistVersion", connectorEntityData.PersistInfo?.PersistVersion);
+            AddToData(DataLakeConstants.PersistVersionKey, connectorEntityData.PersistInfo?.PersistVersion);
             AddToData("OriginEntityCode", connectorEntityData.OriginEntityCode?.ToString());
             AddToData("EntityType", connectorEntityData.EntityType?.ToString());
             AddToData("Codes", connectorEntityData.EntityCodes.SafeEnumerate().Select(code => code.ToString()));
@@ -134,19 +134,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
 
-            if (!data.ContainsKey("Timestamp"))
+            if (!data.ContainsKey(DataLakeConstants.TimestampKey))
             {
-                AddToData("Timestamp", now.ToString("O"));
+                AddToData(DataLakeConstants.TimestampKey, now.ToString("O"));
             }
 
-            if (!data.ContainsKey("Epoch"))
+            if (!data.ContainsKey(DataLakeConstants.EpochKey))
             {
-                AddToData("Epoch", now.ToUnixTimeMilliseconds());
-            }
-
-            if (jobData.IsDeltaMode && !data.ContainsKey(DataLakeConstants.ChangeTypeKey))
-            {
-                AddToData(DataLakeConstants.ChangeTypeKey, connectorEntityData.ChangeType.ToString());
+                AddToData(DataLakeConstants.EpochKey, now.ToUnixTimeMilliseconds());
             }
 
             // end match previous version of the connector
@@ -163,6 +158,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             {
                 if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
                 {
+                    if (!data.ContainsKey(DataLakeConstants.ChangeTypeKey))
+                    {
+                        AddToData(DataLakeConstants.ChangeTypeKey, connectorEntityData.ChangeType.ToString());
+                    }
                     return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
                 }
                 else
@@ -204,12 +203,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 IF NOT EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
                 BEGIN
                     CREATE TABLE [{tableName}] (
-                        {DataLakeConstants.IdKey} UNIQUEIDENTIFIER NOT NULL,
+                        [{DataLakeConstants.IdKey}] UNIQUEIDENTIFIER NOT NULL,
                         {string.Join(string.Empty, propertiesColumns.Select(prop => $"{prop},\n    "))}
                         [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
                         [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
                         PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo),
-                        CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ({DataLakeConstants.IdKey})
+                        CONSTRAINT [PK_{tableName}] PRIMARY KEY CLUSTERED ([{DataLakeConstants.IdKey}])
                     ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{tableName}_History]));
                     CREATE INDEX [ValidFromValidTo] ON [{tableName}] ([ValidFrom], [ValidTo]);
                 END
@@ -235,7 +234,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 return SaveResult.Failed;
             }
 
-            var syncItem = new SyncItem(streamModel.Id, connectorEntityData.EntityId, connectorEntityData.ChangeType, data, dataValueTypes);
+            var syncItem = new SyncItem(
+                streamModel.Id,
+                connectorEntityData.EntityId,
+                connectorEntityData.PersistInfo?.PersistVersion,
+                connectorEntityData.ChangeType,
+                data,
+                dataValueTypes);
             var tableName = GetCacheTableName(syncItem.StreamId);
 
             try
@@ -243,7 +248,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
                 await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
                 await connection.OpenAsync();
-                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: configurations.IsDeltaMode);
+                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: true);
                 transactionScope.Complete();
             }
             catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
@@ -264,7 +269,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     {
                         await EnsureCacheTableExists(connection, tableName, syncItem);
                     }
-                    await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: configurations.IsDeltaMode);
+                    await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: true);
                     transactionScope.Complete();
                 }
                 catch (Exception ex2)
@@ -311,19 +316,32 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
             else
             {
+                // Prevent updates to removed records
+                // But allow recreation of removed records (e.g: Unmerge Deduplication)
+                var changeTypeConstraint = syncItem.ChangeType == VersionChangeType.Changed
+                    ? $"AND [{DataLakeConstants.ChangeTypeKey}] != '{VersionChangeType.Removed.ToString()}'"
+                    : string.Empty;
+
                 var insertOrUpdateSql = $"""
                         IF EXISTS (
                             SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
-                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})
+                            WHERE
+                                [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey})
                         BEGIN
-                            UPDATE [{tableName}]
+                            UPDATE
+                                [{tableName}]
                             SET
                                 {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}
-                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};
+                            WHERE
+                                [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
+                                [{DataLakeConstants.PersistVersionKey}] < @EntityPersionVersion
+                              {changeTypeConstraint};
                         END
                         ELSE
                         BEGIN
-                            INSERT INTO [{tableName}] ({DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                            INSERT INTO
+                                [{tableName}]
+                                ([{DataLakeConstants.IdKey}]{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
                             VALUES(@{DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
                         END
                         """;
@@ -331,6 +349,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 {
                     CommandType = CommandType.Text
                 };
+                command.Parameters.Add(new SqlParameter($"@EntityPersionVersion", syncItem.PersistVersion));
                 command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
 
                 for (var i = 0; i < propertyKeys.Count; i++)
@@ -342,7 +361,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 var rowsAffected = await command.ExecuteNonQueryAsync();
                 if (rowsAffected != 1)
                 {
-                    throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
+                    // check if row exists to determine if failure was due to update condition not being met or some other issue
+                    if (rowsAffected == 0)
+                    {
+                        await VerifyRowUpToDate(connection, syncItem, tableName);
+                        return;
+                    }
+
+                    throw new ApplicationException($"Rows affected for upsert of is not 1, it is {rowsAffected} for item {syncItem.EntityId}.");
                 }
             }
 
@@ -366,14 +392,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 var updateSql = $"""
                         IF EXISTS (
                             SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
-                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})
+                            WHERE [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey})
                         BEGIN
                             UPDATE [{tableName}]
                             SET
-                                [{DataLakeConstants.ChangeTypeKey}] = @ChangeType,
-                                [Timestamp] = @Timestamp,
-                                [Epoch] = @Epoch
-                            WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey};
+                                [{DataLakeConstants.ChangeTypeKey}] = @{DataLakeConstants.ChangeTypeKey},
+                                [{DataLakeConstants.TimestampKey}] = @{DataLakeConstants.TimestampKey},
+                                [{DataLakeConstants.EpochKey}] = @{DataLakeConstants.EpochKey}
+                            WHERE [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
                         END
                         """;
                 var command = new SqlCommand(updateSql, connection)
@@ -381,14 +407,53 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     CommandType = CommandType.Text
                 };
                 command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
-                command.Parameters.Add(new SqlParameter($"@ChangeType", syncItem.ChangeType.ToString()));
-                command.Parameters.Add(new SqlParameter($"@Timestamp", syncItem.Data["Timestamp"]));
-                command.Parameters.Add(new SqlParameter($"@Epoch", syncItem.Data["Epoch"]));
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.ChangeTypeKey}", syncItem.ChangeType.ToString()));
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.TimestampKey}", syncItem.Data[DataLakeConstants.TimestampKey]));
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.EpochKey}", syncItem.Data[DataLakeConstants.EpochKey]));
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
                 if (rowsAffected != 1)
                 {
                     throw new ApplicationException($"Rows affected for soft deletion of is not 1, it is {rowsAffected}.");
+                }
+            }
+
+            static async Task VerifyRowUpToDate(SqlConnection connection, SyncItem syncItem, string tableName)
+            {
+                var getVersionSql = $"""
+                            SELECT
+                                [{DataLakeConstants.IdKey}],
+                                [{DataLakeConstants.PersistVersionKey}],
+                                [{DataLakeConstants.ChangeTypeKey}]
+                            FROM
+                                [{tableName}]
+                            WITH
+                                (XLOCK, ROWLOCK)
+                            WHERE
+                                [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
+                            """;
+                var getVersionCommand = new SqlCommand(getVersionSql, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                getVersionCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
+                await using var getVersionReader = await getVersionCommand.ExecuteReaderAsync();
+                if (!await getVersionReader.ReadAsync())
+                {
+                    throw new ApplicationException($"No rows updated for upsert and entity could not be found.");
+                }
+
+                var changeType = getVersionReader.GetValue(DataLakeConstants.ChangeTypeKey).ToString();
+                var persistVersion = Convert.ToInt32(getVersionReader.GetValue(DataLakeConstants.PersistVersionKey));
+
+                if (!Enum.TryParse<VersionChangeType>(changeType, out var parsedChangedType))
+                {
+                    throw new ApplicationException($"Unable to parse change type '{changeType}' from the cache table item {syncItem.EntityId}.");
+                }
+
+                if (parsedChangedType != VersionChangeType.Removed && persistVersion < syncItem.PersistVersion)
+                {
+                    throw new ApplicationException($"Unable to update cache table item {syncItem.EntityId} from PersistVersion '{persistVersion}' to '{syncItem.PersistVersion}'.");
                 }
             }
         }
@@ -574,15 +639,24 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             var testTableName = GetCacheTableName(testStreamId, true);
 
             var entityId = Guid.NewGuid();
+            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
             var data = new Dictionary<string, object>
             {
                 [DataLakeConstants.IdKey] = entityId,
+                [DataLakeConstants.ChangeTypeKey] = VersionChangeType.Added.ToString(),
+                [DataLakeConstants.PersistVersionKey] = 1,
+                [DataLakeConstants.TimestampKey] = now,
+                [DataLakeConstants.EpochKey] = now.ToUnixTimeMilliseconds(),
                 ["testColumn"] = 1234,
             };
 
             var dataValueTypes = new Dictionary<string, Type>
             {
                 [DataLakeConstants.IdKey] = typeof(Guid),
+                [DataLakeConstants.ChangeTypeKey] = typeof(string),
+                [DataLakeConstants.PersistVersionKey] = typeof(int),
+                [DataLakeConstants.TimestampKey] = typeof(DateTimeOffset),
+                [DataLakeConstants.EpochKey] = typeof(long),
                 ["testColumn"] = typeof(string),
             };
 
@@ -597,12 +671,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     throw new ApplicationException("Failed to acquire lock for verifying connection.");
                 }
 
-                var baseSyncItem = new SyncItem(testStreamId, entityId, VersionChangeType.Added, data, dataValueTypes);
+                var baseSyncItem = new SyncItem(testStreamId, entityId, PersistVersion: 1, VersionChangeType.Added, data, dataValueTypes);
                 await EnsureCacheTableExists(
                         connection,
                         testTableName,
                         baseSyncItem);
                 await VerifyOperation(connection, testTableName, baseSyncItem);
+
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Changed });
                 await VerifyOperation(connection, testTableName, baseSyncItem with { ChangeType = VersionChangeType.Removed });
                 await RenameCacheTableIfExists(connection, testTableName);
@@ -618,7 +693,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             try
             {
-                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: false);
+                var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                syncItem.Data[DataLakeConstants.ChangeTypeKey] = syncItem.ChangeType.ToString();
+                syncItem.Data[DataLakeConstants.PersistVersionKey] = syncItem.PersistVersion;
+                syncItem.Data[DataLakeConstants.TimestampKey] = now;
+                syncItem.Data[DataLakeConstants.EpochKey] = now.ToUnixTimeMilliseconds();
+                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: true);
 
             }
             catch (Exception ex)
@@ -792,6 +872,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private record SyncItem(
             Guid StreamId,
             Guid EntityId,
+            int? PersistVersion,
             VersionChangeType ChangeType,
             IDictionary<string, object> Data,
             Dictionary<string, Type> DataValueTypes);
