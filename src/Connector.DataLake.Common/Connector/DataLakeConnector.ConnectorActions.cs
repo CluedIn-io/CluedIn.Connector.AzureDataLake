@@ -152,8 +152,11 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var systemEvents = executionContext.ApplicationContext.System.Events;
         var bufferStatus = new ConcurrentDictionary<string, BufferStatus>();
-        var timeOutInMilliseconds = request?.Parameters?.TryGetValue("TimeOutInMilliseconds", out var timeOutObj) == true
-            && int.TryParse(timeOutObj.ToString(), out var parsedTimeOut)  ? Math.Min(parsedTimeOut, MaximumGetBufferTimeOutInMilliseconds): MaximumGetBufferTimeOutInMilliseconds;
+        var timeOutInMilliseconds =
+            request?.Parameters?.TryGetValue("TimeOutInMilliseconds", out var timeOutObj) == true &&
+            int.TryParse(timeOutObj?.ToString(), out var parsedTimeOut)
+                ? Math.Min(parsedTimeOut, MaximumGetBufferTimeOutInMilliseconds)
+                : MaximumGetBufferTimeOutInMilliseconds;
 
         await GetPeersBufferStatus();
 

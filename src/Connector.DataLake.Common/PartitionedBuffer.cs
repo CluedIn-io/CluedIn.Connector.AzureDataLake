@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common.Buffers;
@@ -40,7 +39,7 @@ namespace CluedIn.Connector.DataLake.Common
             _buffers = new Dictionary<TPartition, IBuffer<TItem>>();
         }
 
-        public bool TryGet(TPartition partition, out IBuffer<TItem?> item)
+        public bool TryGet(TPartition partition, out IBuffer<TItem>? item)
         {
             lock (_buffers)
             {

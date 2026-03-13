@@ -22,7 +22,7 @@ using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.DataLake.Common.Connector
 {
-    public abstract partial class DataLakeConnector : ConnectorBaseV2
+    public abstract partial class DataLakeConnector : ConnectorBaseV2, IDisposable
     {
         protected static readonly ConnectionVerificationResult SuccessfulConnectionVerification = new (true);
         private const string JsonMimeType = "application/json";
@@ -56,6 +56,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             [typeof(Guid)] = "UNIQUEIDENTIFIER",
             [typeof(string)] = "NVARCHAR(MAX)"
         };
+        private bool _disposedValue;
 
         protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
 
@@ -93,8 +94,28 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         ~DataLakeConnector()
         {
-            _buffer.Dispose();
-            _bufferStatusSubscription?.Dispose();
+            Dispose(disposing: false);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    _buffer.Dispose();
+                    _bufferStatusSubscription?.Dispose();
+                }
+
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
 
         public override Task VerifyExistingContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
