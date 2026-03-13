@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Connector.AzureAIStudio\Connector.AzureAIStudio.csproj" />
     <ProjectReference Include="..\..\src\Connector.AzureDatabricks\Connector.AzureDatabricks.csproj" />
