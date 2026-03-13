@@ -19,7 +19,7 @@ elseif ($fallbackPath -and (Test-Path $fallbackPath)) {
 }
 else {
     Write-Error "Could not locate the CluedIn publish directory. Please check your paths or set 'CLUEDIN_PUBLISH_DIR'."
-    exit
+    exit -1
 }
 
 # Define specific sub-paths based on the validated base directory
@@ -29,7 +29,7 @@ $app = Join-Path $baseDir "CluedIn.Server.Host.dll"
 # Final sanity check for the required DLL
 if (-not (Test-Path $app)) {
     Write-Error "The application DLL was not found at: $app"
-    exit
+    exit -1
 }
 
 # --- 2. KILL RUNNING SERVICE ---
