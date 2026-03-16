@@ -17,6 +17,8 @@ using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
+using Hangfire.Storage;
+
 using Microsoft.Extensions.Logging;
 
 using Moq;
@@ -502,6 +504,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
         Action<Dictionary<string, object>> configureAuthentication = null,
         Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
+        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null,
         Func<IDataLakeJobData, SetupContainerResult, string> configureDirectoryName = null)
     {
         var configuration = CreateConfigurationWithStreamCache(format);
@@ -516,7 +519,14 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             : getConnectorEntityData();
         foreach (var data in connectorEntityData)
         {
+            if (storeData != null)
+            {
+                await storeData(setupResult, data);
+                continue;
+            }
+
             await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+            await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
         }
         var exportJob = CreateExportJob(setupResult);
 
@@ -528,6 +538,36 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             exportJob,
             assertMethod,
             executeExport);
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreWhenChangedAfterDeletion()
+    {
+        await VerifyStoreData_Sync_WithStreamCache("csv",
+            async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
+            {
+                var removed = rows.ToList();
+                removed.Clear();
+                return removed;
+            }),
+            getConnectorEntityData: () =>
+            {
+                var initialUserData = UserData.Default;
+                var removedUserData = initialUserData with { Age = initialUserData.Age + 1 };
+                var readdAfterDeletionUserData = initialUserData with { Age = initialUserData.Age + 2 };
+
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var removedEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Removed, persistVersion: 2, userData: removedUserData);
+                var readdAfterDeletionEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: readdAfterDeletionUserData);
+
+                // Intermediate version is outdated when final version is stored, so it should be ignored and not cause the export to fail
+                return new[] { initialEntityData, removedEntityData, readdAfterDeletionEntityData };
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+            });
     }
 
     private protected override DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)

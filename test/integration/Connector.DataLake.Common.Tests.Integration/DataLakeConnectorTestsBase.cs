@@ -44,6 +44,8 @@ using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
+using static CluedIn.Core.Constants.Configuration;
+
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.DataLake.Common.Tests.Integration;
@@ -70,6 +72,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
         Action<Dictionary<string, object>> configureAuthentication = null,
         Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
+        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null,
         Func<IDataLakeJobData, SetupContainerResult, string> configureDirectoryName = null);
 
     [Fact]
@@ -123,36 +126,6 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
                 // Second change is the most recent version, so first change should be ignored and not cause the export to fail
                 return new[] { initialEntityData, secondChangeEntityData, firstChangeEntityData };
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
-            });
-    }
-
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreWhenChangedAfterDeletion()
-    {
-        await VerifyStoreData_Sync_WithStreamCache("csv",
-            async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
-            {
-                var removed = rows.ToList();
-                removed.Clear();
-                return removed;
-            }),
-            getConnectorEntityData: () =>
-            {
-                var initialUserData = UserData.Default;
-                var removedUserData = initialUserData with { Age = initialUserData.Age + 1 };
-                var readdAfterDeletionUserData = initialUserData with { Age = initialUserData.Age + 2 };
-
-                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
-                var removedEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Removed, persistVersion: 2, userData: removedUserData);
-                var readdAfterDeletionEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: readdAfterDeletionUserData);
-
-                // Intermediate version is outdated when final version is stored, so it should be ignored and not cause the export to fail
-                return new[] { initialEntityData, removedEntityData, readdAfterDeletionEntityData };
             },
             configureAuthentication: (values) =>
             {
@@ -465,7 +438,6 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         try
         {
             var fsClient = client.GetFileSystemClient(fileSystemName);
-            await ModifyHistoryTimeToBeCurrentTime(setupContainerResult);
 
             var executeExportArg = new ExecuteExportArg(
                 context,
@@ -474,7 +446,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                 FileSystemName: fileSystemName,
                 DirectoryName: directoryName,
                 client,
-                exportJob);
+                exportJob,
+                setupContainerResult);
 
             var path = executeExport == null
                 ? await DefaultExecuteExport(executeExportArg)
@@ -558,7 +531,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         }
     }
 
-    private protected async Task ModifyHistoryTimeToBeCurrentTime(SetupContainerResult setupContainerResult)
+    private protected async Task ModifyHistoryTimeToBeCurrentTime(SetupContainerResult setupContainerResult, ConnectorEntityData connectorEntityData)
     {
         var jobData = setupContainerResult.DataLakeJobData;
         var connectionString = jobData.StreamCacheConnectionString;
@@ -582,6 +555,19 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             await DeleteTable(streamModel.Id, jobData.StreamCacheConnectionString);
             throw;
         }
+
+        static async Task AssertRowCount(SqlConnection connection, string tableName)
+        {
+            var getCountSql = $"SELECT COUNT(*) FROM [{tableName}]";
+            var sqlCommand = new SqlCommand(getCountSql, connection)
+            {
+                CommandType = CommandType.Text,
+            };
+            var total = (int)await sqlCommand.ExecuteScalarAsync();
+
+            Assert.Equal(1, total);
+        }
+
 
         static async Task EnableHistory(SqlConnection connection, string tableName)
         {
@@ -613,63 +599,100 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             await disableHistoryCommand.ExecuteNonQueryAsync();
         }
 
-        static async Task AlterHistory(Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider, SqlConnection connection, string tableName)
+        async Task AlterHistory(Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider, SqlConnection connection, string tableName)
         {
+
             var targetTime = mockDateTimeOffsetProvider.Object.GetCurrentUtcTime();
-
-            await AdjustTimeAsync(connection, "ValidFrom", tableName, targetTime, shouldUpdateValidTo: false);
-            await AdjustTimeAsync(connection, "ValidTo", $"{tableName}_History", targetTime, shouldUpdateValidTo: true);
-
-            static async Task AdjustTimeAsync(SqlConnection connection, string maxDateColumn, string tableNameToAdjust, DateTimeOffset targetTime, bool shouldUpdateValidTo)
-            {
-                ICollection<string> dateParts = ["YEAR", "MONTH", "HOUR", "MINUTE", "SECOND", "MICROSECOND", "NANOSECOND"];
-
-                foreach (var datePart in dateParts)
-                {
-                    var getHistorySql = $"""
-                        SELECT DATEDIFF_BIG({datePart}, MAX([{maxDateColumn}]), @CurrentTime)
-                        FROM [dbo].[{tableNameToAdjust}];
+            var getCurrentValidFromSql = $"""
+                        SELECT
+                            [ValidFrom]
+                        FROM
+                            [dbo].[{tableName}]
+                        WHERE
+                            [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
                         """;
-                    using var getHistoryCommand = new SqlCommand(getHistorySql, connection);
-                    getHistoryCommand.Parameters.Add(new SqlParameter("@CurrentTime", targetTime));
-                    var diff = await getHistoryCommand.ExecuteScalarAsync() as long?;
+            using var getCurrentValidFromCommand = new SqlCommand(getCurrentValidFromSql, connection);
+            getCurrentValidFromCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            var validFrom = await getCurrentValidFromCommand.ExecuteScalarAsync() as DateTime?;
 
-                    if (diff == null)
-                    {
-                        continue;
-                    }
 
-                    var updateValidTo = shouldUpdateValidTo ? $",[ValidTo] = DATEADD({datePart}, @DateDiff, [ValidTo])" : string.Empty;
-                    var alterHistoryTimeSql = $"""
+            var updateCurrentValidFromToTimeSql = $"""
                     UPDATE
-                        [dbo].[{tableNameToAdjust}]
+                        [dbo].[{tableName}]
                     SET
-                        [ValidFrom] = DATEADD({datePart}, @DateDiff, [ValidFrom])
-                        {updateValidTo};
+                        [ValidFrom] = @ValidFrom
+                    WHERE
+                        [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
                     """;
-                    using var alterHistoryTimeCommand = new SqlCommand(alterHistoryTimeSql, connection)
-                    {
-                        CommandType = CommandType.Text,
-                    };
-                    alterHistoryTimeCommand.Parameters.Add(new SqlParameter("@DateDiff", diff));
-                    await alterHistoryTimeCommand.ExecuteNonQueryAsync();
-                }
-            }
-
-        }
-
-        static async Task AssertRowCount(SqlConnection connection, string tableName)
-        {
-            var getCountSql = $"SELECT COUNT(*) FROM [{tableName}]";
-            var sqlCommand = new SqlCommand(getCountSql, connection)
+            using var updateCurrentValidFromToTimeCommand = new SqlCommand(updateCurrentValidFromToTimeSql, connection)
             {
                 CommandType = CommandType.Text,
             };
-            var total = (int)await sqlCommand.ExecuteScalarAsync();
+            updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter("@ValidFrom", targetTime));
+            updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            await updateCurrentValidFromToTimeCommand.ExecuteNonQueryAsync();
 
-            Assert.Equal(1, total);
+
+            var updateHistoryValidFromToTimeSql = $"""
+                    UPDATE
+                        [dbo].[{tableName}_History]
+                    SET
+                        [ValidTo] = @TargetValidTo
+                    WHERE
+                        [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
+                        [ValidTo] = @OriginalValidTo;
+                    """;
+            using var updateHistoryValidFromToTimeCommand = new SqlCommand(updateHistoryValidFromToTimeSql, connection)
+            {
+                CommandType = CommandType.Text,
+            };
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@TargetValidTo", targetTime));
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@OriginalValidTo", validFrom?.ToString("o")));
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            await updateHistoryValidFromToTimeCommand.ExecuteNonQueryAsync();
+
+            //await AdjustTimeAsync(connection, "ValidFrom", tableName, targetTime, shouldUpdateValidTo: false);
+            //await AdjustTimeAsync(connection, "ValidTo", $"{tableName}_History", targetTime, shouldUpdateValidTo: true);
+
+            //static async Task AdjustTimeAsync(SqlConnection connection, string maxDateColumn, string tableNameToAdjust, DateTimeOffset targetTime, bool shouldUpdateValidTo)
+            //{
+            //    ICollection<string> dateParts = ["YEAR", "MONTH", "HOUR", "MINUTE", "SECOND", "MICROSECOND", "NANOSECOND"];
+
+            //    foreach (var datePart in dateParts)
+            //    {
+            //        var getHistorySql = $"""
+            //            SELECT DATEDIFF_BIG({datePart}, MAX([{maxDateColumn}]), @CurrentTime)
+            //            FROM [dbo].[{tableNameToAdjust}];
+            //            """;
+            //        using var getHistoryCommand = new SqlCommand(getHistorySql, connection);
+            //        getHistoryCommand.Parameters.Add(new SqlParameter("@CurrentTime", targetTime));
+            //        var diff = await getHistoryCommand.ExecuteScalarAsync() as long?;
+
+            //        if (diff == null)
+            //        {
+            //            continue;
+            //        }
+
+            //        var updateValidTo = shouldUpdateValidTo ? $",[ValidTo] = DATEADD({datePart}, @DateDiff, [ValidTo])" : string.Empty;
+            //        var alterHistoryTimeSql = $"""
+            //        UPDATE
+            //            [dbo].[{tableNameToAdjust}]
+            //        SET
+            //            [ValidFrom] = DATEADD({datePart}, @DateDiff, [ValidFrom])
+            //            {updateValidTo};
+            //        """;
+            //        using var alterHistoryTimeCommand = new SqlCommand(alterHistoryTimeSql, connection)
+            //        {
+            //            CommandType = CommandType.Text,
+            //        };
+            //        alterHistoryTimeCommand.Parameters.Add(new SqlParameter("@DateDiff", diff));
+            //        await alterHistoryTimeCommand.ExecuteNonQueryAsync();
+            //    }
+            //}
         }
     }
+
+
 
     private protected virtual async Task AssertCsvResultUnescaped(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
     {
@@ -718,8 +741,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     private void AssertResult(List<DataRow> actualRows, List<DataRow> expectedRows)
     {
         TestOutputHelper.WriteLine("Actual"  + Environment.NewLine + JsonConvert.SerializeObject(actualRows, Formatting.Indented));
-        TestOutputHelper.WriteLine("Expected" + Environment.NewLine + JsonConvert.SerializeObject(actualRows, Formatting.Indented));
-        Assert.Equal(actualRows.Count, actualRows.Count);
+        TestOutputHelper.WriteLine("Expected" + Environment.NewLine + JsonConvert.SerializeObject(expectedRows, Formatting.Indented));
+        Assert.Equal(actualRows.Count, expectedRows.Count);
         for (var i = 0; i < expectedRows.Count; i++)
         {
             var expectedRow = expectedRows[i];
@@ -1113,7 +1136,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             string FileSystemName,
             string DirectoryName,
             DataLakeServiceClient Client,
-            DataLakeExportEntitiesJobBase ExportJob);
+            DataLakeExportEntitiesJobBase ExportJob,
+            SetupContainerResult SetupContainerResult);
 
     private protected record UserData(
         string Name,

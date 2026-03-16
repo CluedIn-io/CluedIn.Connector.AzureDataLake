@@ -201,7 +201,10 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanCreateNewFile()
     {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
         var executionCount = 0;
+        var storeDataCount = 0;
         var dateTimeList = new List<DateTimeOffset>
         {
             DefaultCurrentTime,
@@ -209,9 +212,23 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         };
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
-            AssertParquetResultEscapedWithRowMarker,
+            async (fileClient, _, setupResult) =>
+            {
+                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                await base.AssertParquetResult(fileClient, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+                {
+                    var updated = original.ToList();
+                    updated[0].Columns["__rowMarker__"] = "4";
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns[DataLakeConstants.PersistVersionKey] = 2;
+                    updated[0].Columns["user_age"] = firstChangeUserData.Age.ToString();
+                    return updated;
+                });
+            },
             async executeExportArg =>
             {
+                executionCount = 0;
                 var jobArgs = new DataLakeJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
@@ -255,6 +272,23 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     {
                         return dateTimeList[executionCount];
                     });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount == 0)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+
+                return new[] { initialEntityData, firstChangeEntityData };
             });
     }
 
@@ -447,6 +481,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
         Action<Dictionary<string, object>> configureAuthentication = null,
         Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
+        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null,
         Func<IDataLakeJobData, SetupContainerResult, string> configureDirectoryName = null)
     {
         var configuration = CreateConfigurationWithStreamCache(format);
@@ -461,7 +496,14 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             : getConnectorEntityData();
         foreach (var data in connectorEntityData)
         {
+            if (storeData != null)
+            {
+                await storeData(setupResult, data);
+                continue;
+            }
+
             await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+            await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
         }
         var exportJob = CreateExportJob(setupResult);
 
