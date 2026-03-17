@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using Azure.Storage;
 using Azure.Storage.Files.DataLake;

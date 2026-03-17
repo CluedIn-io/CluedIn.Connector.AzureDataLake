@@ -69,12 +69,12 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private protected override bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => false;
 
-    private protected override async Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient directoryClient)
+    private protected override async Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, IDataLakeDirectoryClient directoryClient)
     {
         await EnsureMetadataJsonExists(directoryClient);
         await CreatePartnerEventsJsonIfNotExists();
 
-        async Task EnsureMetadataJsonExists(DataLakeDirectoryClient directoryClient)
+        async Task EnsureMetadataJsonExists(IDataLakeDirectoryClient directoryClient)
         {
             if (DataLakeConstants.OutputFormats.Csv.Equals(configuration.OutputFormat, StringComparison.OrdinalIgnoreCase))
             {
@@ -86,7 +86,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
             }
         }
 
-        async Task EnsureCsvMetadataJsonExists(DataLakeDirectoryClient directoryClient)
+        async Task EnsureCsvMetadataJsonExists(IDataLakeDirectoryClient directoryClient)
         {
             var fileClient = directoryClient.GetFileClient("_metadata.json");
 
@@ -114,7 +114,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
             }
         }
 
-        async Task EnsureGenericMetadataJsonExists(DataLakeDirectoryClient directoryClient)
+        async Task EnsureGenericMetadataJsonExists(IDataLakeDirectoryClient directoryClient)
         {
             var fileClient = directoryClient.GetFileClient("_metadata.json");
 

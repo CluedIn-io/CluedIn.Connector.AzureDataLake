@@ -6,8 +6,6 @@ using System.Net;
 using System.Threading.Tasks;
 using System.Transactions;
 
-using Azure.Storage.Files.DataLake;
-
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 using CluedIn.Connector.DataLake.Common.Extensions;
 using CluedIn.Core;
@@ -89,8 +87,8 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return;
         }
 
-        var filePathProperties = await _dataLakeClient.GetFilePathProperties(configuration, outputFileName);
-        if (filePathProperties != null)
+        var fileMetadata = await _dataLakeClient.GetFileMetadata(configuration, outputFileName);
+        if (fileMetadata != null)
         {
             if (args.IsTriggeredFromJobServer)
             {
@@ -101,7 +99,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
                 outputFileName = await GetOutputFileNameAsync(context, configuration, streamId, streamModel.ContainerName, asOfTime, outputFormat);
             }
-            else if (HasExportedFileBefore(streamId, asOfTime, filePathProperties?.Metadata))
+            else if (HasExportedFileBefore(streamId, asOfTime, fileMetadata.Metadata))
             {
                 context.Log.LogInformation(
                     "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from {SchedulerType}. Skipping export.",
@@ -165,7 +163,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             [DataTimeKey] = asOfTime,
         });
 
-        DataLakeFileClient temporaryFileClient;
+        IDataLakeFileClient temporaryFileClient;
         try
         {
             temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
@@ -228,7 +226,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
-            await using var outputStream = await temporaryFileClient.OpenWriteExAsync(configuration.IsOverwriteEnabled);
+            await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
             return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
         }
@@ -314,7 +312,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return Task.FromResult(string.Empty);
     }
 
-    private protected virtual Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient client)
+    private protected virtual Task InitializeDirectoryAsync(
+        ExecutionContext context,
+        SqlConnection connection,
+        IDataLakeJobData configuration,
+        ExportJobData exportJobData,
+        IDataLakeDirectoryClient client)
     {
         return Task.CompletedTask;
     }
