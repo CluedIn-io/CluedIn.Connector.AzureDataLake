@@ -48,14 +48,14 @@ public abstract class DataLakeConnectorComponentBase : ServiceApplicationCompone
             var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, dateTimeOffsetProvider);
 
             _ = Task.Run(scheduler.RunAsync);
-            
+
             SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
         }
         else
         {
             Log.LogInformation($"{ConnectorComponentName} scheduled jobs disabled");
         }
-        
+
         Log.LogInformation($"{ConnectorComponentName} Registered");
         State = ServiceState.Started;
     }

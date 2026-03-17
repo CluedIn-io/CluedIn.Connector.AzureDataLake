@@ -58,18 +58,16 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
 
-        protected IDataLakeClient Client => _client;
+        protected abstract IDataLakeClient CreateClient(ExecutionContext executionContext);
 
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
-            IDataLakeClient client,
             IDataLakeConstants constants,
             IDataLakeJobDataFactory dataLakeJobDataFactory,
             IDateTimeOffsetProvider dateTimeOffsetProvider)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
-            _client = client;
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
@@ -513,13 +511,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
-                    await Client.DeleteFile(configurations, filePathAndName);
+                    await client.DeleteFile(configurations, filePathAndName);
                 }
                 else
                 {
                     var json = JsonConvert.SerializeObject(data, _immediateOutputSerializerSettings);
 
-                    await Client.SaveData(configurations, json, filePathAndName, JsonMimeType);
+                    await client.SaveData(configurations, json, filePathAndName, JsonMimeType);
 
                 }
             }

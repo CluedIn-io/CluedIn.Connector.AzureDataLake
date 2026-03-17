@@ -7,40 +7,35 @@ using CluedIn.Core.Connectors;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
-public interface IDataLakeDirectoryClient
-{
-    IDataLakeFileClient GetFileClient(string path);
-}
+//public interface IDataLakeDirectoryClient
+//{
+//    //IDataLakeFileClient GetFileClient(string path);
+//}
 
 public interface IDataLakeFileClient
 {
     Uri Uri { get; }
     string Path { get; }
 
+    Task DeleteAsync();
     Task DeleteIfExistsAsync();
     Task<bool> ExistsAsync();
-    Task<Stream> OpenWriteAsync(bool v);
+    Task<Stream> OpenWriteAsync(bool overwrite);
     Task RenameAsync(string value);
-    Task SetMetadataAsync(Dictionary<string, string> dictionary);
+    Task SetMetadataAsync(Dictionary<string, string> metadata);
 }
 public interface IDataLakeClient
 {
-    //Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(IDataLakeJobData configuration);
-    //Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(IDataLakeJobData configuration, string subDirectory);
-    Task<IDataLakeDirectoryClient> EnsureDataLakeDirectoryExist(IDataLakeJobData configuration);
-    Task<IDataLakeDirectoryClient> EnsureDataLakeDirectoryExist(IDataLakeJobData configuration, string subDirectory);
-    Task SaveData(IDataLakeJobData configuration, string content, string fileName, string contentType);
-    Task DeleteDirectory(IDataLakeJobData configuration, string subDirectory);
-    Task DeleteFile(IDataLakeJobData configuration, string fileName);
-    Task<bool> FileInPathExists(IDataLakeJobData configuration, string fileName);
-    Task<bool> FileInPathExists(IDataLakeJobData configuration, string fileName, string subDirectory);
-    //Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName);
-    //Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName, string subDirectory);
-    Task<FileMetadata> GetFileMetadata(IDataLakeJobData configuration, string fileName);
-    Task<FileMetadata> GetFileMetadata(IDataLakeJobData configuration, string fileName, string subDirectory);
-    Task<bool> DirectoryExists(IDataLakeJobData configuration);
-    Task<bool> DirectoryExists(IDataLakeJobData configuration, string subDirectory);
-    Task<IEnumerable<IConnectorContainer>> GetFilesInDirectory(IDataLakeJobData configuration, string subDirectory = null);
+    Task SaveData(DataLakeFilePath filePath, string content, string contentType);
+    Task DeleteDirectory(DataLakeDirectoryPath directoryPath);
+    Task DeleteFile(DataLakeFilePath filePath);
+    Task<bool> FileExists(DataLakeFilePath filePath);
+    Task<FileMetadata> GetFileMetadata(DataLakeFilePath filePath);
+    Task<bool> DirectoryExists(DataLakeDirectoryPath directory);
+    Task<IEnumerable<DataLakeFilePath>> GetFilesInDirectory(DataLakeDirectoryPath directoryPath);
+    Task<IDataLakeFileClient> GetFileClient(DataLakeFilePath directoryPath);
 }
 
-public record FileMetadata(Dictionary<string, string> Metadata);
+public record FileMetadata(IDictionary<string, string> Metadata);
+public record DataLakeDirectoryPath(string Path);
+public record DataLakeFilePath(string Name, DataLakeDirectoryPath Directory);

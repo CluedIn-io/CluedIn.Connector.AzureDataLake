@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using System.Transactions;
 
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
-using CluedIn.Connector.DataLake.Common.Extensions;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Streams;
@@ -21,7 +20,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector;
 internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 {
     private readonly IStreamRepository _streamRepository;
-    protected readonly IDataLakeClient _dataLakeClient;
     private readonly IDataLakeConstants _dataLakeConstants;
     private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
@@ -35,13 +33,11 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     protected DataLakeExportEntitiesJobBase(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        IDataLakeClient dataLakeClient,
         IDataLakeConstants dataLakeConstants,
         IDataLakeJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext, dateTimeOffsetProvider)
     {
         _streamRepository = streamRepository ?? throw new ArgumentNullException(nameof(streamRepository));
-        _dataLakeClient = dataLakeClient ?? throw new ArgumentNullException(nameof(dataLakeClient));
         _dataLakeConstants = dataLakeConstants ?? throw new ArgumentNullException(nameof(dataLakeConstants));
         _dataLakeJobDataFactory = dataLakeJobDataFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataFactory));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
