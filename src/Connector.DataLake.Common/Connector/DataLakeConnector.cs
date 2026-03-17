@@ -451,7 +451,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     throw new ApplicationException($"Unable to parse change type '{changeType}' from the cache table item {syncItem.EntityId}.");
                 }
 
-                if (parsedChangedType != VersionChangeType.Removed && persistVersion < syncItem.PersistVersion)
+                if (parsedChangedType != VersionChangeType.Removed &&
+                    syncItem.PersistVersion != null &&
+                    persistVersion < syncItem.PersistVersion)
                 {
                     throw new ApplicationException($"Unable to update cache table item {syncItem.EntityId} from PersistVersion '{persistVersion}' to '{syncItem.PersistVersion}'.");
                 }

@@ -6,8 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-using Azure;
-using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
@@ -42,9 +40,6 @@ using Parquet;
 
 using Xunit;
 using Xunit.Abstractions;
-using Xunit.Sdk;
-
-using static CluedIn.Core.Constants.Configuration;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -502,6 +497,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
             DROP TABLE IF EXISTS [{tableName}];
             DROP TABLE IF EXISTS [{tableName}_History];
+            DROP TABLE IF EXISTS [{CacheTableHelper.GetExportHistoryTableName(streamId)}_ExportHistory];
             """;
         try
         {
@@ -509,11 +505,11 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         }
         catch (SqlException ex) when (ex.Number == NotTemporalTableErrorCode)
         {
-            var historyTable = $"{tableName}_History";
             var deleteTableSeparatelySql = $"""
                 IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
                 DROP TABLE IF EXISTS [{tableName}];
                 DROP TABLE IF EXISTS [{tableName}_History];
+                DROP TABLE IF EXISTS [{CacheTableHelper.GetExportHistoryTableName(streamId)}_ExportHistory];
                 """;
             await DeleteTableInternal(deleteTableSeparatelySql, streamCacheConnectionString);
         }
@@ -650,45 +646,6 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@OriginalValidTo", validFrom?.ToString("o")));
             updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
             await updateHistoryValidFromToTimeCommand.ExecuteNonQueryAsync();
-
-            //await AdjustTimeAsync(connection, "ValidFrom", tableName, targetTime, shouldUpdateValidTo: false);
-            //await AdjustTimeAsync(connection, "ValidTo", $"{tableName}_History", targetTime, shouldUpdateValidTo: true);
-
-            //static async Task AdjustTimeAsync(SqlConnection connection, string maxDateColumn, string tableNameToAdjust, DateTimeOffset targetTime, bool shouldUpdateValidTo)
-            //{
-            //    ICollection<string> dateParts = ["YEAR", "MONTH", "HOUR", "MINUTE", "SECOND", "MICROSECOND", "NANOSECOND"];
-
-            //    foreach (var datePart in dateParts)
-            //    {
-            //        var getHistorySql = $"""
-            //            SELECT DATEDIFF_BIG({datePart}, MAX([{maxDateColumn}]), @CurrentTime)
-            //            FROM [dbo].[{tableNameToAdjust}];
-            //            """;
-            //        using var getHistoryCommand = new SqlCommand(getHistorySql, connection);
-            //        getHistoryCommand.Parameters.Add(new SqlParameter("@CurrentTime", targetTime));
-            //        var diff = await getHistoryCommand.ExecuteScalarAsync() as long?;
-
-            //        if (diff == null)
-            //        {
-            //            continue;
-            //        }
-
-            //        var updateValidTo = shouldUpdateValidTo ? $",[ValidTo] = DATEADD({datePart}, @DateDiff, [ValidTo])" : string.Empty;
-            //        var alterHistoryTimeSql = $"""
-            //        UPDATE
-            //            [dbo].[{tableNameToAdjust}]
-            //        SET
-            //            [ValidFrom] = DATEADD({datePart}, @DateDiff, [ValidFrom])
-            //            {updateValidTo};
-            //        """;
-            //        using var alterHistoryTimeCommand = new SqlCommand(alterHistoryTimeSql, connection)
-            //        {
-            //            CommandType = CommandType.Text,
-            //        };
-            //        alterHistoryTimeCommand.Parameters.Add(new SqlParameter("@DateDiff", diff));
-            //        await alterHistoryTimeCommand.ExecuteNonQueryAsync();
-            //    }
-            //}
         }
     }
 
