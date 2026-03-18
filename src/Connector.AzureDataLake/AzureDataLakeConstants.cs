@@ -38,7 +38,7 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
             new ()
             {
                 Name = AccountName,
-                DisplayName = AccountName,
+                DisplayName = "Account Name",
                 Type = "input",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -52,7 +52,7 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
             new ()
             {
                 Name = AccountKey,
-                DisplayName = AccountKey,
+                DisplayName = "Account Key",
                 Type = "password",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -66,7 +66,7 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
             new ()
             {
                 Name = FileSystemName,
-                DisplayName = FileSystemName,
+                DisplayName = "File System Name",
                 Type = "input",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -80,7 +80,7 @@ public class AzureDataLakeConstants : DataLakeConstants, IAzureDataLakeConstants
             new ()
             {
                 Name = DirectoryName,
-                DisplayName = DirectoryName,
+                DisplayName = "Directory Name",
                 Type = "input",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
