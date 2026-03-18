@@ -1,4 +1,4 @@
-﻿using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.DataLake.Common;
 using System.Threading.Tasks;
 using System;
 
@@ -25,11 +25,10 @@ public class AzureDataLakeConnector : DataLakeConnector
 
     public AzureDataLakeConnector(
         ILogger<AzureDataLakeConnector> logger,
-        AzureDataLakeClient client,
         IAzureDataLakeConstants constants,
         AzureDataLakeJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

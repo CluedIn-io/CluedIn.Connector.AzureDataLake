@@ -20,11 +20,11 @@ using System.Text.Json;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
-public class OpenMirroringClient : DataLakeClient
+internal class OpenMirroringClient : DataLakeClient
 {
     private readonly ILogger<OpenMirroringClient> _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
-
+    private readonly OpenMirroringConnectorJobData _jobData;
     private static readonly TimeSpan CreationTimeOut = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan DelayBetweenCreationPolls = TimeSpan.FromSeconds(5);
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions()
@@ -38,21 +38,24 @@ public class OpenMirroringClient : DataLakeClient
 
     public OpenMirroringClient(
         ILogger<OpenMirroringClient> logger,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        IDateTimeOffsetProvider dateTimeOffsetProvider,
+        OpenMirroringConnectorJobData jobData):
+        base(logger, jobData)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _jobData = jobData;
     }
 
-    public async Task<bool> HasValidWorkspaceAsync(IDataLakeJobData configuration)
+    public async Task<bool> HasValidWorkspaceAsync()
     {
-        var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: false);
+        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: false);
         return await fileSystemClient.ExistsAsync();
     }
 
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
+    protected override DataLakeServiceClient GetDataLakeServiceClient()
     {
-        var casted = CastJobData<OpenMirroringConnectorJobData>(configuration);
+        var casted = CastJobData<OpenMirroringConnectorJobData>(_jobData);
         var accountName = "onelake";
 
         var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);

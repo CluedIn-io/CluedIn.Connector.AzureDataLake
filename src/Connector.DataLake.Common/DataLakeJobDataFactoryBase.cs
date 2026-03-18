@@ -1,14 +1,15 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 
 namespace CluedIn.Connector.DataLake.Common;
 
-public abstract class DataLakeJobDataFactoryBase
+public abstract class DataLakeJobDataFactoryBase : IDataLakeJobDataFactory
 {
     protected static async Task<IConnectorConnectionV2> GetAuthenticationDetails(
         ExecutionContext executionContext,
@@ -49,4 +50,8 @@ public abstract class DataLakeJobDataFactoryBase
         ExecutionContext executionContext,
         IDictionary<string, object> authenticationDetails,
         string containerName);
+
+    public abstract Task<IDataLakeClient> CreateDataLakeClient(
+        ExecutionContext executionContext,
+        IDataLakeJobData jobData);
 }

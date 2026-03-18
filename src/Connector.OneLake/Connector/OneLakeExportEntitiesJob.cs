@@ -14,13 +14,11 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
     public OneLakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        OneLakeClient dataLakeClient,
         IOneLakeConstants dataLakeConstants,
         OneLakeJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
-        DataLakeClient = dataLakeClient;
     }
 
     private OneLakeClient DataLakeClient { get; }

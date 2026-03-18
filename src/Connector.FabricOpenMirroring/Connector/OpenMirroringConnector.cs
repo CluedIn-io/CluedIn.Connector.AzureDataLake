@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Azure.Identity;
 using Azure;
+using Azure.Identity;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
@@ -24,23 +24,20 @@ public class OpenMirroringConnector : DataLakeConnector
     internal const string WorkspaceNotFoundErrorCode = "WorkspaceNotFound";
 
     private readonly ILogger<OpenMirroringConnector> _logger;
-    private readonly OpenMirroringClient _client;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
 
     public OpenMirroringConnector(
         ILogger<OpenMirroringConnector> logger,
-        OpenMirroringClient client,
         IOpenMirroringConstants constants,
         OpenMirroringJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _client = client ?? throw new ArgumentNullException(nameof(client));
         _dateTimeOffsetProvider = dateTimeOffsetProvider;
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData)
     {
         // There are three places where verification can be called
         // 1. Health check
@@ -61,9 +58,11 @@ public class OpenMirroringConnector : DataLakeConnector
 
         var isHealthCheckVerification = IsHealthCheckVerification(casted);
         var shouldTolerateMissingDirectory = !isHealthCheckVerification && casted.ShouldCreateMirroredDatabase;
+
+        var client = await DataLakeJobDataFactory.CreateDataLakeClient(executionContext, jobData);
         if (shouldTolerateMissingDirectory)
         {
-            if (await _client.HasValidWorkspaceAsync(jobData))
+            if (await client.HasValidWorkspaceAsync())
             {
                 return SuccessfulConnectionVerification;
             }
@@ -73,7 +72,7 @@ public class OpenMirroringConnector : DataLakeConnector
 
         try
         {
-            if (await Client.DirectoryExists(jobData))
+            if (await client.DirectoryExists())
             {
                 return SuccessfulConnectionVerification;
             }
@@ -110,7 +109,8 @@ public class OpenMirroringConnector : DataLakeConnector
 
         var jobData = await DataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
         var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, jobData, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), jobData.OutputFormat);
-        await Client.DeleteDirectory(jobData, subDirectory);
+        var client = await DataLakeJobDataFactory.CreateDataLakeClient(executionContext, jobData);
+        await client.DeleteDirectory(subDirectory);
         await base.ArchiveContainer(executionContext, streamModel);
     }
 

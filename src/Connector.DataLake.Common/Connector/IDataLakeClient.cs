@@ -26,6 +26,7 @@ public interface IDataLakeFileClient
 }
 public interface IDataLakeClient
 {
+    Task<DataLakeDirectoryPath> GetBaseDirectoryPath();
     Task SaveData(DataLakeFilePath filePath, string content, string contentType);
     Task DeleteDirectory(DataLakeDirectoryPath directoryPath);
     Task DeleteFile(DataLakeFilePath filePath);
@@ -34,6 +35,7 @@ public interface IDataLakeClient
     Task<bool> DirectoryExists(DataLakeDirectoryPath directory);
     Task<IEnumerable<DataLakeFilePath>> GetFilesInDirectory(DataLakeDirectoryPath directoryPath);
     Task<IDataLakeFileClient> GetFileClient(DataLakeFilePath directoryPath);
+    Task VerifyConnection();
 }
 
 public record FileMetadata(IDictionary<string, string> Metadata);

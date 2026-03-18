@@ -1,4 +1,4 @@
-﻿using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
@@ -9,11 +9,10 @@ internal class AzureDataLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
     public AzureDataLakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        AzureDataLakeClient dataLakeClient,
         IAzureDataLakeConstants dataLakeConstants,
         AzureDataLakeJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 

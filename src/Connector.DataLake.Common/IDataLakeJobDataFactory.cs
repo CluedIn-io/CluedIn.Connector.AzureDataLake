@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 
 namespace CluedIn.Connector.DataLake.Common;
@@ -17,4 +18,8 @@ public interface IDataLakeJobDataFactory
         ExecutionContext executionContext,
         IDictionary<string, object> authenticationDetails,
         string containerName = null);
+
+    Task<IDataLakeClient> CreateDataLakeClient(
+        ExecutionContext executionContext,
+        IDataLakeJobData jobData);
 }

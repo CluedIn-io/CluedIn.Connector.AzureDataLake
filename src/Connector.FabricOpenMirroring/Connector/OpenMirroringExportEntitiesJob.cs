@@ -37,11 +37,10 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
     public OpenMirroringExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        OpenMirroringClient dataLakeClient,
         IOpenMirroringConstants dataLakeConstants,
         OpenMirroringJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         DateTimeOffsetProvider = dateTimeOffsetProvider;
     }
@@ -69,7 +68,13 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private protected override bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => false;
 
-    private protected override async Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, IDataLakeDirectoryClient directoryClient)
+    private protected override async Task InitializeDirectoryAsync(
+        ExecutionContext context,
+        SqlConnection connection,
+        IDataLakeJobData configuration,
+        ExportJobData exportJobData,
+        IDataLakeClient client,
+        DataLakeDirectoryPath dataLakeDirectoryPath)
     {
         await EnsureMetadataJsonExists(directoryClient);
         await CreatePartnerEventsJsonIfNotExists();
@@ -138,7 +143,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                 context.Log.LogDebug("Unable to acquire lock to partner events for ProviderDefinition '{ProviderDefinitionId}'.", exportJobData.ProviderDefinition.Id);
                 return;
             }
-            var landingZoneDirectoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
+            var landingZoneDirectoryClient = await client.EnsureDataLakeDirectoryExist(configuration);
             var fileClient = landingZoneDirectoryClient.GetFileClient("_partnerEvents.json");
 
             if (!await fileClient.ExistsAsync())

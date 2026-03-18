@@ -12,6 +12,8 @@ using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
 using CluedIn.Core.Streams.Models;
 
+using Hangfire.Storage;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
@@ -31,10 +33,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private static readonly string _invalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", _invalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
         private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<DataLakeConnector> _logger;
-        private readonly IDataLakeClient _client;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
-        private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
+        private readonly PartitionedBuffer<Partition, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
 
@@ -58,8 +59,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
 
-        protected abstract IDataLakeClient CreateClient(ExecutionContext executionContext);
-
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
             IDataLakeConstants constants,
@@ -81,7 +80,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 cacheBufferStrategy = Enum.Parse<BufferStrategy>(constants.CacheBufferStrategyDefaultValue);
             }
 
-            _buffer = new PartitionedBuffer<IDataLakeJobData, string>(cacheRecordsThreshold,
+            _buffer = new PartitionedBuffer<Partition, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush, dateTimeOffsetProvider, cacheBufferStrategy);
         }
 
@@ -164,7 +163,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 }
                 else
                 {
-                    return await WriteToOutputImmediately(streamModel, connectorEntityData, jobData, data);
+                    return await WriteToOutputImmediately(executionContext, streamModel, connectorEntityData, jobData, data);
                 }
             }
             catch (Exception ex)
@@ -500,6 +499,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         }
 
         private async Task<SaveResult> WriteToOutputImmediately(
+            ExecutionContext executionContext,
             IReadOnlyStreamModel streamModel,
             IReadOnlyConnectorEntityData connectorEntityData,
             IDataLakeJobData configurations,
@@ -509,15 +509,17 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             {
                 var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
 
+                var client = await _dataLakeJobDataFactory.CreateDataLakeClient(executionContext, configurations);
+                var baseDirectory = await client.GetBaseDirectoryPath();
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
-                    await client.DeleteFile(configurations, filePathAndName);
+                    await client.DeleteFile(new (filePathAndName, baseDirectory));
                 }
                 else
                 {
                     var json = JsonConvert.SerializeObject(data, _immediateOutputSerializerSettings);
 
-                    await client.SaveData(configurations, json, filePathAndName, JsonMimeType);
+                    await client.SaveData(new(filePathAndName, baseDirectory), json, JsonMimeType);
 
                 }
             }
@@ -569,7 +571,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected virtual async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData)
         {
-            var verifyConnectionResult = await VerifyDataLakeConnection(jobData);
+            var verifyConnectionResult = await VerifyDataLakeConnection(executionContext, jobData);
             if (!verifyConnectionResult.Success)
             {
                 return verifyConnectionResult;
@@ -622,9 +624,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return SuccessfulConnectionVerification;
         }
 
-        protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+        protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData)
         {
-            await Client.EnsureDataLakeDirectoryExist(jobData);
+            var client = await _dataLakeJobDataFactory.CreateDataLakeClient(executionContext, jobData);
+            await client.VerifyConnection();
             return SuccessfulConnectionVerification;
         }
 
@@ -708,7 +711,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
         }
 
-        private async Task Flush(IDataLakeJobData configuration, string[] entityData)
+        private async Task Flush(Partition partition, string[] entityData)
         {
             if (entityData == null)
             {
@@ -724,10 +727,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 entityData.Select(x => (JObject)JsonConvert.DeserializeObject(x, _immediateOutputSerializerSettings)).ToArray(),
                 _immediateOutputSerializerSettings);
 
+            var configuration = partition.JobData;
+            var organizationId = partition.OrganizationId;
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-            await Client.SaveData(configuration, content, fileName, JsonMimeType);
+            var client = await _dataLakeJobDataFactory.CreateDataLakeClient(configuration);
+            var baseDirectory = await client.GetBaseDirectoryPath();
+            await client.SaveData(new DataLakeFilePath(fileName, baseDirectory), content, JsonMimeType);
         }
 
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
@@ -747,8 +754,10 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             _logger.LogInformation($"DataLakeConnector.GetContainers: entry");
 
             var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, "");
-
-            return await _client.GetFilesInDirectory(jobData);
+            var client = await _dataLakeJobDataFactory.CreateDataLakeClient(executionContext, jobData);
+            var baseDirectory = await client.GetBaseDirectoryPath();
+            var files = await client.GetFilesInDirectory(baseDirectory);
+            return files.Select(file => new DataLakeContainer() {  Name = file.Name, FullyQualifiedName =});
         }
 
         public override Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
@@ -876,5 +885,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             VersionChangeType ChangeType,
             IDictionary<string, object> Data,
             Dictionary<string, Type> DataValueTypes);
+        private record Partition(Guid OrganizationId, IDataLakeJobData JobData);
     }
 }

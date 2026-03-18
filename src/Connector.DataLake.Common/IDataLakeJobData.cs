@@ -1,4 +1,4 @@
-﻿namespace CluedIn.Connector.DataLake.Common;
+namespace CluedIn.Connector.DataLake.Common;
 
 public interface IDataLakeJobData
 {
@@ -19,4 +19,20 @@ public interface IDataLakeJobData
     string FileSystemName { get; }
 
     string RootDirectoryPath { get; }
+}
+
+internal interface IAzureSharedKeyCredentialJobData
+{
+    string AccountName { get; }
+    string AccountKey { get; }
+    string StorageUri { get; }
+}
+
+internal interface IAzureServicePrincipalCredentialJobData
+{
+    string TenantId { get; }
+    string ClientId { get; }
+    string ClientSecret { get; }
+    string AccountName { get; }
+    string StorageUri { get; }
 }

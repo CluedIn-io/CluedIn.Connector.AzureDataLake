@@ -17,29 +17,32 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
-public class OneLakeClient : DataLakeClient
+internal class OneLakeClient : DataLakeClient
 {
+    private readonly OneLakeConnectorJobData _jobData;
+
     public ILogger<OneLakeClient> Logger { get; }
 
-    public OneLakeClient(ILogger<OneLakeClient> logger)
+    public OneLakeClient(ILogger<OneLakeClient> logger, OneLakeConnectorJobData jobData): base(logger, jobData)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _jobData = jobData;
     }
 
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
-    {
-        var casted = CastJobData<OneLakeConnectorJobData>(configuration);
-        var accountName = "onelake";
+    //protected override DataLakeServiceClient GetDataLakeServiceClient()
+    //{
+    //    var casted = CastJobData<OneLakeConnectorJobData>(_jobData);
+    //    var accountName = "onelake";
 
-        var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
+    //    var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
 
-        var dfsUri = $"https://{accountName}.dfs.fabric.microsoft.com";
+    //    var dfsUri = $"https://{accountName}.dfs.fabric.microsoft.com";
 
-        var dataLakeServiceClient = new DataLakeServiceClient(
-            new Uri(dfsUri),
-            sharedKeyCredential);
-        return dataLakeServiceClient;
-    }
+    //    var dataLakeServiceClient = new DataLakeServiceClient(
+    //        new Uri(dfsUri),
+    //        sharedKeyCredential);
+    //    return dataLakeServiceClient;
+    //}
 
     internal async Task LoadToTableAsync(string sourceFileName, string targetTableName, IDataLakeJobData configuration)
     {

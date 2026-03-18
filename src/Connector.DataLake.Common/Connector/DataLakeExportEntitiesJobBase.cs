@@ -82,8 +82,8 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamModel.Id);
             return;
         }
-
-        var fileMetadata = await _dataLakeClient.GetFileMetadata(configuration, outputFileName);
+        var dataLakeClient = await _dataLakeJobDataFactory.CreateDataLakeClient(context, configuration);
+        var fileMetadata = await dataLakeClient.GetFileMetadata(outputFileName);
         if (fileMetadata != null)
         {
             if (args.IsTriggeredFromJobServer)
@@ -112,7 +112,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
 
         var subDirectory = await GetSubDirectory(context, configuration, exportJobData);
-        var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration, subDirectory);
+        var directoryClient = await dataLakeClient.EnsureDataLakeDirectoryExist(configuration, subDirectory);
         await InitializeDirectoryAsync(context, connection, configuration, exportJobData, directoryClient);
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(

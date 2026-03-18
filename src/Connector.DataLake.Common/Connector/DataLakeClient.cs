@@ -1,15 +1,21 @@
-//using System;
-//using System.Collections.Generic;
-//using System.IO;
-//using System.Threading;
-//using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
-//using Azure;
-//using Azure.Storage.Files.DataLake;
+using Azure;
+using Azure.Identity;
+using Azure.Storage;
+using Azure.Storage.Files.DataLake;
 
-//using CluedIn.Core.Connectors;
+using CluedIn.Core.Connectors;
 
-//namespace CluedIn.Connector.DataLake.Common.Connector;
+using Hangfire.Storage;
+
+using Microsoft.Extensions.Logging;
+
+namespace CluedIn.Connector.DataLake.Common.Connector;
 
 //public class ADLSFileClient : IDataLakeFileClient
 //{
@@ -43,6 +49,254 @@
 //        }
 //    }
 //}
+internal abstract class DataLakeClient : IDataLakeClient
+{
+    private readonly ILogger<DataLakeClient> _logger;
+    private readonly DataLakeJobData _dataLakeJobData;
+
+    public DataLakeClient(ILogger<DataLakeClient> logger, DataLakeJobData dataLakeJobData)
+    {
+        _logger = logger;
+        _dataLakeJobData = dataLakeJobData;
+    }
+
+    public async Task DeleteDirectory(DataLakeDirectoryPath directoryPath)
+    {
+        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: true);
+        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: true);
+
+        await directoryClient.DeleteIfExistsAsync();
+    }
+
+    public async Task DeleteFile(DataLakeFilePath filePath)
+    {
+        var directoryClient = await EnsureDataLakeDirectoryExist();
+        var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+
+        var response = await dataLakeFileClient.DeleteAsync();
+
+        if (response.Status != 200)
+        {
+            throw new Exception($"{nameof(IDataLakeFileClient)}.{nameof(IDataLakeFileClient.DeleteAsync)} returned {response.Status}");
+        }
+    }
+
+    public async Task<bool> DirectoryExists(DataLakeDirectoryPath directory)
+    {
+        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: false);
+        if (!await fileSystemClient.ExistsAsync())
+        {
+            return false;
+        }
+
+        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: false);
+        return await directoryClient.ExistsAsync();
+    }
+
+    public async Task<bool> FileExists(DataLakeFilePath filePath)
+    {
+        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: false);
+        if (!await fileSystemClient.ExistsAsync())
+        {
+            return false;
+        }
+
+        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: false);
+        if (!await directoryClient.ExistsAsync())
+        {
+            return false;
+        }
+
+        var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+        return await dataLakeFileClient.ExistsAsync();
+    }
+
+    public Task<DataLakeDirectoryPath> GetBaseDirectoryPath()
+    {
+        return Task.FromResult(new DataLakeDirectoryPath(_dataLakeJobData.RootDirectoryPath));
+    }
+
+    public Task<IDataLakeFileClient> GetFileClient(DataLakeFilePath directoryPath)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task<FileMetadata> GetFileMetadata(DataLakeFilePath filePath)
+    {
+        var fileSystemClient = await GetFileSystemClientAsync( ensureExists: false);
+
+        if (!await fileSystemClient.ExistsAsync())
+        {
+            return null;
+        }
+
+        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: false);
+        if (!await directoryClient.ExistsAsync())
+        {
+            return null;
+        }
+
+        var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+        if (!await dataLakeFileClient.ExistsAsync())
+        {
+            return null;
+        }
+
+        var properties = await dataLakeFileClient.GetPropertiesAsync();
+
+        if (properties == null)
+        {
+            return null;
+        }
+
+        return new FileMetadata(properties.Value.Metadata);
+    }
+
+    public async Task<IEnumerable<DataLakeFilePath>> GetFilesInDirectory(DataLakeDirectoryPath directoryPath)
+    {
+        var serviceClient = GetDataLakeServiceClient(;
+        var fileSystemName = _dataLakeJobData.FileSystemName;
+        var fileSystemClient = serviceClient.GetFileSystemClient(fileSystemName);
+
+        if (!await fileSystemClient.ExistsAsync())
+        {
+            return null;
+        }
+
+        var directory = _dataLakeJobData.RootDirectoryPath;
+        if (!string.IsNullOrEmpty(subDirectory))
+            directory = Path.Combine(directory, subDirectory);
+
+        var directoryClient = fileSystemClient.GetDirectoryClient(directory);
+        if (!await directoryClient.ExistsAsync())
+        {
+            return null;
+        }
+
+        var files = directoryClient.GetPathsAsync().GetAsyncEnumerator();
+        await files.MoveNextAsync();
+        var item = files.Current;
+
+        var result = new List<IConnectorContainer>();
+        while (item != null)
+        {
+            if (!item.IsDirectory.GetValueOrDefault())
+            {
+                result.Add(new DataLakeContainer
+                {
+                    Name = Path.GetFileName(item.Name),
+                    FullyQualifiedName = directoryClient.Uri.ToString() + "/" + Path.GetFileName(item.Name)
+                });
+            }
+
+            if (!await files.MoveNextAsync())
+            {
+                break;
+            }
+
+            item = files.Current;
+        }
+
+        return result;
+    }
+
+    public Task SaveData(DataLakeFilePath filePath, string content, string contentType)
+    {
+        //        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+        //        var directoryClient = await EnsureDataLakeDirectoryExist(configuration);
+
+        //        var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+        //        var options = new DataLakeFileUploadOptions
+        //        {
+        //            HttpHeaders = new PathHttpHeaders { ContentType = contentType }
+        //        };
+
+        //        var response = await dataLakeFileClient.UploadAsync(stream, options);
+
+        //        if (response?.Value == null)
+        //        {
+        //            throw new Exception($"{nameof(IDataLakeFileClient)}.{nameof(IDataLakeFileClient.UploadAsync)} did not return a valid path");
+        //        }
+        throw new NotImplementedException();
+    }
+
+    public async Task VerifyConnection()
+    {
+        await EnsureDataLakeDirectoryExist(string.Empty);
+    }
+
+    protected async Task<DataLakeDirectoryClient> GetDirectoryClientAsync(
+        DataLakeFileSystemClient fileSystemClient,
+        string subDirectory,
+        bool ensureExists)
+    {
+        var directory = _dataLakeJobData.RootDirectoryPath;
+        var directoryClient = fileSystemClient.GetDirectoryClient(directory);
+        if (string.IsNullOrWhiteSpace(subDirectory))
+        {
+            return directoryClient;
+        }
+
+        directoryClient = directoryClient.GetSubDirectoryClient(subDirectory);
+
+        if (ensureExists && !await directoryClient.ExistsAsync())
+        {
+            directoryClient = await fileSystemClient.CreateDirectoryAsync(directoryClient.Path);
+        }
+
+        return directoryClient;
+    }
+
+    protected async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(bool ensureExists)
+    {
+        var dataLakeServiceClient = GetDataLakeServiceClient();
+        var fileSystemName = _dataLakeJobData.FileSystemName;
+        var dataLakeFileSystemClient = dataLakeServiceClient.GetFileSystemClient(fileSystemName);
+        if (ensureExists && !await dataLakeFileSystemClient.ExistsAsync())
+        {
+            dataLakeFileSystemClient = await dataLakeServiceClient.CreateFileSystemAsync(fileSystemName);
+        }
+
+        return dataLakeFileSystemClient;
+    }
+
+    private async Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(string subDirectory)
+    {
+        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: true);
+        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: true);
+
+        return directoryClient;
+    }
+
+    protected virtual DataLakeServiceClient GetDataLakeServiceClient()
+    {
+        switch (_dataLakeJobData)
+        {
+            case IAzureSharedKeyCredentialJobData sharedKeyCredential:
+                return new DataLakeServiceClient(
+                            new Uri(sharedKeyCredential.StorageUri),
+                            new StorageSharedKeyCredential(sharedKeyCredential.AccountName, sharedKeyCredential.AccountKey));
+            case IAzureServicePrincipalCredentialJobData servicePrincipalCredential:
+                {
+                    var dataLakeServiceClient = new DataLakeServiceClient(
+                        new Uri(servicePrincipalCredential.StorageUri),
+                        new ClientSecretCredential(servicePrincipalCredential.TenantId, servicePrincipalCredential.ClientId, servicePrincipalCredential.ClientSecret));
+                    return dataLakeServiceClient;
+                }
+            default:
+                throw new NotSupportedException($"Unable to create datalake service client from type {_dataLakeJobData.GetType()}");
+        }
+    }
+    protected static TJobData CastJobData<TJobData>(IDataLakeJobData jobData) where TJobData : class, IDataLakeJobData
+    {
+        if (jobData is not TJobData castedJobData)
+        {
+            throw new ApplicationException($"Provided job data is not of expected type '{typeof(TJobData)}'. It is '{jobData.GetType()}'.");
+        }
+
+        return castedJobData;
+    }
+}
 
 //public abstract class DataLakeClient : IDataLakeClient
 //{
