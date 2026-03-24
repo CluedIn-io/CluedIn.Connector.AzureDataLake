@@ -274,3 +274,4 @@ coverage.json
 .artifacts/
 .DS_Store
 /.mfractor
+/integrationtests.runsettings
