@@ -1,7 +1,8 @@
 using System;
-using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+
+using Amazon.S3;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
@@ -66,11 +67,26 @@ public class AmazonS3Connector : DataLakeConnector
         {
             return await base.VerifyDataLakeConnection(jobData);
         }
+        catch (AmazonS3Exception s3Ex) when (IsAuthenticationError(s3Ex))
+        {
+            _logger.LogWarning(s3Ex, "S3 authentication error when verifying connection.");
+            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
+        }
+        catch (AmazonS3Exception s3Ex)
+        {
+            _logger.LogWarning(s3Ex, "S3 error when verifying connection.");
+            return CreateFailedConnectionVerification($"S3 error: {s3Ex.Message}");
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error when verifying S3 connection.");
-            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
+            return CreateFailedConnectionVerification($"Failed to connect to S3: {ex.Message}");
         }
+    }
+
+    private static bool IsAuthenticationError(AmazonS3Exception ex)
+    {
+        return ex.ErrorCode is "InvalidAccessKeyId" or "SignatureDoesNotMatch";
     }
 
     private static bool IsValidBucketName(string bucketName)
