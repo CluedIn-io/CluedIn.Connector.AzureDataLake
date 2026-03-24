@@ -9,7 +9,7 @@ internal class AmazonS3ExportEntitiesJob : DataLakeExportEntitiesJobBase
     public AmazonS3ExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        AmazonS3Client storageClient,
+        AmazonS3StorageClient storageClient,
         IAmazonS3Constants dataLakeConstants,
         AmazonS3JobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)

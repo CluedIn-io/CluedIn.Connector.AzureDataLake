@@ -24,7 +24,7 @@ public class AmazonS3Connector : DataLakeConnector
 
     public AmazonS3Connector(
         ILogger<AmazonS3Connector> logger,
-        AmazonS3Client client,
+        AmazonS3StorageClient client,
         IAmazonS3Constants constants,
         AmazonS3JobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)

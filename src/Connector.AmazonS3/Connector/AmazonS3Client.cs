@@ -14,21 +14,20 @@ using CluedIn.Core.Connectors;
 
 namespace CluedIn.Connector.AmazonS3.Connector;
 
-public class AmazonS3Client : IExternalFileStorageClient
+public class AmazonS3StorageClient : IExternalFileStorageClient
 {
     private IAmazonS3 GetS3Client(IDataLakeJobData configuration)
     {
         var casted = CastJobData(configuration);
         var region = RegionEndpoint.GetBySystemName(casted.Region);
-        return new AmazonS3Client(casted.AccessKey, casted.SecretKey, region);
+        return new Amazon.S3.AmazonS3Client(casted.AccessKey, casted.SecretKey, region);
     }
 
     private static AmazonS3ConnectorJobData CastJobData(IDataLakeJobData jobData)
     {
         if (jobData is not AmazonS3ConnectorJobData castedJobData)
         {
-            throw new ApplicationException($"Provided job data is not of expected type '{typeof(AmazonS3ConnectorJobData)}'. It is '{jobData.GetType()}'.");
-        }
+            throw new ApplicationException($"Provided job data is not of expected type '{typeof(AmazonS3ConnectorJobData)}'. It is '{jobData.GetType()}'.");        }
         return castedJobData;
     }
 
@@ -60,18 +59,22 @@ public class AmazonS3Client : IExternalFileStorageClient
     public async Task<IStorageDirectoryClient> EnsureDirectoryExist(IDataLakeJobData configuration, string subDirectory)
     {
         // S3 doesn't require directory creation - directories are virtual.
-        // We just verify the bucket exists.
+        // We just verify the bucket is accessible.
         var s3Client = GetS3Client(configuration);
         var casted = CastJobData(configuration);
 
+        // Verify bucket accessibility by listing zero objects
         try
         {
-            await s3Client.EnsureBucketExistsAsync(casted.BucketName);
+            await s3Client.ListObjectsV2Async(new ListObjectsV2Request
+            {
+                BucketName = casted.BucketName,
+                MaxKeys = 0,
+            });
         }
-        catch
+        catch (AmazonS3Exception)
         {
-            // Bucket might already exist or we might not have permission to create it.
-            // The actual operations will fail if the bucket truly doesn't exist.
+            throw;
         }
 
         var prefix = GetPrefix(configuration, subDirectory);
