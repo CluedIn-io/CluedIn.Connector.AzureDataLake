@@ -5,7 +5,7 @@ using CluedIn.Connector.DataLake.Common;
 
 namespace CluedIn.Connector.AzureDataLake;
 
-internal class AzureDataLakeConnectorJobData : DataLakeJobData
+internal class AzureDataLakeConnectorJobData : DataLakeJobData, IAzureSharedKeyCredentialJobData
 {
     public AzureDataLakeConnectorJobData(
         IDictionary<string, object> configurations,
@@ -20,6 +20,8 @@ internal class AzureDataLakeConnectorJobData : DataLakeJobData
 
     public override string FileSystemName => GetConfigurationValue(AzureDataLakeConstants.FileSystemName) as string;
     public override string RootDirectoryPath => DirectoryName;
+
+    public string StorageUri => $"https://{AccountName}.dfs.core.windows.net";
 
     protected override void AddToHashCode(HashCode hash)
     {

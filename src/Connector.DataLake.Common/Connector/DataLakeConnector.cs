@@ -33,6 +33,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private static readonly string _invalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", _invalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
         private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<DataLakeConnector> _logger;
+        private readonly ApplicationContext _applicationContext;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
         private readonly PartitionedBuffer<Partition, string> _buffer;
@@ -61,12 +62,14 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
+            ApplicationContext applicationContext,
             IDataLakeConstants constants,
             IDataLakeJobDataFactory dataLakeJobDataFactory,
             IDateTimeOffsetProvider dateTimeOffsetProvider)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
+            _applicationContext = applicationContext;
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
@@ -529,7 +532,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
                 var json = JsonConvert.SerializeObject(data);
 
-                await _buffer.Add(configurations, json);
+                await _buffer.Add(new (executionContext.Organization.Id, configurations), json);
             }
 
             return SaveResult.Success;
@@ -732,7 +735,8 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-            var client = await _dataLakeJobDataFactory.CreateDataLakeClient(configuration);
+            await using var executionContext = _applicationContext.CreateExecutionContext(organizationId);
+            var client = await _dataLakeJobDataFactory.CreateDataLakeClient(executionContext, configuration);
             var baseDirectory = await client.GetBaseDirectoryPath();
             await client.SaveData(new DataLakeFilePath(fileName, baseDirectory), content, JsonMimeType);
         }

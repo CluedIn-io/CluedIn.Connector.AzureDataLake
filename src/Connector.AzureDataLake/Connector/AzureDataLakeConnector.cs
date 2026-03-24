@@ -25,17 +25,18 @@ public class AzureDataLakeConnector : DataLakeConnector
 
     public AzureDataLakeConnector(
         ILogger<AzureDataLakeConnector> logger,
+        ApplicationContext applicationContext,
         IAzureDataLakeConstants constants,
         AzureDataLakeJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected override Type ExportJobType => typeof(AzureDataLakeExportEntitiesJob);
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData)
     {
         if (jobData is not AzureDataLakeConnectorJobData casted)
         {
@@ -64,7 +65,7 @@ public class AzureDataLakeConnector : DataLakeConnector
 
         try
         {
-            return await base.VerifyDataLakeConnection(jobData);
+            return await base.VerifyDataLakeConnection(executionContext, jobData);
         }
         catch (Exception ex)
         {

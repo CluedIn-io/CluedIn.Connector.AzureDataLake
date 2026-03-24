@@ -83,7 +83,10 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return;
         }
         var dataLakeClient = await _dataLakeJobDataFactory.CreateDataLakeClient(context, configuration);
-        var fileMetadata = await dataLakeClient.GetFileMetadata(outputFileName);
+        var baseDirectoryPath = await dataLakeClient.GetBaseDirectoryPath();
+        var outputDirectoryName = await GetOutputDirectoryNameAsync(context, configuration, exportJobData);
+        var outputDirectory = baseDirectoryPath.GetSubDirectoryPath(outputDirectoryName);
+        var fileMetadata = await dataLakeClient.GetFileMetadata(baseDirectoryPath.GetFilePath(outputFileName));
         if (fileMetadata != null)
         {
             if (args.IsTriggeredFromJobServer)
@@ -111,9 +114,8 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             }
         }
 
-        var subDirectory = await GetSubDirectory(context, configuration, exportJobData);
-        var directoryClient = await dataLakeClient.EnsureDataLakeDirectoryExist(configuration, subDirectory);
-        await InitializeDirectoryAsync(context, connection, configuration, exportJobData, directoryClient);
+        await InitializeBaseDirectoryAsync(context, connection, configuration, exportJobData, dataLakeClient);
+        await InitializeOutputDirectoryAsync(context, connection, configuration, exportJobData, dataLakeClient);
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
@@ -159,10 +161,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             [DataTimeKey] = asOfTime,
         });
 
+        var outputFilePath = baseDirectoryPath.GetFilePath(outputFileName);
         IDataLakeFileClient temporaryFileClient;
+        var temporaryFilePath = baseDirectoryPath.GetFilePath(temporaryOutputFileName);
         try
         {
-            temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
+            temporaryFileClient = await dataLakeClient.GetFileClient(temporaryFilePath);
         }
         catch
         {
@@ -187,12 +191,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 temporaryOutputFileName,
                 streamId,
                 asOfTime);
-            await deleteFileIfExistsAsync(temporaryOutputFileName);
+            await deleteFileIfExistsAsync(temporaryFilePath);
         }
         else
         {
             await setFilePropertiesAsync();
-            await deleteFileIfExistsAsync(outputFileName);
+            await deleteFileIfExistsAsync(outputFilePath);
             await renameToTargetFileAsync();
             await PostExportAsync(context, exportJobData);
         }
@@ -264,14 +268,14 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 asOfTime);
         }
 
-        async Task deleteFileIfExistsAsync(string file)
+        async Task deleteFileIfExistsAsync(DataLakeFilePath filePath)
         {
             context.Log.LogDebug(
                 "Deleting file '{FileName}' for StreamId {StreamId} and DataTime {DataTime}.",
-                file,
+                filePath.FullPath,
                 streamId,
                 asOfTime);
-            var targetFileClient = directoryClient.GetFileClient(file);
+            var targetFileClient = await dataLakeClient.GetFileClient(filePath);
             await targetFileClient.DeleteIfExistsAsync();
         }
     }
@@ -303,20 +307,34 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return Task.CompletedTask;
     }
 
-    private protected virtual Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
+    private protected virtual Task<string> GetOutputDirectoryNameAsync(
+        ExecutionContext executionContext,
+        IDataLakeJobData configuration,
+        ExportJobDataBase exportJobData)
     {
         return Task.FromResult(string.Empty);
     }
 
-    private protected virtual Task InitializeDirectoryAsync(
+    private protected virtual Task InitializeBaseDirectoryAsync(
         ExecutionContext context,
         SqlConnection connection,
         IDataLakeJobData configuration,
         ExportJobData exportJobData,
-        IDataLakeDirectoryClient client)
+        IDataLakeClient client)
     {
         return Task.CompletedTask;
     }
+
+    private protected virtual Task InitializeOutputDirectoryAsync(
+        ExecutionContext context,
+        SqlConnection connection,
+        IDataLakeJobData configuration,
+        ExportJobData exportJobData,
+        IDataLakeClient client)
+    {
+        return Task.CompletedTask;
+    }
+
 
     private static string GetTriggerSource(IDataLakeJobArgs args)
     {

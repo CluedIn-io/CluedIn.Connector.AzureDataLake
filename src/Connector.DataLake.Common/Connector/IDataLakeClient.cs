@@ -39,5 +39,12 @@ public interface IDataLakeClient
 }
 
 public record FileMetadata(IDictionary<string, string> Metadata);
-public record DataLakeDirectoryPath(string Path);
-public record DataLakeFilePath(string Name, DataLakeDirectoryPath Directory);
+public record DataLakeDirectoryPath(string Path)
+{
+    public DataLakeFilePath GetFilePath(string fileName) => new DataLakeFilePath(fileName, this);
+    public DataLakeDirectoryPath GetSubDirectoryPath(string directoryName) => new DataLakeDirectoryPath(this.Path + "/" + directoryName); //TODO: Path combine?
+}
+public record DataLakeFilePath(string Name, DataLakeDirectoryPath DirectoryPath)
+{
+    public string FullPath => $"{DirectoryPath.Path}/{Name}";
+}

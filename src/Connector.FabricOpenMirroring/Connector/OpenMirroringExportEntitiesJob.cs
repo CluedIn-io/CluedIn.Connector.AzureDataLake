@@ -67,74 +67,15 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
     }
 
     private protected override bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => false;
-
-    private protected override async Task InitializeDirectoryAsync(
+    private protected override async Task InitializeBaseDirectoryAsync(
         ExecutionContext context,
         SqlConnection connection,
         IDataLakeJobData configuration,
         ExportJobData exportJobData,
         IDataLakeClient client,
-        DataLakeDirectoryPath dataLakeDirectoryPath)
+        DataLakeDirectoryPath baseDirectoryPath)
     {
-        await EnsureMetadataJsonExists(directoryClient);
         await CreatePartnerEventsJsonIfNotExists();
-
-        async Task EnsureMetadataJsonExists(IDataLakeDirectoryClient directoryClient)
-        {
-            if (DataLakeConstants.OutputFormats.Csv.Equals(configuration.OutputFormat, StringComparison.OrdinalIgnoreCase))
-            {
-                await EnsureCsvMetadataJsonExists(directoryClient);
-            }
-            else
-            {
-                await EnsureGenericMetadataJsonExists(directoryClient);
-            }
-        }
-
-        async Task EnsureCsvMetadataJsonExists(IDataLakeDirectoryClient directoryClient)
-        {
-            var fileClient = directoryClient.GetFileClient("_metadata.json");
-
-            if (IsInitialExport || !await fileClient.ExistsAsync())
-            {
-                await using var outputStream = await fileClient.OpenWriteAsync(true);
-                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
-                    $$"""
-                    {
-                       "keyColumns": ["Id"],
-                       "fileExtension": "csv",
-                       "fileFormat": "csv",
-                       "fileFormatTypeProperties": {
-                           "firstRowAsHeader": true,
-                           "rowSeparator": "\r\n",
-                           "columnSeparator": ",",
-                           "quoteCharacter": "\"",
-                           "escapeCharacter": "\"",
-                           "nullValue": "",
-                           "encoding": "UTF-8"
-                       }
-                    }
-                    """));
-                await outputStream.FlushAsync();
-            }
-        }
-
-        async Task EnsureGenericMetadataJsonExists(IDataLakeDirectoryClient directoryClient)
-        {
-            var fileClient = directoryClient.GetFileClient("_metadata.json");
-
-            if (IsInitialExport || !await fileClient.ExistsAsync())
-            {
-                await using var outputStream = await fileClient.OpenWriteAsync(true);
-                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
-                    $$"""
-                {
-                   "keyColumns": ["Id"]
-                }
-                """));
-                await outputStream.FlushAsync();
-            }
-        }
 
         async Task CreatePartnerEventsJsonIfNotExists()
         {
@@ -171,6 +112,73 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
             }
         }
     }
+    private protected override async Task InitializeOutputDirectoryAsync(
+        ExecutionContext context,
+        SqlConnection connection,
+        IDataLakeJobData configuration,
+        ExportJobData exportJobData,
+        IDataLakeClient client,
+        DataLakeDirectoryPath outputDirectoryPath)
+    {
+        await EnsureMetadataJsonExists();
+
+        async Task EnsureMetadataJsonExists()
+        {
+            if (DataLakeConstants.OutputFormats.Csv.Equals(configuration.OutputFormat, StringComparison.OrdinalIgnoreCase))
+            {
+                await EnsureCsvMetadataJsonExists();
+            }
+            else
+            {
+                await EnsureGenericMetadataJsonExists();
+            }
+        }
+
+        async Task EnsureCsvMetadataJsonExists()
+        {
+            var fileClient = await client.GetFileClient(outputDirectoryPath.GetFilePath("_metadata.json"));
+
+            if (IsInitialExport || !await fileClient.ExistsAsync())
+            {
+                await using var outputStream = await fileClient.OpenWriteAsync(true);
+                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
+                    $$"""
+                    {
+                       "keyColumns": ["Id"],
+                       "fileExtension": "csv",
+                       "fileFormat": "csv",
+                       "fileFormatTypeProperties": {
+                           "firstRowAsHeader": true,
+                           "rowSeparator": "\r\n",
+                           "columnSeparator": ",",
+                           "quoteCharacter": "\"",
+                           "escapeCharacter": "\"",
+                           "nullValue": "",
+                           "encoding": "UTF-8"
+                       }
+                    }
+                    """));
+                await outputStream.FlushAsync();
+            }
+        }
+
+        async Task EnsureGenericMetadataJsonExists()
+        {
+            var fileClient = await client.GetFileClient(outputDirectoryPath.GetFilePath("_metadata.json"));
+
+            if (IsInitialExport || !await fileClient.ExistsAsync())
+            {
+                await using var outputStream = await fileClient.OpenWriteAsync(true);
+                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
+                    $$"""
+                {
+                   "keyColumns": ["Id"]
+                }
+                """));
+                await outputStream.FlushAsync();
+            }
+        }
+    }
 
     private protected override async Task<List<string>> GetFieldNamesAsync(
         ExecutionContext context,
@@ -196,7 +204,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private protected override async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
-        var subDirectory = await GetSubDirectory(context, configuration, exportJobData);
+        var subDirectory = await GetOutputDirectoryNameAsync(context, configuration, exportJobData);
         if (!await _dataLakeClient.FileInPathExists(configuration, "_metadata.json", subDirectory))
         {
             return null;
@@ -205,7 +213,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
         return await base.GetLastExport(context, connection, configuration, exportJobData);
     }
 
-    private protected override Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
+    private protected override Task<string> GetOutputDirectoryNameAsync(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
         return OutputDirectoryHelper.GetSubDirectory(
             executionContext,

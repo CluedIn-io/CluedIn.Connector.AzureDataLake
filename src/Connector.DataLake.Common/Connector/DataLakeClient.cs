@@ -62,53 +62,29 @@ internal abstract class DataLakeClient : IDataLakeClient
 
     public async Task DeleteDirectory(DataLakeDirectoryPath directoryPath)
     {
-        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: true);
-        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: true);
+        var directoryClient = await GetDirectoryClientAsync(directoryPath, createIfNotExists: false);
 
-        await directoryClient.DeleteIfExistsAsync();
+        await directoryClient?.DeleteIfExistsAsync();
     }
 
     public async Task DeleteFile(DataLakeFilePath filePath)
     {
-        var directoryClient = await EnsureDataLakeDirectoryExist();
-        var dataLakeFileClient = directoryClient.GetFileClient(fileName);
+        var fileClient = await GetFileClientAsync(filePath, createDirectoryIfNotExists: false);
 
-        var response = await dataLakeFileClient.DeleteAsync();
-
-        if (response.Status != 200)
-        {
-            throw new Exception($"{nameof(IDataLakeFileClient)}.{nameof(IDataLakeFileClient.DeleteAsync)} returned {response.Status}");
-        }
+        await fileClient.DeleteIfExistsAsync();
     }
 
-    public async Task<bool> DirectoryExists(DataLakeDirectoryPath directory)
+    public async Task<bool> DirectoryExists(DataLakeDirectoryPath directoryPath)
     {
-        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: false);
-        if (!await fileSystemClient.ExistsAsync())
-        {
-            return false;
-        }
+        var directoryClient = await GetDirectoryClientAsync(directoryPath, createIfNotExists: false);
 
-        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: false);
-        return await directoryClient.ExistsAsync();
+        return directoryClient != null;
     }
 
     public async Task<bool> FileExists(DataLakeFilePath filePath)
     {
-        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: false);
-        if (!await fileSystemClient.ExistsAsync())
-        {
-            return false;
-        }
-
-        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: false);
-        if (!await directoryClient.ExistsAsync())
-        {
-            return false;
-        }
-
-        var dataLakeFileClient = directoryClient.GetFileClient(fileName);
-        return await dataLakeFileClient.ExistsAsync();
+        var fileClient = await GetFileClientAsync(filePath, createDirectoryIfNotExists: false);
+        return await fileClient.ExistsAsync();
     }
 
     public Task<DataLakeDirectoryPath> GetBaseDirectoryPath()
@@ -123,26 +99,14 @@ internal abstract class DataLakeClient : IDataLakeClient
 
     public async Task<FileMetadata> GetFileMetadata(DataLakeFilePath filePath)
     {
-        var fileSystemClient = await GetFileSystemClientAsync( ensureExists: false);
+        var fileClient = await GetFileClientAsync(filePath, createDirectoryIfNotExists: false);
 
-        if (!await fileSystemClient.ExistsAsync())
+        if (!await fileClient.ExistsAsync())
         {
             return null;
         }
 
-        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: false);
-        if (!await directoryClient.ExistsAsync())
-        {
-            return null;
-        }
-
-        var dataLakeFileClient = directoryClient.GetFileClient(fileName);
-        if (!await dataLakeFileClient.ExistsAsync())
-        {
-            return null;
-        }
-
-        var properties = await dataLakeFileClient.GetPropertiesAsync();
+        var properties = await fileClient.GetPropertiesAsync();
 
         if (properties == null)
         {
@@ -154,21 +118,9 @@ internal abstract class DataLakeClient : IDataLakeClient
 
     public async Task<IEnumerable<DataLakeFilePath>> GetFilesInDirectory(DataLakeDirectoryPath directoryPath)
     {
-        var serviceClient = GetDataLakeServiceClient(;
-        var fileSystemName = _dataLakeJobData.FileSystemName;
-        var fileSystemClient = serviceClient.GetFileSystemClient(fileSystemName);
+        var directoryClient = await GetDirectoryClientAsync(directoryPath, createIfNotExists: false);
 
-        if (!await fileSystemClient.ExistsAsync())
-        {
-            return null;
-        }
-
-        var directory = _dataLakeJobData.RootDirectoryPath;
-        if (!string.IsNullOrEmpty(subDirectory))
-            directory = Path.Combine(directory, subDirectory);
-
-        var directoryClient = fileSystemClient.GetDirectoryClient(directory);
-        if (!await directoryClient.ExistsAsync())
+        if (directoryClient == null)
         {
             return null;
         }
@@ -222,50 +174,107 @@ internal abstract class DataLakeClient : IDataLakeClient
 
     public async Task VerifyConnection()
     {
-        await EnsureDataLakeDirectoryExist(string.Empty);
+        await EnsureDataLakeDirectoryExist(await GetBaseDirectoryPath());
+    }
+
+    protected async Task<DataLakeFileClient> GetFileClientAsync(DataLakeFilePath filePath, bool createDirectoryIfNotExists)
+    {
+        var directoryClient = await GetDirectoryClientAsync(filePath.DirectoryPath, createIfNotExists: createDirectoryIfNotExists);
+
+        if (directoryClient == null)
+        {
+            if (createDirectoryIfNotExists)
+            {
+                throw new ApplicationException("Unable to access files in the directory because the directory does not exist.");
+            }
+
+            return null;
+        }
+
+        return directoryClient.GetFileClient(filePath.Name);
+    }
+
+    protected async Task<DataLakeDirectoryClient> GetDirectoryClientAsync(
+        DataLakeDirectoryPath directoryPath,
+        bool createIfNotExists)
+    {
+        var filesystemClient = await GetFileSystemClientAsync(createIfNotExists);
+        if (filesystemClient == null)
+        {
+            if (createIfNotExists)
+            {
+                throw new ApplicationException("Unable to access files in the directory because the file system does not exist.");
+            }
+
+            return null;
+        }
+
+        var directoryClient = await GetDirectoryClientAsync(filesystemClient, directoryPath, createIfNotExists);
+        if (directoryClient == null)
+        {
+            if (createIfNotExists)
+            {
+                throw new ApplicationException("Unable to access files in the directory because the directory does not exist.");
+            }
+
+            return null;
+        }
+
+        return directoryClient;
     }
 
     protected async Task<DataLakeDirectoryClient> GetDirectoryClientAsync(
         DataLakeFileSystemClient fileSystemClient,
-        string subDirectory,
-        bool ensureExists)
+        DataLakeDirectoryPath directoryPath,
+        bool createIfNotExists)
     {
-        var directory = _dataLakeJobData.RootDirectoryPath;
-        var directoryClient = fileSystemClient.GetDirectoryClient(directory);
-        if (string.IsNullOrWhiteSpace(subDirectory))
+        var targetPath = directoryPath.Path;
+        var rootDirectoryPath = _dataLakeJobData.RootDirectoryPath;
+
+        if (!rootDirectoryPath.StartsWith(targetPath))
         {
-            return directoryClient;
+            throw new ApplicationException("Unable to access files in the directory because the provided directory path is not under the root directory path specified in the job data.");
         }
 
-        directoryClient = directoryClient.GetSubDirectoryClient(subDirectory);
+        var directoryClient = fileSystemClient.GetDirectoryClient(targetPath);
 
-        if (ensureExists && !await directoryClient.ExistsAsync())
+        var exists = await directoryClient.ExistsAsync();
+        if (!exists)
         {
-            directoryClient = await fileSystemClient.CreateDirectoryAsync(directoryClient.Path);
+            if (createIfNotExists)
+            {
+                return await fileSystemClient.CreateDirectoryAsync(directoryClient.Path);
+            }
+
+            return null;
         }
 
         return directoryClient;
     }
 
-    protected async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(bool ensureExists)
+    protected async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(bool createIfNotExists)
     {
         var dataLakeServiceClient = GetDataLakeServiceClient();
         var fileSystemName = _dataLakeJobData.FileSystemName;
-        var dataLakeFileSystemClient = dataLakeServiceClient.GetFileSystemClient(fileSystemName);
-        if (ensureExists && !await dataLakeFileSystemClient.ExistsAsync())
+        var fileSystemClient = dataLakeServiceClient.GetFileSystemClient(fileSystemName);
+
+        var exists = await fileSystemClient.ExistsAsync();
+        if (!exists)
         {
-            dataLakeFileSystemClient = await dataLakeServiceClient.CreateFileSystemAsync(fileSystemName);
+            if (createIfNotExists)
+            {
+                return await dataLakeServiceClient.CreateFileSystemAsync(fileSystemName);
+            }
+
+            return null;
         }
 
-        return dataLakeFileSystemClient;
+        return fileSystemClient;
     }
 
-    private async Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(string subDirectory)
+    private async Task<DataLakeDirectoryClient> EnsureDataLakeDirectoryExist(DataLakeDirectoryPath directoryPath)
     {
-        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: true);
-        var directoryClient = await GetDirectoryClientAsync(fileSystemClient, subDirectory, ensureExists: true);
-
-        return directoryClient;
+        return await GetDirectoryClientAsync(directoryPath, createIfNotExists: true);
     }
 
     protected virtual DataLakeServiceClient GetDataLakeServiceClient()

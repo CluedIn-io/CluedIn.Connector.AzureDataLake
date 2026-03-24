@@ -49,23 +49,8 @@ internal class OpenMirroringClient : DataLakeClient
 
     public async Task<bool> HasValidWorkspaceAsync()
     {
-        var fileSystemClient = await GetFileSystemClientAsync(ensureExists: false);
-        return await fileSystemClient.ExistsAsync();
-    }
-
-    protected override DataLakeServiceClient GetDataLakeServiceClient()
-    {
-        var casted = CastJobData<OpenMirroringConnectorJobData>(_jobData);
-        var accountName = "onelake";
-
-        var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
-
-        var dfsUri = $"https://{accountName}.dfs.fabric.microsoft.com";
-
-        var dataLakeServiceClient = new DataLakeServiceClient(
-            new Uri(dfsUri),
-            sharedKeyCredential);
-        return dataLakeServiceClient;
+        var fileSystemClient = await GetFileSystemClientAsync(createIfNotExists: false);
+        return fileSystemClient != null;
     }
 
     public virtual async Task UpdateOrCreateMirroredDatabaseAsync(IDataLakeJobData dataLakeJobData, bool isEnabled)
