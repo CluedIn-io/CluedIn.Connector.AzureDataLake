@@ -31,7 +31,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private static readonly string _invalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", _invalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
         private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<DataLakeConnector> _logger;
-        private readonly IDataLakeClient _client;
+        private readonly IExternalStorageClient _storageClient;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
@@ -58,18 +58,18 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
 
-        protected IDataLakeClient Client => _client;
+        protected IExternalStorageClient StorageClient => _storageClient;
 
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
-            IDataLakeClient client,
+            IExternalStorageClient storageClient,
             IDataLakeConstants constants,
             IDataLakeJobDataFactory dataLakeJobDataFactory,
             IDateTimeOffsetProvider dateTimeOffsetProvider)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
-            _client = client;
+            _storageClient = storageClient;
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
 
@@ -439,14 +439,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
-                    await Client.DeleteFile(configurations, filePathAndName);
+                    await StorageClient.DeleteFile(configurations, filePathAndName);
                 }
                 else
                 {
                     var json = JsonConvert.SerializeObject(data, _immediateOutputSerializerSettings);
 
-                    await Client.SaveData(configurations, json, filePathAndName, JsonMimeType);
-
+                    await StorageClient.SaveData(configurations, json, filePathAndName, JsonMimeType);
                 }
             }
             else
@@ -552,7 +551,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
         {
-            await Client.EnsureDataLakeDirectoryExist(jobData);
+            await StorageClient.EnsureDirectoryExists(jobData);
             return SuccessfulConnectionVerification;
         }
 
@@ -640,7 +639,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-            Client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
+            StorageClient.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
         }
 
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
@@ -661,7 +660,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, "");
 
-            return await _client.GetFilesInDirectory(jobData);
+            // This will need to be adapted to return IConnectorContainer from ListFiles
+            var files = await StorageClient.ListFiles(jobData);
+            return files.Select(f => new DataLakeContainer { Name = f, FullyQualifiedName = f }).ToList();
         }
 
         public override Task EmptyContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)

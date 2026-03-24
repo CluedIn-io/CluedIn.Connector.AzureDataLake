@@ -42,13 +42,6 @@ public class OpenMirroringConnector : DataLakeConnector
 
     protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
     {
-        // There are three places where verification can be called
-        // 1. Health check
-        // 2. Export Target creation form
-        // 3. Export Target details/update form
-        // When ShouldCreateMirroredDatabase is set to true AND mirrored database is set, ideally we should NOT verify the connection during creation
-        // because it certainly wouldn't have existed
-        // But during update/edit, we should verify it. However, there is no way to distinguish these two cases
         if (jobData is not OpenMirroringConnectorJobData casted)
         {
             throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(OpenMirroringConnectorJobData)}.");
@@ -73,7 +66,7 @@ public class OpenMirroringConnector : DataLakeConnector
 
         try
         {
-            if (await Client.DirectoryExists(jobData))
+            if (await StorageClient.DirectoryExists(jobData))
             {
                 return SuccessfulConnectionVerification;
             }
@@ -110,7 +103,7 @@ public class OpenMirroringConnector : DataLakeConnector
 
         var jobData = await DataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
         var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, jobData, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), jobData.OutputFormat);
-        await Client.DeleteDirectory(jobData, subDirectory);
+        await StorageClient.DeleteDirectory(jobData, subDirectory);
         await base.ArchiveContainer(executionContext, streamModel);
     }
 

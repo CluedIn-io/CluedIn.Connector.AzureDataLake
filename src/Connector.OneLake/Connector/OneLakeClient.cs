@@ -1,23 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
-
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
-
-
+using Microsoft.Extensions.Logging;
 using Azure.Core;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Collections.Generic;
 using System.Net.Http.Headers;
-using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
-public class OneLakeClient : DataLakeClient
+public class OneLakeClient : DataLakeClient, IExternalStorageClient
 {
     public ILogger<OneLakeClient> Logger { get; }
 
@@ -39,6 +35,51 @@ public class OneLakeClient : DataLakeClient
             new Uri(dfsUri),
             sharedKeyCredential);
         return dataLakeServiceClient;
+    }
+
+    // IExternalStorageClient implementation
+    public async Task EnsureDirectoryExists(object configuration, string subDirectory = null)
+    {
+        await EnsureDataLakeDirectoryExist((IDataLakeJobData)configuration, subDirectory);
+    }
+
+    public async Task SaveData(object configuration, string content, string fileName, string contentType)
+    {
+        await SaveData((IDataLakeJobData)configuration, content, fileName, contentType);
+    }
+
+    public async Task DeleteDirectory(object configuration, string subDirectory)
+    {
+        await DeleteDirectory((IDataLakeJobData)configuration, subDirectory);
+    }
+
+    public async Task DeleteFile(object configuration, string fileName)
+    {
+        await DeleteFile((IDataLakeJobData)configuration, fileName);
+    }
+
+    public async Task<bool> FileExists(object configuration, string fileName, string subDirectory = null)
+    {
+        return await FileInPathExists((IDataLakeJobData)configuration, fileName, subDirectory);
+    }
+
+    public async Task<bool> DirectoryExists(object configuration, string subDirectory = null)
+    {
+        return await DirectoryExists((IDataLakeJobData)configuration, subDirectory);
+    }
+
+    public async Task<IEnumerable<string>> ListFiles(object configuration, string subDirectory = null)
+    {
+        var containers = await GetFilesInDirectory((IDataLakeJobData)configuration, subDirectory);
+        var result = new List<string>();
+        if (containers != null)
+        {
+            foreach (var c in containers)
+            {
+                result.Add(c.Name);
+            }
+        }
+        return result;
     }
 
     internal async Task LoadToTableAsync(string sourceFileName, string targetTableName, IDataLakeJobData configuration)
