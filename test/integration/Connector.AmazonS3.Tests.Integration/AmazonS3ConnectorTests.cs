@@ -40,7 +40,7 @@ namespace CluedIn.Connector.AmazonS3.Tests.Integration;
 /// <summary>
 /// Integration tests for the Amazon S3 connector.
 /// Requires environment variables: S3_ACCESSKEY, S3_SECRETKEY, S3_REGION, S3_BUCKETNAME
-/// Tests will be skipped if environment variables are not set.
+/// Tests will fail if environment variables are not set.
 /// </summary>
 public class AmazonS3ConnectorTests : IAsyncLifetime
 {
@@ -79,7 +79,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     public async Task VerifyConnection_WhenValid_ReturnsSuccess()
     {
         var (connector, context, configuration, jobData) = SetupConnector();
-        if (connector == null) return; // skip when env vars not set
 
         var result = await connector.VerifyConnection(context, configuration);
 
@@ -94,7 +93,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     public async Task VerifyConnection_WhenInvalidAccessKey_ReturnError(string accessKey)
     {
         var (connector, context, configuration, _) = SetupConnector();
-        if (connector == null) return;
 
         configuration[AmazonS3Constants.AccessKey] = accessKey;
         var jobData = new AmazonS3ConnectorJobData(configuration);
@@ -114,7 +112,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     public async Task VerifyConnection_WhenInvalidSecretKey_ReturnError(string secretKey)
     {
         var (connector, context, configuration, _) = SetupConnector();
-        if (connector == null) return;
 
         configuration[AmazonS3Constants.SecretKey] = secretKey;
         var jobData = new AmazonS3ConnectorJobData(configuration);
@@ -137,7 +134,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     public async Task VerifyConnection_WhenInvalidBucketName_ReturnError(string bucketName)
     {
         var (connector, context, configuration, _) = SetupConnector();
-        if (connector == null) return;
 
         configuration[AmazonS3Constants.BucketName] = bucketName;
         var jobData = new AmazonS3ConnectorJobData(configuration);
@@ -157,7 +153,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     public async Task VerifyConnection_WhenInvalidRegion_ReturnError(string region)
     {
         var (connector, context, configuration, _) = SetupConnector();
-        if (connector == null) return;
 
         configuration[AmazonS3Constants.Region] = region;
         var jobData = new AmazonS3ConnectorJobData(configuration);
@@ -174,7 +169,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     public async Task StoreData_EventStream_WritesJsonToS3()
     {
         var (connector, context, configuration, jobData) = SetupConnector(StreamMode.EventStream);
-        if (connector == null) return;
 
         var streamModel = CreateStreamModel(StreamMode.EventStream, Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c"));
         var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
@@ -208,7 +202,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     public async Task StoreData_Sync_WritesJsonToS3()
     {
         var (connector, context, configuration, jobData) = SetupConnector(StreamMode.Sync);
-        if (connector == null) return;
 
         var streamModel = CreateStreamModel(StreamMode.Sync, Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c"));
         var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
@@ -240,7 +233,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     public async Task GetContainers_WhenBucketEmpty_ReturnsEmptyOrNull()
     {
         var (connector, context, configuration, jobData) = SetupConnector();
-        if (connector == null) return;
 
         var containers = await connector.GetContainers(context, Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c"));
 
@@ -253,12 +245,6 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     private (AmazonS3Connector Connector, ExecutionContext Context, Dictionary<string, object> Configuration, AmazonS3ConnectorJobData JobData) SetupConnector(StreamMode streamMode = StreamMode.EventStream)
     {
         var configuration = CreateConfiguration();
-        if (configuration == null)
-        {
-            _testOutputHelper.WriteLine("S3 environment variables not set. Skipping test.");
-            return (null, null, null, null);
-        }
-
         var jobData = new AmazonS3ConnectorJobData(configuration);
         var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
 
@@ -330,15 +316,13 @@ public class AmazonS3ConnectorTests : IAsyncLifetime
     private Dictionary<string, object> CreateConfiguration()
     {
         var accessKey = Environment.GetEnvironmentVariable("S3_ACCESSKEY");
+        Assert.NotNull(accessKey);
         var secretKey = Environment.GetEnvironmentVariable("S3_SECRETKEY");
+        Assert.NotNull(secretKey);
         var region = Environment.GetEnvironmentVariable("S3_REGION");
+        Assert.NotNull(region);
         var bucketName = Environment.GetEnvironmentVariable("S3_BUCKETNAME");
-
-        if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey)
-            || string.IsNullOrEmpty(region) || string.IsNullOrEmpty(bucketName))
-        {
-            return null;
-        }
+        Assert.NotNull(bucketName);
 
         return new Dictionary<string, object>
         {
