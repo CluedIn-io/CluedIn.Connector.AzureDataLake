@@ -23,6 +23,18 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return directoryClient;
         }
 
+        async Task<IStorageDirectoryClient> IExternalFileStorageClient.EnsureDirectoryExist(IDataLakeJobData configuration)
+        {
+            var directoryClient = await EnsureDataLakeDirectoryExist(configuration);
+            return new DataLakeStorageDirectoryClient(directoryClient);
+        }
+
+        async Task<IStorageDirectoryClient> IExternalFileStorageClient.EnsureDirectoryExist(IDataLakeJobData configuration, string subDirectory)
+        {
+            var directoryClient = await EnsureDataLakeDirectoryExist(configuration, subDirectory);
+            return new DataLakeStorageDirectoryClient(directoryClient);
+        }
+
         public async Task DeleteDirectory(IDataLakeJobData configuration, string subDirectory)
         {
             var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: true);
@@ -115,12 +127,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             return await directoryClient.ExistsAsync();
         }
 
-        public Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName)
+        public Task<PathProperties> GetDataLakeFilePathProperties(IDataLakeJobData configuration, string fileName)
         {
-            return GetFilePathProperties(configuration, fileName, string.Empty);
+            return GetDataLakeFilePathProperties(configuration, fileName, string.Empty);
         }
 
-        public async Task<PathProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName, string subDirectory)
+        public async Task<PathProperties> GetDataLakeFilePathProperties(IDataLakeJobData configuration, string fileName, string subDirectory)
         {
             var fileSystemClient = await GetFileSystemClientAsync(configuration, ensureExists: false);
 
@@ -142,6 +154,17 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
 
             return await dataLakeFileClient.GetPropertiesAsync();
+        }
+
+        public Task<IStorageFileProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName)
+        {
+            return GetFilePathProperties(configuration, fileName, string.Empty);
+        }
+
+        public async Task<IStorageFileProperties> GetFilePathProperties(IDataLakeJobData configuration, string fileName, string subDirectory)
+        {
+            var pathProperties = await GetDataLakeFilePathProperties(configuration, fileName, subDirectory);
+            return pathProperties != null ? new DataLakeStorageFileProperties(pathProperties) : null;
         }
 
         private async Task<DataLakeDirectoryClient> GetDirectoryClientAsync(

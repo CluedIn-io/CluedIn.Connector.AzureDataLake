@@ -31,7 +31,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         private static readonly string _invalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", _invalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
         private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<DataLakeConnector> _logger;
-        private readonly IDataLakeClient _client;
+        private readonly IExternalFileStorageClient _client;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
         private readonly PartitionedBuffer<IDataLakeJobData, string> _buffer;
@@ -58,11 +58,11 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
 
-        protected IDataLakeClient Client => _client;
+        protected IExternalFileStorageClient Client => _client;
 
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
-            IDataLakeClient client,
+            IExternalFileStorageClient client,
             IDataLakeConstants constants,
             IDataLakeJobDataFactory dataLakeJobDataFactory,
             IDateTimeOffsetProvider dateTimeOffsetProvider)
@@ -552,7 +552,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
         {
-            await Client.EnsureDataLakeDirectoryExist(jobData);
+            await Client.EnsureDirectoryExist(jobData);
             return SuccessfulConnectionVerification;
         }
 

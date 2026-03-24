@@ -6,8 +6,6 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-using Azure.Storage.Files.DataLake;
-
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
@@ -69,12 +67,12 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private protected override bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => false;
 
-    private protected override async Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient directoryClient)
+    private protected override async Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, IStorageDirectoryClient directoryClient)
     {
         await EnsureMetadataJsonExists(directoryClient);
         await CreatePartnerEventsJsonIfNotExists();
 
-        async Task EnsureMetadataJsonExists(DataLakeDirectoryClient directoryClient)
+        async Task EnsureMetadataJsonExists(IStorageDirectoryClient directoryClient)
         {
             if (DataLakeConstants.OutputFormats.Csv.Equals(configuration.OutputFormat, StringComparison.OrdinalIgnoreCase))
             {
@@ -86,11 +84,11 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
             }
         }
 
-        async Task EnsureCsvMetadataJsonExists(DataLakeDirectoryClient directoryClient)
+        async Task EnsureCsvMetadataJsonExists(IStorageDirectoryClient directoryClient)
         {
             var fileClient = directoryClient.GetFileClient("_metadata.json");
 
-            if (IsInitialExport || !await fileClient.ExistsAsync())
+            if (IsInitialExport || !await _storageClient.FileInPathExists(configuration, "_metadata.json", await GetSubDirectory(context, configuration, exportJobData)))
             {
                 await using var outputStream = await fileClient.OpenWriteAsync(true);
                 await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
@@ -114,11 +112,11 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
             }
         }
 
-        async Task EnsureGenericMetadataJsonExists(DataLakeDirectoryClient directoryClient)
+        async Task EnsureGenericMetadataJsonExists(IStorageDirectoryClient directoryClient)
         {
             var fileClient = directoryClient.GetFileClient("_metadata.json");
 
-            if (IsInitialExport || !await fileClient.ExistsAsync())
+            if (IsInitialExport || !await _storageClient.FileInPathExists(configuration, "_metadata.json", await GetSubDirectory(context, configuration, exportJobData)))
             {
                 await using var outputStream = await fileClient.OpenWriteAsync(true);
                 await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
@@ -138,10 +136,10 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                 context.Log.LogDebug("Unable to acquire lock to partner events for ProviderDefinition '{ProviderDefinitionId}'.", exportJobData.ProviderDefinition.Id);
                 return;
             }
-            var landingZoneDirectoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
+            var landingZoneDirectoryClient = await _storageClient.EnsureDirectoryExist(configuration);
             var fileClient = landingZoneDirectoryClient.GetFileClient("_partnerEvents.json");
 
-            if (!await fileClient.ExistsAsync())
+            if (!await _storageClient.FileInPathExists(configuration, "_partnerEvents.json"))
             {
                 await using var outputStream = await fileClient.OpenWriteAsync(true);
                 await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
@@ -192,7 +190,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
     private protected override async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
     {
         var subDirectory = await GetSubDirectory(context, configuration, exportJobData);
-        if (!await _dataLakeClient.FileInPathExists(configuration, "_metadata.json", subDirectory))
+        if (!await _storageClient.FileInPathExists(configuration, "_metadata.json", subDirectory))
         {
             return null;
         }

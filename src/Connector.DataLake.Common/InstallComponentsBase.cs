@@ -1,4 +1,4 @@
-﻿using Castle.MicroKernel.Registration;
+using Castle.MicroKernel.Registration;
 using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 
@@ -14,7 +14,7 @@ internal abstract class InstallComponentsBase : IWindsorInstaller
 
     protected static void DefaultInstall<TExportJob, TClient, TIConstants, TConstants, TJobDataFactory>(IWindsorContainer container, IConfigurationStore store)
         where TExportJob : DataLakeExportEntitiesJobBase
-        where TClient : class, IDataLakeClient
+        where TClient : class, IExternalFileStorageClient
         where TIConstants : class, IDataLakeConstants
         where TConstants : class, IDataLakeConstants, TIConstants
         where TJobDataFactory : class, IDataLakeJobDataFactory

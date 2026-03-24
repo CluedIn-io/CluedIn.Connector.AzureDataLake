@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CluedIn.Connector.AmazonS3 provides the ability to post data to Amazon S3</Description>
+    <AssemblyName>CluedIn.Connector.AmazonS3</AssemblyName>
+    <RootNamespace>CluedIn.Connector.AmazonS3</RootNamespace>
+    <IsCluedInServerComponent>true</IsCluedInServerComponent>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Unit" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Integration" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\amazons3.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" />
+  </ItemGroup>
+</Project>
