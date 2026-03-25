@@ -74,6 +74,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AmazonS3.Tests.In
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AmazonS3.Tests.Unit", "test\unit\Connector.AmazonS3.Tests.Unit\Connector.AmazonS3.Tests.Unit.csproj", "{7F845977-5E4D-02A4-36B2-70C510EE0A10}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.Common", "src\Connector.Common\Connector.Common.csproj", "{6A68D9AD-D78D-12B3-07C5-D1F6BDDA67FC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -140,6 +142,10 @@ Global
 		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A68D9AD-D78D-12B3-07C5-D1F6BDDA67FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A68D9AD-D78D-12B3-07C5-D1F6BDDA67FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A68D9AD-D78D-12B3-07C5-D1F6BDDA67FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A68D9AD-D78D-12B3-07C5-D1F6BDDA67FC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -166,6 +172,7 @@ Global
 		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45} = {5256D9B9-8A1D-480D-A8F0-1A69AFA59B31}
 		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
 		{7F845977-5E4D-02A4-36B2-70C510EE0A10} = {F5373611-431E-459B-B775-5A31DDEC5B21}
+		{6A68D9AD-D78D-12B3-07C5-D1F6BDDA67FC} = {5256D9B9-8A1D-480D-A8F0-1A69AFA59B31}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E6A866CB-824C-4271-8EA6-053B7FC4B134}

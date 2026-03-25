@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Connector.Common\Connector.Common.csproj" />
     <ProjectReference Include="..\..\..\src\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
   </ItemGroup>
 
