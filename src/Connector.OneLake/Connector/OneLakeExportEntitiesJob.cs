@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
@@ -11,6 +12,8 @@ namespace CluedIn.Connector.OneLake.Connector;
 
 internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
 {
+    private readonly OneLakeJobDataFactory _dataLakeJobDataFactory;
+
     public OneLakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
@@ -19,12 +22,12 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
+        _dataLakeJobDataFactory = dataLakeJobDataFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataFactory));
     }
-
-    private OneLakeClient DataLakeClient { get; }
 
     private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
+        var client = await _dataLakeJobDataFactory.CreateDataLakeClient(context, exportJobData.DataLakeJobData as OneLakeConnectorJobData);
         var jobData = exportJobData.DataLakeJobData as OneLakeConnectorJobData;
         if (!jobData.ShouldLoadToTable)
         {
@@ -45,6 +48,6 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
             exportJobData.StreamModel.ContainerName,
             exportJobData.AsOfTime,
             exportJobData.OutputFormat);
-        await DataLakeClient.LoadToTableAsync(exportJobData.OutputFileName, replacedTableName, exportJobData.DataLakeJobData);
+        await client.LoadToTableAsync(exportJobData.OutputFileName, replacedTableName);
     }
 }

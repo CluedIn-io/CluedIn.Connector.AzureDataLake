@@ -24,17 +24,20 @@ public class OpenMirroringConnector : DataLakeConnector
     internal const string WorkspaceNotFoundErrorCode = "WorkspaceNotFound";
 
     private readonly ILogger<OpenMirroringConnector> _logger;
+    private readonly OpenMirroringJobDataFactory _dataLakeJobDataFactory;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
 
     public OpenMirroringConnector(
         ILogger<OpenMirroringConnector> logger,
+        ApplicationContext applicationContext,
         IOpenMirroringConstants constants,
         OpenMirroringJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider;
+        _dataLakeJobDataFactory = dataLakeJobDataFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataFactory));
+        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
     protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData)
@@ -59,7 +62,7 @@ public class OpenMirroringConnector : DataLakeConnector
         var isHealthCheckVerification = IsHealthCheckVerification(casted);
         var shouldTolerateMissingDirectory = !isHealthCheckVerification && casted.ShouldCreateMirroredDatabase;
 
-        var client = await DataLakeJobDataFactory.CreateDataLakeClient(executionContext, jobData);
+        var client = await _dataLakeJobDataFactory.CreateDataLakeClient(executionContext, casted);
         if (shouldTolerateMissingDirectory)
         {
             if (await client.HasValidWorkspaceAsync())

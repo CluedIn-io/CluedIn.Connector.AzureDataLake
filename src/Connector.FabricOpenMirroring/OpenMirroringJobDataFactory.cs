@@ -1,9 +1,12 @@
-﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Core;
+
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.FabricOpenMirroring;
 
@@ -30,5 +33,17 @@ public class OpenMirroringJobDataFactory : DataLakeJobDataFactoryBase, IDataLake
         }
 
         return await base.GetConfiguration(executionContext, authenticationDetails, containerName);
+    }
+    public override async Task<IDataLakeClient> CreateDataLakeClient(ExecutionContext executionContext, IDataLakeJobData jobData)
+    {
+        return await CreateDataLakeClient(executionContext, jobData as OpenMirroringConnectorJobData);
+    }
+
+    internal virtual Task<OpenMirroringClient> CreateDataLakeClient(ExecutionContext executionContext, OpenMirroringConnectorJobData jobData)
+    {
+        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<OpenMirroringClient>>();
+        var dateTimeOffsetProvider = executionContext.ApplicationContext.Container.Resolve<IDateTimeOffsetProvider>();
+        var client = new OpenMirroringClient(logger, dateTimeOffsetProvider, jobData);
+        return Task.FromResult(client);
     }
 }

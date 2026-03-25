@@ -5,7 +5,7 @@ using CluedIn.Connector.DataLake.Common;
 
 namespace CluedIn.Connector.FabricOpenMirroring;
 
-internal class OpenMirroringConnectorJobData : DataLakeJobData
+internal class OpenMirroringConnectorJobData : DataLakeJobData, IAzureServicePrincipalCredentialJobData
 {
     public OpenMirroringConnectorJobData(
         IDictionary<string, object> configurations,
@@ -31,6 +31,10 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
     public override string FileSystemName => WorkspaceName;
 
     public override string RootDirectoryPath => $"{MirroredDatabaseName}.MountedRelationalDatabase/Files/LandingZone";
+
+    public string AccountName => "onelake";
+
+    public string StorageUri => $"https://{AccountName}.dfs.fabric.microsoft.com";
 
     protected override void AddToHashCode(HashCode hash)
     {

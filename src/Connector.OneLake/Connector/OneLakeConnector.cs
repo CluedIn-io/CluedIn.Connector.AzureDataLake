@@ -26,15 +26,16 @@ public class OneLakeConnector : DataLakeConnector
 
     public OneLakeConnector(
         ILogger<OneLakeConnector> logger,
+        ApplicationContext applicationContext,
         IOneLakeConstants constants,
         OneLakeJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData)
     {
         if (jobData is not OneLakeConnectorJobData casted)
         {
@@ -53,7 +54,7 @@ public class OneLakeConnector : DataLakeConnector
 
         try
         {
-            return await base.VerifyDataLakeConnection(jobData);
+            return await base.VerifyDataLakeConnection(executionContext, jobData);
         }
         catch (AuthenticationFailedException ex)
         {

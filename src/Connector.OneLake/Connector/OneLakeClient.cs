@@ -1,18 +1,16 @@
 using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 
+using Azure.Core;
 using Azure.Identity;
-using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 
-
-using Azure.Core;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Collections.Generic;
-using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
@@ -26,33 +24,17 @@ internal class OneLakeClient : DataLakeClient
     public OneLakeClient(ILogger<OneLakeClient> logger, OneLakeConnectorJobData jobData): base(logger, jobData)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _jobData = jobData;
+        _jobData = jobData ?? throw new ArgumentNullException(nameof(jobData));
     }
 
-    //protected override DataLakeServiceClient GetDataLakeServiceClient()
-    //{
-    //    var casted = CastJobData<OneLakeConnectorJobData>(_jobData);
-    //    var accountName = "onelake";
-
-    //    var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
-
-    //    var dfsUri = $"https://{accountName}.dfs.fabric.microsoft.com";
-
-    //    var dataLakeServiceClient = new DataLakeServiceClient(
-    //        new Uri(dfsUri),
-    //        sharedKeyCredential);
-    //    return dataLakeServiceClient;
-    //}
-
-    internal async Task LoadToTableAsync(string sourceFileName, string targetTableName, IDataLakeJobData configuration)
+    internal async Task LoadToTableAsync(string sourceFileName, string targetTableName)
     {
-        var casted = CastJobData<OneLakeConnectorJobData>(configuration);
-        if (!casted.ShouldLoadToTable)
+        if (!_jobData.ShouldLoadToTable)
         {
             return;
         }
 
-        var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
+        var sharedKeyCredential = new ClientSecretCredential(_jobData.TenantId, _jobData.ClientId, _jobData.ClientSecret);
         var tokenResult = await sharedKeyCredential.GetTokenAsync(
         new TokenRequestContext(new string[]
         {
@@ -62,19 +44,19 @@ internal class OneLakeClient : DataLakeClient
 
         var httpClient = new HttpClient();
 
-        var workspace = await GetWorkspaceAsync(httpClient, token, casted.WorkspaceName);
+        var workspace = await GetWorkspaceAsync(httpClient, token, _jobData.WorkspaceName);
         if (workspace == null)
         {
-            throw new ApplicationException($"Workspace {casted.WorkspaceName}is not found.");
+            throw new ApplicationException($"Workspace {_jobData.WorkspaceName}is not found.");
         }
 
-        var lakehouse = await GetLakehouseAsync(httpClient, token, workspace.Id, casted.ItemName);
+        var lakehouse = await GetLakehouseAsync(httpClient, token, workspace.Id, _jobData.ItemName);
         if (lakehouse == null)
         {
-            throw new ApplicationException($"Lakehouse {casted.ItemName} is not found in workspace {workspace.Id}.");
+            throw new ApplicationException($"Lakehouse {_jobData.ItemName} is not found in workspace {workspace.Id}.");
         }
 
-        var filePath = $"{casted.ItemFolder}/{sourceFileName}";
+        var filePath = $"{_jobData.ItemFolder}/{sourceFileName}";
         await LoadTableAsync(httpClient, token, workspace.Id, lakehouse.Id.Value, targetTableName, filePath);
     }
 
