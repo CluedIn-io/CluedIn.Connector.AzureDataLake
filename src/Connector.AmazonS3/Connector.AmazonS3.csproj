@@ -13,7 +13,7 @@
     <EmbeddedResource Include="Resources\amazons3.svg" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Connector.Common\Connector.Common.csproj" />
+    <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" />

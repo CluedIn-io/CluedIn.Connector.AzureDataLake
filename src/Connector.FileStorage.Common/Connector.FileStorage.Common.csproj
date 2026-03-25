@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>CluedIn.Connector.Common provides the common functionality to post data to external storage systems</Description>
-    <AssemblyName>CluedIn.Connector.Common</AssemblyName>
+    <Description>CluedIn.Connector.FileStorage.Common provides the common functionality to post data to external file storage systems</Description>
+    <AssemblyName>CluedIn.Connector.FileStorage.Common</AssemblyName>
     <RootNamespace>CluedIn.Connector.DataLake.Common</RootNamespace>
   </PropertyGroup>
   <ItemGroup>

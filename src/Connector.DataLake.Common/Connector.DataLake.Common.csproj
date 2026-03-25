@@ -21,6 +21,6 @@
     <PackageReference Include="Azure.Storage.Files.DataLake" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Connector.Common\Connector.Common.csproj" />
+    <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
   </ItemGroup>
 </Project>
