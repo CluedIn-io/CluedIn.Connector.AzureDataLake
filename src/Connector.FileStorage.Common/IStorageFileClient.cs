@@ -8,7 +8,6 @@ namespace CluedIn.Connector.FileStorage.Common;
 public interface IStorageFileClient
 {
     Uri Uri { get; }
-    string Path { get; }
 
     Task DeleteAsync();
 
@@ -18,7 +17,7 @@ public interface IStorageFileClient
 
     Task<Stream> OpenWriteAsync(bool overwrite);
 
-    Task RenameAsync(string value);
+    Task RenameAsync(FilePath targetPath);
 
-    Task SetMetadataAsync(Dictionary<string, string> metadata);
+    Task SetMetadataAsync(FileMetadata fileMetadata);
 }

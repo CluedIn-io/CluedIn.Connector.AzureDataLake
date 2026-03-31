@@ -1,0 +1,228 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+
+using Amazon;
+using Amazon.S3;
+using Amazon.S3.Model;
+
+using CluedIn.Connector.FileStorage.Common;
+
+using Microsoft.Extensions.Logging;
+
+namespace CluedIn.Connector.AmazonS3.Connector;
+
+internal class AmazonS3Clienttt : IStorageClient
+{
+    private readonly ILogger<AmazonS3Clienttt> _logger;
+    private readonly AmazonS3ConnectorConfiguration _configuration;
+
+    public AmazonS3Clienttt(ILogger<AmazonS3Clienttt> logger, AmazonS3ConnectorConfiguration configuration)
+    {
+        _logger = logger;
+        _configuration = configuration;
+    }
+
+    public async Task CreateDirectoryIfNotExists(DirectoryPath directoryPath)
+    {
+        // S3 doesn't require directory creation - directories are virtual.
+        // We just verify the bucket is accessible.
+        var s3Client = GetS3Client();
+
+        // Verify bucket accessibility by listing zero objects
+        try
+        {
+            await s3Client.ListObjectsV2Async(new ListObjectsV2Request
+            {
+                BucketName = _configuration.BucketName,
+                MaxKeys = 0,
+            });
+        }
+        catch (AmazonS3Exception)
+        {
+            throw;
+        }
+    }
+
+    public async Task DeleteDirectory(DirectoryPath directoryPath)
+    {
+        var s3Client = GetS3Client();
+        var prefix = directoryPath.GetPrefix();
+
+        if (string.IsNullOrEmpty(prefix))
+        {
+            return;
+        }
+
+        var listRequest = new ListObjectsV2Request
+        {
+            BucketName = _configuration.BucketName,
+            Prefix = prefix + "/",
+        };
+
+        ListObjectsV2Response response;
+        do
+        {
+            response = await s3Client.ListObjectsV2Async(listRequest);
+
+            if (response.S3Objects.Any())
+            {
+                var deleteRequest = new DeleteObjectsRequest
+                {
+                    BucketName = _configuration.BucketName,
+                    Objects = response.S3Objects.Select(o => new KeyVersion { Key = o.Key }).ToList(),
+                };
+
+                await s3Client.DeleteObjectsAsync(deleteRequest);
+            }
+
+            listRequest.ContinuationToken = response.NextContinuationToken;
+        } while (response?.IsTruncated == true);
+    }
+
+    public async Task DeleteFile(FilePath filePath)
+    {
+        var s3Client = GetS3Client();
+        var key = filePath.GetKey();
+
+        var response = await s3Client.DeleteObjectAsync(_configuration.BucketName, key);
+
+        if ((int)response.HttpStatusCode < 200 || (int)response.HttpStatusCode >= 300)
+        {
+            throw new Exception($"S3 DeleteObject returned {response.HttpStatusCode}");
+        }
+    }
+
+    public async Task<bool> DirectoryExists(DirectoryPath directory)
+    {
+        var s3Client = GetS3Client();
+        var prefix = directory.GetPrefix();
+
+        var listRequest = new ListObjectsV2Request
+        {
+            BucketName = _configuration.BucketName,
+            Prefix = string.IsNullOrEmpty(prefix) ? null : prefix + "/",
+            MaxKeys = 1,
+        };
+
+        try
+        {
+            var response = await s3Client.ListObjectsV2Async(listRequest);
+            return response.S3Objects.Any();
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> FileExists(FilePath filePath)
+    {
+        var s3Client = GetS3Client();
+        var key = filePath.GetKey();
+
+        try
+        {
+            await s3Client.GetObjectMetadataAsync(_configuration.BucketName, key);
+            return true;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    public Task<DirectoryPath> GetBaseDirectoryPath()
+    {
+        return Task.FromResult(new DirectoryPath(_configuration.RootDirectoryPath));
+    }
+
+    public Task<IStorageFileClient> GetFileClient(FilePath filePath)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task<FileMetadata> GetFileMetadata(FilePath filePath)
+    {
+        var s3Client = GetS3Client();
+        var key = filePath.GetKey();
+
+        try
+        {
+            var metadata = await s3Client.GetObjectMetadataAsync(_configuration.BucketName, key);
+            var metadataDict = new Dictionary<string, string>();
+            foreach (var metaKey in metadata.Metadata.Keys)
+            {
+                metadataDict[metaKey.Replace("x-amz-meta-", string.Empty)] = metadata.Metadata[metaKey];
+            }
+
+            return new FileMetadata(metadataDict);
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    public async Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectory(DirectoryPath directoryPath)
+    {
+        var s3Client = GetS3Client();
+        var prefix = directoryPath.GetPrefix();
+
+        var listRequest = new ListObjectsV2Request
+        {
+            BucketName = _configuration.BucketName,
+            Prefix = string.IsNullOrEmpty(prefix) ? null : prefix + "/",
+        };
+
+        var result = new List<FullyQualifiedFilePath>();
+        ListObjectsV2Response response;
+        do
+        {
+            response = await s3Client.ListObjectsV2Async(listRequest);
+
+            foreach (var s3Object in response.S3Objects)
+            {
+                if (!s3Object.Key.EndsWith("/"))
+                {
+                    var fileName = Path.GetFileName(s3Object.Key);
+                    var filePath = new FilePath(fileName, directoryPath);
+                    result.Add(new FullyQualifiedFilePath (fileName, directoryPath, filePath.GetS3Url(_configuration.BucketName)));
+                }
+            }
+
+            listRequest.ContinuationToken = response.NextContinuationToken;
+        } while (response?.IsTruncated == true);
+
+        return result;
+    }
+
+    public async Task SaveData(FilePath filePath, string content, string contentType)
+    {
+        var s3Client = GetS3Client();
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+        var putRequest = new PutObjectRequest
+        {
+            BucketName = _configuration.BucketName,
+            Key = filePath.GetKey(),
+            InputStream = stream,
+            ContentType = contentType,
+        };
+
+        await s3Client.PutObjectAsync(putRequest);
+    }
+
+    public async Task VerifyConnection()
+    {
+        await CreateDirectoryIfNotExists(await GetBaseDirectoryPath());
+    }
+
+    private IAmazonS3 GetS3Client()
+    {
+        var region = RegionEndpoint.GetBySystemName(_configuration.Region);
+        return new Amazon.S3.AmazonS3Client(_configuration.AccessKey, _configuration.SecretKey, region);
+    }
+}

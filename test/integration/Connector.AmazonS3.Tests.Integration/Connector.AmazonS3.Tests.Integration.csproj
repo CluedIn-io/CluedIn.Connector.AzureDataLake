@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoFixture.Xunit2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="coverlet.msbuild" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="AWSSDK.S3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Connector.AmazonS3\Connector.AmazonS3.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -245,11 +245,11 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                 streamId,
                 asOfTime);
             await temporaryFileClient.SetMetadataAsync(
-                new Dictionary<string, string>
+                new FileMetadata(new Dictionary<string, string>
                 {
                     [StreamIdKey] = streamId.ToString(),
                     [DataTimeKey] = asOfTime.ToString("O"),
-                });
+                }));
             context.Log.LogDebug(
                 "End setting file properties to file '{OutputFileName}' StreamId {StreamId} and DataTime {DataTime}.",
                 outputFileName,
@@ -265,7 +265,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                 outputFileName,
                 streamId,
                 asOfTime);
-            await temporaryFileClient.RenameAsync(temporaryFileClient.Path[..^TemporaryFileSuffix.Length]);
+            await temporaryFileClient.RenameAsync(outputFilePath);
             context.Log.LogDebug(
                 "End rename temporary file {TemporaryOutputFileName} to '{OutputFileName}' for StreamId {StreamId} and DataTime {DataTime}.",
                 temporaryOutputFileName,
@@ -499,7 +499,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         return hasMissed;
     }
 
-    private static bool TryGetMetadata(IDictionary<string, string> metadata, out FileMetadata fileMetadata)
+    private static bool TryGetMetadata(IDictionary<string, string> metadata, out ExportedFileMetadata fileMetadata)
     {
         if(metadata != null
                 && metadata.TryGetValue(StreamIdKey, out var fileStreamIdString)
@@ -507,7 +507,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                 && Guid.TryParse(fileStreamIdString, out var fileStreamId)
                 && DateTimeOffset.TryParse(fileDataTimeString, out var fileDataTime))
         {
-            fileMetadata = new FileMetadata(fileStreamId, fileDataTime);
+            fileMetadata = new ExportedFileMetadata(fileStreamId, fileDataTime);
             return true;
         }
 
@@ -835,7 +835,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         return CacheTableHelper.GetExportHistoryTableName(streamId) + "_ExportHistory";
     }
 
-    private record FileMetadata(Guid StreamId, DateTimeOffset DataTime);
+    private record ExportedFileMetadata(Guid StreamId, DateTimeOffset DataTime);
+
     private protected record ExportJobDataBase(
         Guid StreamId,
         StreamModel StreamModel,

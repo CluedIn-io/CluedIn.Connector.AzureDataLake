@@ -9,6 +9,7 @@
 
         MUST SPECIFY IN CSPROJ AS <PackageReference Name="<depName>" />
     -->
+    <PackageReference Update="AWSSDK.S3" Version="4.0.19.4" />
     <PackageReference Update="Azure.Storage.Files.DataLake" Version="12.22.0" />
     <PackageReference Update="CluedIn.Core" Version="$(_CluedIn)" />
   </ItemGroup>

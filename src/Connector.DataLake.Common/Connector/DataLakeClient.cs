@@ -295,8 +295,6 @@ internal class DataLakeClient : IStorageClient
 
         public Uri Uri => _fileClient.Uri;
 
-        public string Path => _fileClient.Path;
-
         public async Task DeleteAsync()
         {
             await _fileClient.DeleteAsync();
@@ -318,14 +316,14 @@ internal class DataLakeClient : IStorageClient
             return new DataLakeBufferedWriteStream(outputStream);
         }
 
-        public async Task RenameAsync(string value)
+        public async Task RenameAsync(FilePath targetPath)
         {
-            await _fileClient.RenameAsync(value);
+            await _fileClient.RenameAsync(targetPath.FullPath);
         }
 
-        public async Task SetMetadataAsync(Dictionary<string, string> metadata)
+        public async Task SetMetadataAsync(FileMetadata fileMetadata)
         {
-            await _fileClient.SetMetadataAsync(metadata);
+            await _fileClient.SetMetadataAsync(fileMetadata.Metadata);
         }
     }
 }
