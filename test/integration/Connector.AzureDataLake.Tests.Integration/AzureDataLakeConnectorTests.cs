@@ -8,10 +8,15 @@ using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
+using Castle.Core.Logging;
+using Castle.Windsor;
+
 using CluedIn.Connector.AzureDataLake.Connector;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
@@ -20,6 +25,7 @@ using CluedIn.Core.Streams.Models;
 using Hangfire.Storage;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Moq;
 
@@ -30,9 +36,9 @@ using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
 
-public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataLakeConnector, AzureDataLakeJobDataFactory, IAzureDataLakeConstants>
+public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataLakeConnector, AzureDataLakeFactory, IAzureDataLakeConfigurationConstants>
 {
-    protected override Guid DataLakeProviderId => AzureDataLakeConstants.DataLakeProviderId;
+    protected override Guid DataLakeProviderId => AzureDataLakeConfigurationConstants.DataLakeProviderId;
 
     public AzureDataLakeConnectorTests(ITestOutputHelper testOutputHelper)
         : base(testOutputHelper)
@@ -43,14 +49,14 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyConnection_WhenValid_ReturnsSuccess()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         try
         {
             var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
             var connector = setupResult.ConnectorMock.Object;
-            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
             var result = await connector.VerifyConnection(setupResult.Context, configuration);
             Assert.NotNull(result);
             Assert.True(result.Success);
@@ -62,7 +68,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         }
     }
 
-    private static void DeleteFileSystemIfExists(AzureDataLakeConnectorJobData jobData)
+    private static void DeleteFileSystemIfExists(AzureDataLakeConnectorConfiguration jobData)
     {
         var client = GetDataLakeClient(jobData);
         client.GetFileSystemClient(jobData.FileSystemName).DeleteIfExists();
@@ -80,14 +86,14 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     {
 
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AzureDataLakeConstants.AccountName)] = accountName;
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        configuration[nameof(AzureDataLakeConfigurationConstants.AccountName)] = accountName;
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
         try
         {
             var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
             var connector = setupResult.ConnectorMock.Object;
-            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
             var result = await connector.VerifyConnection(setupResult.Context, configuration);
             Assert.NotNull(result);
             Assert.False(result.Success);
@@ -104,15 +110,15 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyConnection_WhenInexistentAccountName_ReturnInvalidAccountNameErrorMessage()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AzureDataLakeConstants.AccountName)] = "1";
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        configuration[nameof(AzureDataLakeConfigurationConstants.AccountName)] = "1";
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         try
         {
             var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
             var connector = setupResult.ConnectorMock.Object;
-            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
             var result = await connector.VerifyConnection(setupResult.Context, configuration);
             Assert.NotNull(result);
             Assert.False(result.Success);
@@ -133,15 +139,15 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyConnection_WhenInvalidAccountKey_ReturnInvalidAccountKeyErrorMessage(string accountKey)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AzureDataLakeConstants.AccountKey)] = accountKey;
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] = accountKey;
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         try
         {
             var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
             var connector = setupResult.ConnectorMock.Object;
-            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
             var result = await connector.VerifyConnection(setupResult.Context, configuration);
             Assert.NotNull(result);
             Assert.False(result.Success);
@@ -171,15 +177,15 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyConnection_WhenInvalidFileSystemName_ReturnInvalidFileSystemNameErrorMessage(string fileSystemName)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AzureDataLakeConstants.FileSystemName)] = fileSystemName;
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        configuration[nameof(AzureDataLakeConfigurationConstants.FileSystemName)] = fileSystemName;
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         try
         {
             var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
             var connector = setupResult.ConnectorMock.Object;
-            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
             var result = await connector.VerifyConnection(setupResult.Context, configuration);
             Assert.NotNull(result);
             Assert.False(result.Success);
@@ -202,15 +208,15 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyConnection_WhenInvalidDirectoryName_ReturnInvalidFileSystemNameErrorMessage(string directoryName)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AzureDataLakeConstants.DirectoryName)] = directoryName;
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        configuration[nameof(AzureDataLakeConfigurationConstants.DirectoryName)] = directoryName;
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         try
         {
             var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
             var connector = setupResult.ConnectorMock.Object;
-            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
             var result = await connector.VerifyConnection(setupResult.Context, configuration);
             Assert.NotNull(result);
             Assert.False(result.Success);
@@ -230,15 +236,15 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyConnection_WhenValidDirectoryName_ReturnSuccess(string directoryName)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AzureDataLakeConstants.DirectoryName)] = directoryName;
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        configuration[nameof(AzureDataLakeConfigurationConstants.DirectoryName)] = directoryName;
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         try
         {
             var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
             var connector = setupResult.ConnectorMock.Object;
-            setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-                .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
             var result = await connector.VerifyConnection(setupResult.Context, configuration);
             Assert.NotNull(result);
             Assert.True(result.Success);
@@ -254,7 +260,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyStoreData_EventStream()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
@@ -275,7 +281,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async void VerifyStoreData_Sync_WithoutStreamCache()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
@@ -317,8 +323,8 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             AssertCsvResultEscaped,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
@@ -336,8 +342,8 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             AssertParquetResultEscaped,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
@@ -349,7 +355,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             AssertParquetResultArrayColumnEnabled,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.IsArrayColumnsEnabled), true);
+                values.Add(nameof(StorageConfigurationConstants.IsArrayColumnsEnabled), true);
             });
     }
 
@@ -361,7 +367,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             AssertCsvResultUnescaped,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
@@ -407,7 +413,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             AssertCsvResultUnescaped,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
@@ -467,7 +473,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             AssertCsvResultUnescaped,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
@@ -516,21 +522,21 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task GetContainers_InvalidParamsTest()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
         var containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
-        Assert.Null(containers);
+        Assert.Empty(containers);
 
         //This is an existing container in the Azure Data Lake account
         //There are existing files in the directory
         //Changing this or removing the files will cause the test to fail
-        configuration[AzureDataLakeConstants.FileSystemName] = "apac-container";
-        configuration[AzureDataLakeConstants.DirectoryName] = "TestExport01";
+        configuration[AzureDataLakeConfigurationConstants.FileSystemName] = "apac-container";
+        configuration[AzureDataLakeConfigurationConstants.DirectoryName] = "TestExport01";
 
         containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
-        Assert.NotNull(containers);
+        Assert.NotEmpty(containers);
     }
 
     [Fact]
@@ -540,9 +546,9 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         //This is an existing container in the Azure Data Lake account
         //There are existing files in the directory
         //Changing this or removing the files will cause the test to fail
-        configuration[AzureDataLakeConstants.FileSystemName] = "apac-container";
-        configuration[AzureDataLakeConstants.DirectoryName] = "TestExport01";
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        configuration[AzureDataLakeConfigurationConstants.FileSystemName] = "apac-container";
+        configuration[AzureDataLakeConfigurationConstants.DirectoryName] = "TestExport01";
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
@@ -577,8 +583,8 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             },
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
@@ -590,11 +596,11 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         Action<Dictionary<string, object>> configureAuthentication = null,
         Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
         Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null,
-        Func<IDataLakeJobData, SetupContainerResult, string> configureDirectoryName = null)
+        Func<IDataLakeStorageConfiguration, SetupContainerResult, string> configureDirectoryName = null)
     {
         var configuration = CreateConfigurationWithStreamCache(format);
         configureAuthentication?.Invoke(configuration);
-        var jobData = new AzureDataLakeConnectorJobData(configuration);
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
         var connector = setupResult.ConnectorMock.Object;
@@ -625,22 +631,18 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             executeExport);
     }
 
-    private protected override DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
+    private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
-        var azureDataLakeClient = new AzureDataLakeClient();
         var exportJob = new AzureDataLakeExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
-            azureDataLakeClient,
             setupResult.ConstantsMock.Object,
-            setupResult.JobDataFactoryMock.Object,
+            setupResult.StorageFactoryMock.Object,
             setupResult.DateTimeOffsetProviderMock.Object);
         return exportJob;
     }
 
-
-
-    private static DataLakeServiceClient GetDataLakeClient(AzureDataLakeConnectorJobData jobData)
+    private static DataLakeServiceClient GetDataLakeClient(AzureDataLakeConnectorConfiguration jobData)
     {
         return new DataLakeServiceClient(
             new Uri($"https://{jobData.AccountName}.dfs.core.windows.net"),
@@ -658,10 +660,10 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         var directoryName = $"xunit-{DateTime.Now.Ticks}";
         return new Dictionary<string, object>()
         {
-            { nameof(AzureDataLakeConstants.AccountName), accountName },
-            { nameof(AzureDataLakeConstants.AccountKey), accountKey },
-            { nameof(AzureDataLakeConstants.FileSystemName), fileSystemName },
-            { nameof(AzureDataLakeConstants.DirectoryName), directoryName },
+            { nameof(AzureDataLakeConfigurationConstants.AccountName), accountName },
+            { nameof(AzureDataLakeConfigurationConstants.AccountKey), accountKey },
+            { nameof(AzureDataLakeConfigurationConstants.FileSystemName), fileSystemName },
+            { nameof(AzureDataLakeConfigurationConstants.DirectoryName), directoryName },
         };
     }
 
@@ -675,28 +677,39 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
 
         var updatedConfiguration = new Dictionary<string, object>(baseConfiguration)
         {
-            { nameof(DataLakeConstants.IsStreamCacheEnabled), true },
-            { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
-            { nameof(DataLakeConstants.OutputFormat), format },
-            { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
-            { nameof(DataLakeConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
-            { nameof(DataLakeConstants.ContainerName), "test" },
+            { nameof(StorageConfigurationConstants.IsStreamCacheEnabled), true },
+            { nameof(StorageConfigurationConstants.StreamCacheConnectionString), streamCacheConnectionString },
+            { nameof(StorageConfigurationConstants.OutputFormat), format },
+            { nameof(StorageConfigurationConstants.UseCurrentTimeForExport), true },
+            { nameof(StorageConfigurationConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
+            { nameof(StorageConfigurationConstants.ContainerName), "test" },
         };
         return updatedConfiguration;
     }
 
     protected override Mock<AzureDataLakeConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
-        Mock<IAzureDataLakeConstants> constantsMock,
-        Mock<AzureDataLakeJobDataFactory> jobDataFactory)
+        Mock<IAzureDataLakeConfigurationConstants> constantsMock,
+        Mock<AzureDataLakeFactory> jobDataFactory)
     {
         var mockConnector = new Mock<AzureDataLakeConnector>(
             new Mock<ILogger<AzureDataLakeConnector>>().Object,
-            new AzureDataLakeClient(),
+            applicationContext,
             constantsMock.Object,
             jobDataFactory.Object,
             mockDateTimeOffsetProvider.Object);
         return mockConnector;
+    }
+
+    protected override Mock<AzureDataLakeFactory> CreateStorageFactoryMock(
+        WindsorContainer container,
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
+    {
+        var dataFactoryMock = new Mock<AzureDataLakeFactory>();
+        dataFactoryMock.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new DataLakeClient(NullLogger<DataLakeClient>.Instance, data)));
+        return dataFactoryMock;
     }
 }
 

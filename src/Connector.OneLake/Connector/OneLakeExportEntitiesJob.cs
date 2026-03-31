@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
@@ -10,32 +11,32 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
-internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
+internal class OneLakeExportEntitiesJob : StorageExportEntitiesJobBase
 {
-    private readonly OneLakeJobDataFactory _dataLakeJobDataFactory;
+    private readonly OneLakeFactory _storageFactory;
 
     public OneLakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        IOneLakeConstants dataLakeConstants,
-        OneLakeJobDataFactory dataLakeJobDataFactory,
+        IOneLakeConfigurationConstants dataLakeConstants,
+        OneLakeFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeConstants, storageFactory, dateTimeOffsetProvider)
     {
-        _dataLakeJobDataFactory = dataLakeJobDataFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataFactory));
+        _storageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
     }
 
     private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
-        var client = await _dataLakeJobDataFactory.CreateDataLakeClient(context, exportJobData.DataLakeJobData as OneLakeConnectorJobData);
-        var jobData = exportJobData.DataLakeJobData as OneLakeConnectorJobData;
-        if (!jobData.ShouldLoadToTable)
+        var client = await _storageFactory.CreateStorageClient(context, exportJobData.StorageConfiguration) as OneLakeClient;
+        var configuration = exportJobData.StorageConfiguration as OneLakeConnectorConfiguration;
+        if (!configuration.ShouldLoadToTable)
         {
             context.Log.LogDebug("Skipping loading to table as the job data does not require it.");
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(jobData.TableName))
+        if (string.IsNullOrWhiteSpace(configuration.TableName))
         {
             context.Log.LogWarning("Skipping loading to table as the table name is not specified.");
             return;
@@ -43,7 +44,7 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
 
         var replacedTableName = await PatternHelper.ReplaceNameUsingPatternAsync(
             context,
-            jobData.TableName,
+            configuration.TableName,
             exportJobData.StreamId,
             exportJobData.StreamModel.ContainerName,
             exportJobData.AsOfTime,

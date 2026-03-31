@@ -1,4 +1,5 @@
 using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.SynapseDataEngineering.Connector;
 using CluedIn.Core;
 
@@ -9,7 +10,7 @@ namespace CluedIn.Connector.SynapseDataEngineering
     [Component(nameof(SynapseDataEngineeringConnectorComponent), "Providers", ComponentType.Service,
         ServerComponents.ProviderWebApi,
         Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
-    public sealed class SynapseDataEngineeringConnectorComponent : DataLakeConnectorComponentBase
+    public sealed class SynapseDataEngineeringConnectorComponent : StorageConnectorComponentBase
     {
 
         public SynapseDataEngineeringConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
@@ -20,7 +21,7 @@ namespace CluedIn.Connector.SynapseDataEngineering
         /// <summary>Starts this instance.</summary>
         public override void Start()
         {
-            DefaultStartInternal<ISynapseDataEngineeringConstants, SynapseDataEngineeringJobDataFactory, SynapseDataEngineeringExportEntitiesJob>();
+            DefaultStartInternal<ISynapseDataEngineeringConfigurationConstants, SynapseDataEngineeringFactory, SynapseDataEngineeringExportEntitiesJob>();
         }
 
         public const string ComponentName = "Synapse Data Engineering";

@@ -13,6 +13,8 @@ using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
 using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
 using CluedIn.Core.Caching;
@@ -45,10 +47,10 @@ using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.DataLake.Common.Tests.Integration;
 
-public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFactory, TConstants>
-    where TConnector : DataLakeConnector
-    where TJobDataFactory : class, IDataLakeJobDataFactory
-    where TConstants : class, IDataLakeConstants
+public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFactory, TConfigurationConstants>
+    where TConnector : StorageConnectorBase
+    where TClientFactory : class, IStorageFactory
+    where TConfigurationConstants : class, IStorageConfigurationConstants
 {
     private const int NotTemporalTableErrorCode = 13591;
     private readonly ITestOutputHelper _testOutputHelper;
@@ -68,7 +70,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         Action<Dictionary<string, object>> configureAuthentication = null,
         Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
         Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null,
-        Func<IDataLakeJobData, SetupContainerResult, string> configureDirectoryName = null);
+        Func<IDataLakeStorageConfiguration, SetupContainerResult, string> configureDirectoryName = null);
 
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheCanHandleMultipleUpdates()
@@ -80,7 +82,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
             {
                 var updated = rows.ToList();
-                updated[0].Columns[DataLakeConstants.PersistVersionKey] = 3.ToString();
+                updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
                 updated[0].Columns["user_age"] = secondChangeUserData.Age.ToString();
                 return updated;
             }),
@@ -94,8 +96,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             },
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
@@ -109,7 +111,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
             {
                 var updated = rows.ToList();
-                updated[0].Columns[DataLakeConstants.PersistVersionKey] = 3.ToString();
+                updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
                 updated[0].Columns["user_age"] = secondChangeUserData.Age.ToString();
                 return updated;
             }),
@@ -124,8 +126,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             },
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
@@ -139,7 +141,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
             {
                 var updated = rows.ToList();
-                updated[0].Columns[DataLakeConstants.PersistVersionKey] = 3.ToString();
+                updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
                 updated[0].Columns["user_age"] = readdUserData.Age.ToString();
                 return updated;
             }),
@@ -155,8 +157,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             },
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
@@ -164,7 +166,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         TJobData jobData,
         StreamMode streamMode,
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null)
-        where TJobData : DataLakeJobData
+        where TJobData : StorageConfigurationBase
     {
         var organizationId = Guid.NewGuid();
         var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
@@ -181,9 +183,9 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         SetupConfiguration(jobData);
 
         var constantsMock = CreateConstantsMock();
-        var jobDataFactoryMock = CreateJobDataFactoryMock(container);
-        var connectorMock = GetConnectorMock(mockDateTimeOffsetProvider, constantsMock, jobDataFactoryMock);
-        jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
+        var jobDataFactoryMock = CreateStorageFactoryMock(container, mockDateTimeOffsetProvider);
+        var connectorMock = GetConnectorMock(applicationContext, mockDateTimeOffsetProvider, constantsMock, jobDataFactoryMock);
+        jobDataFactoryMock.Setup(x => x.CreateStorageConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
             .ReturnsAsync(jobData);
         connectorMock.CallBase = true;
 
@@ -228,7 +230,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         return context;
     }
 
-    private static void SetupConfiguration<TJobData>(TJobData jobData) where TJobData : DataLakeJobData
+    private static void SetupConfiguration<TJobData>(TJobData jobData) where TJobData : StorageConfigurationBase
     {
         var configurationDictionary = jobData.Configurations.ToDictionary(config => config.Key, config => config.Value);
         var connectorConnectionMock = new Mock<IConnectorConnectionV2>();
@@ -301,16 +303,12 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     }
 
     protected abstract Mock<TConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
-        Mock<TConstants> constantsMock,
-        Mock<TJobDataFactory> jobDataFactory);
+        Mock<TConfigurationConstants> constantsMock,
+        Mock<TClientFactory> jobDataFactory);
 
-    protected virtual Mock<TJobDataFactory> CreateJobDataFactoryMock(WindsorContainer container)
-    {
-        var dataFactoryMock = new Mock<TJobDataFactory>();
-
-        return dataFactoryMock;
-    }
+    protected abstract Mock<TClientFactory> CreateStorageFactoryMock(WindsorContainer container, Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider);
 
     protected virtual StreamModel CreateStreamModel(
         Organization organization,
@@ -331,9 +329,9 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         return streamModel;
     }
 
-    protected virtual Mock<TConstants> CreateConstantsMock()
+    protected virtual Mock<TConfigurationConstants> CreateConstantsMock()
     {
-        var constants = new Mock<TConstants>();
+        var constants = new Mock<TConfigurationConstants>();
         constants.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
         constants.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
         constants.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
@@ -421,14 +419,14 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         string directoryName,
         SetupContainerResult setupContainerResult,
         DataLakeServiceClient client,
-        DataLakeExportEntitiesJobBase exportJob,
+        StorageExportEntitiesJobBase exportJob,
         Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null)
     {
         var context = setupContainerResult.Context;
         var streamModel = setupContainerResult.StreamModel;
         var organization = setupContainerResult.Organization;
-        var jobData = setupContainerResult.DataLakeJobData;
+        var jobData = setupContainerResult.StorageConfiguration;
 
         try
         {
@@ -469,7 +467,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         }
     }
 
-    private protected abstract DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult);
+    private protected abstract StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult);
 
 
     private protected async Task<PathItem> DefaultExecuteExport(ExecuteExportArg executeExportArg)
@@ -529,7 +527,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
     private protected async Task ModifyHistoryTimeToBeCurrentTime(SetupContainerResult setupContainerResult, ConnectorEntityData connectorEntityData)
     {
-        var jobData = setupContainerResult.DataLakeJobData;
+        var jobData = setupContainerResult.StorageConfiguration;
         var connectionString = jobData.StreamCacheConnectionString;
         var streamModel = setupContainerResult.StreamModel;
         var mockDateTimeOffsetProvider = setupContainerResult.DateTimeOffsetProviderMock;
@@ -605,10 +603,10 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                         FROM
                             [dbo].[{tableName}]
                         WHERE
-                            [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
+                            [{StorageConfigurationConstants.IdKey}] = @{StorageConfigurationConstants.IdKey};
                         """;
             using var getCurrentValidFromCommand = new SqlCommand(getCurrentValidFromSql, connection);
-            getCurrentValidFromCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            getCurrentValidFromCommand.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.IdKey}", connectorEntityData.EntityId));
             var validFrom = await getCurrentValidFromCommand.ExecuteScalarAsync() as DateTime?;
 
 
@@ -618,14 +616,14 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                     SET
                         [ValidFrom] = @ValidFrom
                     WHERE
-                        [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
+                        [{StorageConfigurationConstants.IdKey}] = @{StorageConfigurationConstants.IdKey};
                     """;
             using var updateCurrentValidFromToTimeCommand = new SqlCommand(updateCurrentValidFromToTimeSql, connection)
             {
                 CommandType = CommandType.Text,
             };
             updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter("@ValidFrom", targetTime));
-            updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.IdKey}", connectorEntityData.EntityId));
             await updateCurrentValidFromToTimeCommand.ExecuteNonQueryAsync();
 
 
@@ -635,7 +633,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                     SET
                         [ValidTo] = @TargetValidTo
                     WHERE
-                        [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
+                        [{StorageConfigurationConstants.IdKey}] = @{StorageConfigurationConstants.IdKey} AND
                         [ValidTo] = @OriginalValidTo;
                     """;
             using var updateHistoryValidFromToTimeCommand = new SqlCommand(updateHistoryValidFromToTimeSql, connection)
@@ -644,7 +642,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             };
             updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@TargetValidTo", targetTime));
             updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@OriginalValidTo", validFrom?.ToString("o")));
-            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.IdKey}", connectorEntityData.EntityId));
             await updateHistoryValidFromToTimeCommand.ExecuteNonQueryAsync();
         }
     }
@@ -1080,9 +1078,9 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         Mock<IDateTimeOffsetProvider> DateTimeOffsetProviderMock,
         ApplicationContext ApplicationContext,
         Organization Organization,
-        Mock<TJobDataFactory> JobDataFactoryMock,
-        DataLakeJobData DataLakeJobData,
-        Mock<TConstants> ConstantsMock,
+        Mock<TClientFactory> StorageFactoryMock,
+        StorageConfigurationBase StorageConfiguration,
+        Mock<TConfigurationConstants> ConstantsMock,
         Mock<IStreamRepository> StreamRepositoryMock,
         ProviderDefinition ProviderDefinition);
 
@@ -1093,7 +1091,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             string FileSystemName,
             string DirectoryName,
             DataLakeServiceClient Client,
-            DataLakeExportEntitiesJobBase ExportJob,
+            StorageExportEntitiesJobBase ExportJob,
             SetupContainerResult SetupContainerResult);
 
     private protected record UserData(

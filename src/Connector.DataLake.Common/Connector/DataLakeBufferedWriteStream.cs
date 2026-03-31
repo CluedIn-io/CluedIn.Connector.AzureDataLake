@@ -1,12 +1,15 @@
-﻿using System;
+using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
-internal class DataLakeBufferedWriteStream : Stream
+internal class DataLakeBufferedWriteStream : Stream, IDisposable, IAsyncDisposable
 {
     private const int BufferSize = 4 * 1024 * 1024; // 4MB, Azure Data Lake request size
     BufferedStream _bufferedStream;
+    private bool _disposedValue;
+
     public DataLakeBufferedWriteStream(Stream backingStream)
     {
         if (backingStream is null)
@@ -34,7 +37,7 @@ internal class DataLakeBufferedWriteStream : Stream
 
     public override void Close()
     {
-        _bufferedStream.Flush();
+        _bufferedStream.Close();
         base.Close();
     }
 
@@ -56,5 +59,30 @@ internal class DataLakeBufferedWriteStream : Stream
     public override void Write(byte[] buffer, int offset, int count)
     {
         _bufferedStream.Write(buffer, offset, count);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _bufferedStream?.Dispose();
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    void IDisposable.Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        await _bufferedStream.DisposeAsync();
     }
 }

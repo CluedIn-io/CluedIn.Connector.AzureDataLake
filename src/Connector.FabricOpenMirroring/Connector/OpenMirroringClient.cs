@@ -17,6 +17,7 @@ using Azure.Core;
 using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using System.Text.Json;
+using CluedIn.Connector.FileStorage.Common;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
@@ -24,7 +25,7 @@ internal class OpenMirroringClient : DataLakeClient
 {
     private readonly ILogger<OpenMirroringClient> _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
-    private readonly OpenMirroringConnectorJobData _jobData;
+    private readonly OpenMirroringConnectorConfiguration _jobData;
     private static readonly TimeSpan CreationTimeOut = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan DelayBetweenCreationPolls = TimeSpan.FromSeconds(5);
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions()
@@ -39,7 +40,7 @@ internal class OpenMirroringClient : DataLakeClient
     public OpenMirroringClient(
         ILogger<OpenMirroringClient> logger,
         IDateTimeOffsetProvider dateTimeOffsetProvider,
-        OpenMirroringConnectorJobData jobData):
+        OpenMirroringConnectorConfiguration jobData):
         base(logger, jobData)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -53,9 +54,9 @@ internal class OpenMirroringClient : DataLakeClient
         return fileSystemClient != null;
     }
 
-    public virtual async Task UpdateOrCreateMirroredDatabaseAsync(IDataLakeJobData dataLakeJobData, bool isEnabled)
+    public virtual async Task UpdateOrCreateMirroredDatabaseAsync(IStorageConfiguration dataLakeJobData, bool isEnabled)
     {
-        var jobData = CastJobData<OpenMirroringConnectorJobData>(dataLakeJobData);
+        var jobData = CastConfiguration<OpenMirroringConnectorConfiguration>(dataLakeJobData);
         if (!jobData.ShouldCreateMirroredDatabase)
         {
             _logger.LogDebug("Skipping creation of mirrored database because {Setting} is disabled.", nameof(jobData.ShouldCreateMirroredDatabase));
@@ -129,7 +130,7 @@ internal class OpenMirroringClient : DataLakeClient
     private async Task CreateMirroredDatabase(
         HttpClient httpClient,
         string token,
-        OpenMirroringConnectorJobData jobData,
+        OpenMirroringConnectorConfiguration jobData,
         Workspace workspace,
         string mirroredDatabaseName)
     {

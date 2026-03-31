@@ -1,21 +1,21 @@
-﻿using System;
+using System;
 
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureAIStudio.Connector;
 
-public class AzureAIStudioConnector : DataLakeConnector
+public class AzureAIStudioConnector : StorageConnectorBase
 {
     public AzureAIStudioConnector(
         ILogger<AzureAIStudioConnector> logger,
-        AzureAIStudioClient client,
-        IAzureAIStudioConstants constants,
+        ApplicationContext applicationContext,
+        IAzureAIStudioConfigurationConstants constants,
         AzureAIStudioJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 

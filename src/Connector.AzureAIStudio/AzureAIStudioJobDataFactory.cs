@@ -1,18 +1,33 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
+
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureAIStudio;
 
-public class AzureAIStudioJobDataFactory : DataLakeJobDataFactoryBase, IDataLakeJobDataFactory
+public class AzureAIStudioJobDataFactory : StorageFactoryBase, IStorageFactory
 {
-    protected override Task<IDataLakeJobData> CreateJobData(
+    public override Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration jobData)
+    {
+        if (jobData is not AzureAIStudioConnectorConfiguration castedJobData)
+        {
+            throw new ApplicationException($"Provided job data is not of expected type '{typeof(AzureAIStudioConnectorConfiguration)}'. It is '{jobData.GetType()}'.");
+        }
+
+        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<DataLakeClient>>();
+        return Task.FromResult<IStorageClient>(new DataLakeClient(logger, castedJobData));
+    }
+
+    protected override Task<IStorageConfiguration> CreateStorageConfigurationInternal(
         ExecutionContext executionContext,
         IDictionary<string, object> authenticationDetails,
         string containerName)
     {
-        return Task.FromResult<IDataLakeJobData>(new AzureAIStudioConnectorJobData(authenticationDetails, containerName));
+        return Task.FromResult<IStorageConfiguration>(new AzureAIStudioConnectorConfiguration(authenticationDetails, containerName));
     }
 }

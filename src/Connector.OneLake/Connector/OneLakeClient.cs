@@ -17,11 +17,11 @@ namespace CluedIn.Connector.OneLake.Connector;
 
 internal class OneLakeClient : DataLakeClient
 {
-    private readonly OneLakeConnectorJobData _jobData;
+    private readonly OneLakeConnectorConfiguration _jobData;
 
     public ILogger<OneLakeClient> Logger { get; }
 
-    public OneLakeClient(ILogger<OneLakeClient> logger, OneLakeConnectorJobData jobData): base(logger, jobData)
+    public OneLakeClient(ILogger<OneLakeClient> logger, OneLakeConnectorConfiguration jobData): base(logger, jobData)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _jobData = jobData ?? throw new ArgumentNullException(nameof(jobData));

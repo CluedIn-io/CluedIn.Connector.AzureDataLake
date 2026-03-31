@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using Azure;
 using Azure.Identity;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 
@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
-public class OneLakeConnector : DataLakeConnector
+public class OneLakeConnector : StorageConnectorBase
 {
     internal const string InvalidCredentialsErrorMessage = "Authentication failed due to invalid credentials.";
     internal const string InvalidWorkspaceErrorMessage = "Workspace name cannot be empty.";
@@ -27,19 +27,19 @@ public class OneLakeConnector : DataLakeConnector
     public OneLakeConnector(
         ILogger<OneLakeConnector> logger,
         ApplicationContext applicationContext,
-        IOneLakeConstants constants,
-        OneLakeJobDataFactory dataLakeJobDataFactory,
+        IOneLakeConfigurationConstants constants,
+        OneLakeFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(logger, applicationContext, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData)
+    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration jobData)
     {
-        if (jobData is not OneLakeConnectorJobData casted)
+        if (jobData is not OneLakeConnectorConfiguration casted)
         {
-            throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(OneLakeConnectorJobData)}.");
+            throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(OneLakeConnectorConfiguration)}.");
         }
 
         if (string.IsNullOrWhiteSpace(casted.WorkspaceName))
@@ -76,7 +76,7 @@ public class OneLakeConnector : DataLakeConnector
 
     protected override Type ExportJobType => typeof(OneLakeExportEntitiesJob);
 
-    protected override async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData)
+    protected override async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration jobData)
     {
         var result = await base.VerifyConnectionInternal(executionContext, jobData);
 
@@ -85,15 +85,15 @@ public class OneLakeConnector : DataLakeConnector
             return result;
         }
 
-        var casted = (OneLakeConnectorJobData)jobData;
+        var casted = (OneLakeConnectorConfiguration)jobData;
         if (!casted.ShouldLoadToTable)
         {
             return result;
         }
 
-        if (!DataLakeConstants.OutputFormats.IsValid(casted.OutputFormat, isReducedSupportedFormat: true))
+        if (!StorageConfigurationConstants.OutputFormats.IsValid(casted.OutputFormat, isReducedSupportedFormat: true))
         {
-            var supported = string.Join(',', DataLakeConstants.OutputFormats.ReducedSupportedFormats);
+            var supported = string.Join(',', StorageConfigurationConstants.OutputFormats.ReducedSupportedFormats);
             var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
             return new ConnectionVerificationResult(false, errorMessage);
         }

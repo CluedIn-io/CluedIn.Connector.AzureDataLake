@@ -1,14 +1,14 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Events;
 using CluedIn.Core.Events.Types;
 
 using Microsoft.Extensions.Logging;
-using CluedIn.Connector.DataLake.Common.EventHandlers;
+using CluedIn.Connector.FileStorage.Common.EventHandlers;
 using CluedIn.Connector.FabricOpenMirroring.Connector;
 
 namespace CluedIn.Connector.FabricOpenMirroring.EventHandlers;
@@ -19,22 +19,22 @@ internal class ExportTargetEventHandler : IDisposable
     private readonly IDisposable _updateExportTargetSubscription;
     private readonly ILogger<ExportTargetEventHandler> _logger;
     private readonly ApplicationContext _applicationContext;
-    private readonly IDataLakeConstants _constants;
-    private readonly IDataLakeJobDataFactory _jobDataFactory;
+    private readonly IStorageConfigurationConstants _configurationConstants;
+    private readonly IStorageFactory _storageFactory;
     private readonly OpenMirroringClient _openMirroringDataLakeClient;
     private bool _disposedValue;
 
     public ExportTargetEventHandler(
         ILogger<ExportTargetEventHandler> logger,
         ApplicationContext applicationContext,
-        IDataLakeConstants constants,
-        IDataLakeJobDataFactory jobDataFactory,
+        IStorageConfigurationConstants constants,
+        IStorageFactory jobDataFactory,
         OpenMirroringClient openMirroringDataLakeClient)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
-        _constants = constants ?? throw new ArgumentNullException(nameof(constants));
-        _jobDataFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
+        _configurationConstants = constants ?? throw new ArgumentNullException(nameof(constants));
+        _storageFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
         _openMirroringDataLakeClient = openMirroringDataLakeClient ?? throw new ArgumentNullException(nameof(openMirroringDataLakeClient));
 
         _registerExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<RegisterExportTargetEvent>(ProcessEvent);
@@ -92,15 +92,15 @@ internal class ExportTargetEventHandler : IDisposable
             return;
         }
 
-        if (providerDefinition.ProviderId != _constants.ProviderId)
+        if (providerDefinition.ProviderId != _configurationConstants.ProviderId)
         {
             executionContext.Log.LogDebug("Skipping creating of mirrored database for '{ProviderDefinitionId}' because ProviderId is not '{ProviderId}'.",
                 providerDefinitionId,
-                _constants.ProviderId);
+                _configurationConstants.ProviderId);
             return;
         }
 
-        var jobData = await _jobDataFactory.GetConfiguration(executionContext, providerDefinitionId, string.Empty) as OpenMirroringConnectorJobData;
+        var jobData = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, string.Empty) as OpenMirroringConnectorConfiguration;
         if (jobData == null)
         {
             throw new ApplicationException($"Failed to get job data for ProviderDefinitionId {providerDefinitionId}.");

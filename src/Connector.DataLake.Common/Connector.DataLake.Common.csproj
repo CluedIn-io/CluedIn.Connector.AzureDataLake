@@ -20,9 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Files.DataLake" />
-    <PackageReference Include="CluedIn.Core" />
-    <PackageReference Include="CsvHelper" />
-    <PackageReference Include="NCrontab" />
-    <PackageReference Include="Parquet.Net" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
   </ItemGroup>
 </Project>
