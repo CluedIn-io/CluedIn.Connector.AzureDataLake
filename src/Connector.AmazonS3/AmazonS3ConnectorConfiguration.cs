@@ -20,7 +20,7 @@ internal class AmazonS3ConnectorConfiguration : StorageConfigurationBase
     public string Region => GetConfigurationValue(AmazonS3ConfigurationConstants.Region) as string;
     public string DirectoryName => GetConfigurationValue(AmazonS3ConfigurationConstants.DirectoryName) as string;
 
-    public override string FileSystemName => BucketName;
+    public virtual string FileSystemName => BucketName;
     public override string RootDirectoryPath => DirectoryName ?? string.Empty;
 
     protected override void AddToHashCode(HashCode hash)

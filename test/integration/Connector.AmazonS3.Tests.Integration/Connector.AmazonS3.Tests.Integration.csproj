@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Connector.AmazonS3\Connector.AmazonS3.csproj" />
+    <ProjectReference Include="..\Connector.DataLake.Common.Tests.Integration\Connector.DataLake.Common.Tests.Integration.csproj" />
   </ItemGroup>
 
 </Project>

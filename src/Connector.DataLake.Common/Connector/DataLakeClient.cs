@@ -19,9 +19,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector;
 internal class DataLakeClient : IStorageClient
 {
     private readonly ILogger<DataLakeClient> _logger;
-    private readonly IStorageConfiguration _storageConfiguration;
+    private readonly IDataLakeStorageConfiguration _storageConfiguration;
 
-    public DataLakeClient(ILogger<DataLakeClient> logger, IStorageConfiguration storageConfiguration)
+    public DataLakeClient(ILogger<DataLakeClient> logger, IDataLakeStorageConfiguration storageConfiguration)
     {
         _logger = logger;
         _storageConfiguration = storageConfiguration;

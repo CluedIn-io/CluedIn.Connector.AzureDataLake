@@ -6,19 +6,14 @@ using System.Threading.Tasks;
 
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
-using Azure.Storage.Files.DataLake.Models;
 
-using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Connector.OneLake.Connector;
 using CluedIn.Core;
-using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
@@ -36,7 +31,7 @@ namespace CluedIn.Connector.OneLake.Tests.Integration;
 
 public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector, OneLakeFactory, IOneLakeConfigurationConstants>
 {
-    protected override Guid DataLakeProviderId => OneLakeConfigurationConstants.DataLakeProviderId;
+    protected override Guid StorageProviderId => OneLakeConfigurationConstants.DataLakeProviderId;
     protected override bool IsFixedFileSystem => true;
 
     public OneLakeConnectorTests(ITestOutputHelper testOutputHelper)
@@ -204,12 +199,10 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
         await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
         await AssertImmediateOutputResult(
-            storageConfiguration.FileSystemName,
-            storageConfiguration.RootDirectoryPath,
-            GetDataLakeClient(storageConfiguration),
-            assertMethod: async (fileClient) =>
+            setupResult,
+            assertMethod: async (setupResult, filePath) =>
             {
-                await AssertJsonResult(fileClient, StreamMode.EventStream, VersionChangeType.Added);
+                await AssertJsonResult(setupResult, filePath, StreamMode.EventStream, VersionChangeType.Added);
             });
     }
 
@@ -225,12 +218,10 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
         await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
         await AssertImmediateOutputResult(
-            storageConfiguration.FileSystemName,
-            storageConfiguration.RootDirectoryPath,
-            GetDataLakeClient(storageConfiguration),
-            assertMethod: async (fileClient) =>
+            setupResult,
+            assertMethod: async (setupResult, filePath) =>
             {
-                await AssertJsonResult(fileClient, StreamMode.Sync, VersionChangeType.Added, isSingleObject: true);
+                await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added, isSingleObject: true);
             });
     }
 
@@ -239,9 +230,9 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "JSON",
-            assertMethod: async (fileClient, _, _) =>
+            assertMethod: async (setupResult, filePath) =>
             {
-                await AssertJsonResult(fileClient, StreamMode.Sync, VersionChangeType.Added);
+                await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added);
             });
     }
 
@@ -317,20 +308,20 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         var tableName = Guid.NewGuid().ToString("N");
         await VerifyStoreData_Sync_WithStreamCache(
             "pArQuet",
-            async (fileClient, fileSystemClient, setupContainerResult) =>
+            async (setupResult, filePath) =>
             {
-                await AssertParquetResultEscaped(fileClient, fileSystemClient, setupContainerResult);
-                var storageConfiguration = setupContainerResult.StorageConfiguration as OneLakeConnectorConfiguration;
+                await AssertParquetResultEscaped(setupResult, filePath);
+                var storageConfiguration = setupResult.StorageConfiguration as OneLakeConnectorConfiguration;
                 var dataLakeClient = GetDataLakeClient(storageConfiguration);
                 var directoryName = $"{storageConfiguration.ItemName}.Lakehouse/Tables/{tableName}";
 
                 var tableFile = await WaitForFileToBeCreated(
-                    storageConfiguration.FileSystemName,
-                    directoryName,
-                    dataLakeClient,
-                    paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList());
+                    setupResult,
+                    paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList(),
+                    (_, _) => directoryName);
 
                 Assert.NotNull(tableFile);
+                var fileSystemClient = dataLakeClient.GetFileSystemClient(storageConfiguration.FileSystemName);
                 await fileSystemClient.DeleteDirectoryAsync(directoryName);
             },
             configureAuthentication: (values) =>
@@ -361,20 +352,14 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
-                var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
-                var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client);
+                var secondPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
                 Assert.Equal(firstDataTime, secondDataTime);
@@ -409,10 +394,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
 
                 executionCount++;
 
-                var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -420,9 +402,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client,
+                    executeExportArg.SetupContainerResult,
                     filterPaths: paths =>
                     {
                         return paths.Where(path => path.Name != firstPath.Name).ToList();
@@ -468,10 +448,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     jobArgs);
                 executionCount++;
 
-                var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -479,9 +456,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client,
+                    executeExportArg.SetupContainerResult,
                     filterPaths: paths =>
                     {
                         return paths.Where(path => path.Name != firstPath.Name).ToList();
@@ -501,54 +476,11 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             });
     }
 
-    private protected override async Task VerifyStoreData_Sync_WithStreamCache(
-        string format,
-        Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
-        Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
-        Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
-        Action<Dictionary<string, object>> configureAuthentication = null,
-        Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
-        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null,
-        Func<IDataLakeStorageConfiguration, SetupContainerResult, string> configureDirectoryName = null)
-    {
-        var configuration = CreateConfigurationWithStreamCache(format);
-        configureAuthentication?.Invoke(configuration);
-        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
-
-        var setupResult = await SetupContainer(storageConfiguration, StreamMode.Sync, configureTimeProvider);
-        var connector = setupResult.ConnectorMock.Object;
-
-        var connectorEntityData = getConnectorEntityData == null
-            ? [CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added)]
-            : getConnectorEntityData();
-        foreach (var data in connectorEntityData)
-        {
-            if (storeData != null)
-            {
-                await storeData(setupResult, data);
-                continue;
-            }
-
-            await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
-            await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
-        }
-        var exportJob = CreateExportJob(setupResult);
-
-        await AssertExportJobOutputFileContents(
-            storageConfiguration.FileSystemName,
-            storageConfiguration.RootDirectoryPath,
-            setupResult,
-            GetDataLakeClient(storageConfiguration),
-            exportJob,
-            assertMethod,
-            executeExport);
-    }
-
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreWhenChangedAfterDeletion()
     {
         await VerifyStoreData_Sync_WithStreamCache("csv",
-            async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
+            async (setupResult, filePath) => await AssertCsvResult(setupResult, filePath, "_", (rows) =>
             {
                 var removed = rows.ToList();
                 removed.Clear();
@@ -599,7 +531,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         return new ClientSecretCredential(storageConfiguration.TenantId, storageConfiguration.ClientId, storageConfiguration.ClientSecret);
     }
 
-    private Dictionary<string, object> CreateConfigurationWithoutStreamCache()
+    private protected override Dictionary<string, object> CreateConfigurationWithoutStreamCache()
     {
         var tenantId = Environment.GetEnvironmentVariable("ONELAKE_TENANTID");
         var clientId = Environment.GetEnvironmentVariable("ONELAKE_CLIENTID");
@@ -636,7 +568,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         };
     }
 
-    private Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
+    private protected override Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
     {
         var baseConfiguration = CreateConfigurationWithoutStreamCache();
         var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ONELAKE_STREAMCACHE");
@@ -680,6 +612,22 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
             .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OneLakeClient(NullLogger<OneLakeClient>.Instance, data as OneLakeConnectorConfiguration)));
         return storageFactory;
+    }
+
+    private protected override DataLakeServiceClient GetDataLakeClient(SetupContainerResult setupContainerResult)
+    {
+        return GetDataLakeClient(setupContainerResult.StorageConfiguration as OneLakeConnectorConfiguration);
+    }
+
+    private protected override string GetDirectoryName(SetupContainerResult setupContainerResult)
+    {
+        var config = setupContainerResult.StorageConfiguration as OneLakeConnectorConfiguration;
+        return $"{config.ItemName}.Lakehouse/{config.ItemFolder}";
+    }
+
+    private protected override StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration)
+    {
+        return new OneLakeConnectorConfiguration(configuration);
     }
 }
 

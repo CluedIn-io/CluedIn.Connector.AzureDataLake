@@ -27,7 +27,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
     public virtual bool ShouldLoadToTable => GetConfigurationValue(OneLakeConfigurationConstants.ShouldLoadToTable) as bool? ?? false;
     public string TableName => GetConfigurationValue(OneLakeConfigurationConstants.TableName) as string;
 
-    public override string FileSystemName => WorkspaceName;
+    public virtual string FileSystemName => WorkspaceName;
 
     public override string RootDirectoryPath => $"{ItemName}.{ItemType}/{ItemFolder}";
 

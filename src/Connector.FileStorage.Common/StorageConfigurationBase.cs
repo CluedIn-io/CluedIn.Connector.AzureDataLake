@@ -24,8 +24,6 @@ internal abstract class StorageConfigurationBase : CrawlJobDataWrapper, IStorage
     public virtual bool IsOverwriteEnabled => GetConfigurationValue(StorageConfigurationConstants.IsOverwriteEnabled) as bool? ?? true;
     public virtual bool IsArrayColumnsEnabled => GetConfigurationValue(StorageConfigurationConstants.IsArrayColumnsEnabled) as bool? ?? false;
 
-    public abstract string FileSystemName { get; }
-
     public abstract string RootDirectoryPath { get; }
 
     public override int GetHashCode()

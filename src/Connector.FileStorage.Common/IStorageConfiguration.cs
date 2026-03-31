@@ -28,7 +28,5 @@ public interface IStorageConfiguration
 
     bool IsArrayColumnsEnabled { get; }
 
-    string FileSystemName { get; }
-
     string RootDirectoryPath { get; }
 }

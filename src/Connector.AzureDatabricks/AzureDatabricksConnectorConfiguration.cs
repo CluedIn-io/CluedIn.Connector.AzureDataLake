@@ -25,7 +25,7 @@ internal class AzureDatabricksConnectorConfiguration : StorageConfigurationBase,
     public override bool ShouldWriteGuidAsString => true;
     public override bool ShouldEscapeVocabularyKeys => true;
 
-    public override string FileSystemName => WorkspaceName;
+    public virtual string FileSystemName => WorkspaceName;
 
     public override string RootDirectoryPath => $"{ItemName}.{ItemType}/{ItemFolder}/";
 

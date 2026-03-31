@@ -19,7 +19,7 @@ internal class AzureDataLakeConnectorConfiguration : StorageConfigurationBase, I
     public string AccountKey => GetConfigurationValue(AzureDataLakeConfigurationConstants.AccountKey) as string;
     public string DirectoryName => GetConfigurationValue(AzureDataLakeConfigurationConstants.DirectoryName) as string;
 
-    public override string FileSystemName => GetConfigurationValue(AzureDataLakeConfigurationConstants.FileSystemName) as string;
+    public virtual string FileSystemName => GetConfigurationValue(AzureDataLakeConfigurationConstants.FileSystemName) as string;
     public override string RootDirectoryPath => DirectoryName;
 
     public string StorageUri => $"https://{AccountName}.dfs.core.windows.net";

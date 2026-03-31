@@ -29,7 +29,7 @@ internal class OpenMirroringConnectorConfiguration : StorageConfigurationBase, I
     public virtual bool ShouldCreateMirroredDatabase => GetConfigurationValue(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase) as bool? ?? false;
     public string TableName => GetConfigurationValue(OpenMirroringConfigurationConstants.TableName) as string;
 
-    public override string FileSystemName => WorkspaceName;
+    public virtual string FileSystemName => WorkspaceName;
 
     public override string RootDirectoryPath => $"{MirroredDatabaseName}.MountedRelationalDatabase/Files/LandingZone";
 
