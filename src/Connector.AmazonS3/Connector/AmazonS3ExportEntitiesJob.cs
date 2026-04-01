@@ -17,4 +17,9 @@ internal class AmazonS3ExportEntitiesJob : StorageExportEntitiesJobBase
     }
 
     protected override string StreamIdDefaultStringFormat => "D";
+
+    protected override string TransformMetadataKey(string key)
+    {
+        return key.ToLowerInvariant();
+    }
 }

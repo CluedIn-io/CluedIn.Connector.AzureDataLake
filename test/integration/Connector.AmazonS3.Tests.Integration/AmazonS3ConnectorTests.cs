@@ -355,6 +355,10 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
 
                 Assert.Equal(firstDataTime, secondDataTime);
                 return secondPath;
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
             });
     }
 
@@ -410,6 +414,10 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                     {
                         return dateTimeList[executionCount];
                     });
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
             });
     }
 
@@ -464,6 +472,10 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                     {
                         return dateTimeList[executionCount];
                     });
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
             });
     }
 
@@ -798,7 +810,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             metadataDict[metaKey.Replace("x-amz-meta-", string.Empty)] = metadata.Metadata[metaKey];
         }
 
-        var fileDataTime = metadataDict["DataTime"];
+        var fileDataTime = metadataDict["datatime"];
 
         return DateTimeOffset.Parse(fileDataTime);
     }

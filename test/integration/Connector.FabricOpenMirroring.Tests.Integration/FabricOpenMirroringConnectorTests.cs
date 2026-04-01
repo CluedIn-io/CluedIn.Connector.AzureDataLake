@@ -563,7 +563,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     {
         return base.WaitForFileToBeCreated(setupContainerResult, filterPaths: (paths) =>
         {
-            var metadataFiltered = paths.Where(path => !path.Name.EndsWith("/_metadata.json") && !path.Name.EndsWith("_partnerEvents.json")).ToList();
+            var metadataFiltered = paths.Where(path => !path.Name.EndsWith("_metadata.json") && !path.Name.EndsWith("_partnerEvents.json")).ToList();
             return filterPaths?.Invoke(metadataFiltered) ?? metadataFiltered;
         },
         getDirectoryName);

@@ -247,8 +247,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             await temporaryFileClient.SetMetadataAsync(
                 new FileMetadata(new Dictionary<string, string>
                 {
-                    [StreamIdKey] = streamId.ToString(),
-                    [DataTimeKey] = asOfTime.ToString("O"),
+                    [TransformMetadataKey(StreamIdKey)] = streamId.ToString(),
+                    [TransformMetadataKey(DataTimeKey)] = asOfTime.ToString("O"),
                 }));
             context.Log.LogDebug(
                 "End setting file properties to file '{OutputFileName}' StreamId {StreamId} and DataTime {DataTime}.",
@@ -499,11 +499,11 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         return hasMissed;
     }
 
-    private static bool TryGetMetadata(IDictionary<string, string> metadata, out ExportedFileMetadata fileMetadata)
+    private bool TryGetMetadata(IDictionary<string, string> metadata, out ExportedFileMetadata fileMetadata)
     {
         if(metadata != null
-                && metadata.TryGetValue(StreamIdKey, out var fileStreamIdString)
-                && metadata.TryGetValue(DataTimeKey, out var fileDataTimeString)
+                && metadata.TryGetValue(TransformMetadataKey(StreamIdKey), out var fileStreamIdString)
+                && metadata.TryGetValue(TransformMetadataKey(DataTimeKey), out var fileDataTimeString)
                 && Guid.TryParse(fileStreamIdString, out var fileStreamId)
                 && DateTimeOffset.TryParse(fileDataTimeString, out var fileDataTime))
         {
@@ -515,7 +515,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         return false;
     }
 
-    private static bool HasExportedFileBefore(Guid streamId, DateTimeOffset asOfTime, IDictionary<string, string> metadata)
+    protected virtual string TransformMetadataKey(string key)
+    {
+        return key;
+    }
+
+    private bool HasExportedFileBefore(Guid streamId, DateTimeOffset asOfTime, IDictionary<string, string> metadata)
     {
         return TryGetMetadata(metadata, out var fileMetadata)
                 && fileMetadata.StreamId == streamId

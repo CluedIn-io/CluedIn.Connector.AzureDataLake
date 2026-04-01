@@ -141,7 +141,8 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public Task<IStorageFileClient> GetFileClient(FilePath filePath)
     {
-        throw new NotImplementedException();
+        var s3Client = GetS3Client();
+        return Task.FromResult<IStorageFileClient>(new AmazonS3StorageFileClient(s3Client, _configuration.BucketName, filePath));
     }
 
     public async Task<FileMetadata> GetFileMetadata(FilePath filePath)
