@@ -5,21 +5,25 @@
     <RootNamespace>CluedIn.Connector.FileStorage.Common</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Connectors -->
+    <InternalsVisibleTo Include="CluedIn.Connector.FileStorage.Common" />
     <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3" />
     <InternalsVisibleTo Include="CluedIn.Connector.AzureAIStudio" />
-    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake" />
     <InternalsVisibleTo Include="CluedIn.Connector.AzureDatabricks" />
-    <InternalsVisibleTo Include="CluedIn.Connector.FileStorage.Common" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake" />
     <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring" />
     <InternalsVisibleTo Include="CluedIn.Connector.OneLake" />
     <InternalsVisibleTo Include="CluedIn.Connector.SynapseDataEngineering" />
+    <!-- Unit Tests -->
+    <InternalsVisibleTo Include="CluedIn.Connector.FileStorage.Common.Tests.Unit" />
     <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Unit" />
     <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Unit" />
-    <InternalsVisibleTo Include="CluedIn.Connector.FileStorage.Common.Tests.Unit" />
+    <!-- Integration Tests -->
     <InternalsVisibleTo Include="CluedIn.Connector.DataLake.Common.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Integration" />
-    <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CluedIn.Core" />

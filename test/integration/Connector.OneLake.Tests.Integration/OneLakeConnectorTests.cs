@@ -172,7 +172,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     [InlineData("Files/path")]
     [InlineData("Files/path with space")]
     [InlineData("Files/クルード・イン")]
-    public async Task VerifyConnection_WhenItemFolderValid_ReturnInvalidFolderErrorMessage(string itemFolder)
+    public async Task VerifyConnection_WhenItemFolderValid_ReturnSuccess(string itemFolder)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
         configuration[nameof(OneLakeConfigurationConstants.ItemFolder)] = itemFolder;
@@ -318,7 +318,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 var tableFile = await WaitForFileToBeCreated(
                     setupResult,
                     paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList(),
-                    (_, _) => directoryName);
+                    _ => directoryName);
 
                 Assert.NotNull(tableFile);
                 var fileSystemClient = dataLakeClient.GetFileSystemClient(storageConfiguration.FileSystemName);

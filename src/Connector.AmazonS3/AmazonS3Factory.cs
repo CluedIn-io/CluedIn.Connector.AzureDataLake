@@ -21,8 +21,8 @@ public class AmazonS3Factory : StorageFactoryBase, IStorageFactory
 
     public override Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration configuration)
     {
-        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<AmazonS3Clienttt>>();
-        var client = new AmazonS3Clienttt(logger, configuration as AmazonS3ConnectorConfiguration);
+        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<AmazonS3StorageClient>>();
+        var client = new AmazonS3StorageClient(logger, configuration as AmazonS3ConnectorConfiguration);
         return Task.FromResult<IStorageClient>(client);
     }
 }

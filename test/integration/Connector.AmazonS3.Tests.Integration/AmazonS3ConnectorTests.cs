@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Enumeration;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 using Amazon;
@@ -9,6 +11,8 @@ using Amazon.S3;
 using Amazon.S3.Model;
 
 using Azure.Identity;
+using Azure.Storage.Files.DataLake;
+using Azure.Storage.Files.DataLake.Models;
 
 using Castle.MicroKernel.Registration;
 using Castle.Windsor;
@@ -29,10 +33,16 @@ using CluedIn.Core.DataStore;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.PowerFx.Core.Utils;
 
 using Moq;
+
+using Newtonsoft.Json;
+
+using Parquet.Schema;
 
 using Xunit;
 using Xunit.Abstractions;
@@ -47,360 +57,6 @@ namespace CluedIn.Connector.AmazonS3.Tests.Integration;
 /// Requires environment variables: S3_ACCESSKEY, S3_SECRETKEY, S3_REGION, S3_BUCKETNAME
 /// Tests will fail if environment variables are not set.
 /// </summary>
-//public class AmazonS3ConnectorTests : IAsyncLifetime
-//{
-//    private readonly ITestOutputHelper _testOutputHelper;
-//    private readonly List<string> _keysToCleanup = new();
-//    private string _testPrefix;
-
-//    public AmazonS3ConnectorTests(ITestOutputHelper testOutputHelper)
-//    {
-//        _testOutputHelper = testOutputHelper;
-//    }
-
-//    public Task InitializeAsync()
-//    {
-//        _testPrefix = $"xunit-{DateTime.UtcNow.Ticks}";
-//        return Task.CompletedTask;
-//    }
-
-//    public async Task DisposeAsync()
-//    {
-//        try
-//        {
-//            var s3 = CreateS3Client();
-//            if (s3 == null) return;
-//            var bucket = GetBucketName();
-
-//            foreach (var key in _keysToCleanup)
-//            {
-//                try { await s3.DeleteObjectAsync(bucket, key); } catch { /* best effort */ }
-//            }
-//        }
-//        catch { /* best effort */ }
-//    }
-
-//    [Fact]
-//    public async Task VerifyConnection_WhenValid_ReturnsSuccess()
-//    {
-//        var (connector, context, configuration, jobData) = SetupConnector();
-
-//        var result = await connector.VerifyConnection(context, configuration);
-
-//        Assert.NotNull(result);
-//        Assert.True(result.Success);
-//    }
-
-//    [Theory]
-//    [InlineData("")]
-//    [InlineData(" ")]
-//    [InlineData(null)]
-//    public async Task VerifyConnection_WhenInvalidAccessKey_ReturnError(string accessKey)
-//    {
-//        var (connector, context, configuration, _) = SetupConnector();
-
-//        configuration[AmazonS3ConfigurationConstants.AccessKey] = accessKey;
-//        var jobData = new AmazonS3ConnectorConfiguration(configuration);
-//        SetupJobDataFactory(connector, configuration, jobData);
-
-//        var result = await connector.VerifyConnection(context, configuration);
-
-//        Assert.NotNull(result);
-//        Assert.False(result.Success);
-//        Assert.Equal(AmazonS3Connector.InvalidAccessKeyErrorMessage, result.ErrorMessage);
-//    }
-
-//    [Theory]
-//    [InlineData("")]
-//    [InlineData(" ")]
-//    [InlineData(null)]
-//    public async Task VerifyConnection_WhenInvalidSecretKey_ReturnError(string secretKey)
-//    {
-//        var (connector, context, configuration, _) = SetupConnector();
-
-//        configuration[AmazonS3ConfigurationConstants.SecretKey] = secretKey;
-//        var jobData = new AmazonS3ConnectorConfiguration(configuration);
-//        SetupJobDataFactory(connector, configuration, jobData);
-
-//        var result = await connector.VerifyConnection(context, configuration);
-
-//        Assert.NotNull(result);
-//        Assert.False(result.Success);
-//        Assert.Equal(AmazonS3Connector.InvalidSecretKeyErrorMessage, result.ErrorMessage);
-//    }
-
-//    [Theory]
-//    [InlineData("")]
-//    [InlineData(" ")]
-//    [InlineData(null)]
-//    [InlineData("ALLCAPS")]
-//    [InlineData("my_bucket")]
-//    [InlineData("ab")]
-//    public async Task VerifyConnection_WhenInvalidBucketName_ReturnError(string bucketName)
-//    {
-//        var (connector, context, configuration, _) = SetupConnector();
-
-//        configuration[AmazonS3ConfigurationConstants.BucketName] = bucketName;
-//        var jobData = new AmazonS3ConnectorConfiguration(configuration);
-//        SetupJobDataFactory(connector, configuration, jobData);
-
-//        var result = await connector.VerifyConnection(context, configuration);
-
-//        Assert.NotNull(result);
-//        Assert.False(result.Success);
-//        Assert.Equal(AmazonS3Connector.InvalidBucketNameErrorMessage, result.ErrorMessage);
-//    }
-
-//    [Theory]
-//    [InlineData("")]
-//    [InlineData(" ")]
-//    [InlineData(null)]
-//    public async Task VerifyConnection_WhenInvalidRegion_ReturnError(string region)
-//    {
-//        var (connector, context, configuration, _) = SetupConnector();
-
-//        configuration[AmazonS3ConfigurationConstants.Region] = region;
-//        var jobData = new AmazonS3ConnectorConfiguration(configuration);
-//        SetupJobDataFactory(connector, configuration, jobData);
-
-//        var result = await connector.VerifyConnection(context, configuration);
-
-//        Assert.NotNull(result);
-//        Assert.False(result.Success);
-//        Assert.Equal(AmazonS3Connector.InvalidRegionErrorMessage, result.ErrorMessage);
-//    }
-
-//    [Fact]
-//    public async Task StoreData_EventStream_WritesJsonToS3()
-//    {
-//        var (connector, context, configuration, jobData) = SetupConnector(StreamMode.EventStream);
-
-//        var streamModel = CreateStreamModel(StreamMode.EventStream, Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c"));
-//        var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
-
-//        await connector.StoreData(context, streamModel, data);
-
-//        // Verify file was written to S3
-//        var s3 = CreateS3Client();
-//        var bucket = GetBucketName();
-//        var prefix = jobData.RootDirectoryPath;
-
-//        var listResponse = await s3.ListObjectsV2Async(new ListObjectsV2Request
-//        {
-//            BucketName = bucket,
-//            Prefix = prefix + "/",
-//        });
-
-//        Assert.NotEmpty(listResponse.S3Objects);
-//        _keysToCleanup.AddRange(listResponse.S3Objects.Select(o => o.Key));
-
-//        var obj = listResponse.S3Objects.First();
-//        var getResponse = await s3.GetObjectAsync(bucket, obj.Key);
-//        using var reader = new StreamReader(getResponse.ResponseStream);
-//        var content = await reader.ReadToEndAsync();
-
-//        Assert.Contains("Jean Luc Picard", content);
-//        Assert.Contains("f55c66dc-7881-55c9-889f-344992e71cb8", content);
-//    }
-
-//    [Fact]
-//    public async Task StoreData_Sync_WritesJsonToS3()
-//    {
-//        var (connector, context, configuration, jobData) = SetupConnector(StreamMode.Sync);
-
-//        var streamModel = CreateStreamModel(StreamMode.Sync, Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c"));
-//        var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
-
-//        await connector.StoreData(context, streamModel, data);
-
-//        var s3 = CreateS3Client();
-//        var bucket = GetBucketName();
-//        var prefix = jobData.RootDirectoryPath;
-
-//        var listResponse = await s3.ListObjectsV2Async(new ListObjectsV2Request
-//        {
-//            BucketName = bucket,
-//            Prefix = prefix + "/",
-//        });
-
-//        Assert.NotEmpty(listResponse.S3Objects);
-//        _keysToCleanup.AddRange(listResponse.S3Objects.Select(o => o.Key));
-
-//        var obj = listResponse.S3Objects.First();
-//        var getResponse = await s3.GetObjectAsync(bucket, obj.Key);
-//        using var reader = new StreamReader(getResponse.ResponseStream);
-//        var content = await reader.ReadToEndAsync();
-
-//        Assert.Contains("Jean Luc Picard", content);
-//    }
-
-//    [Fact]
-//    public async Task GetContainers_WhenBucketEmpty_ReturnsEmptyOrNull()
-//    {
-//        var (connector, context, configuration, jobData) = SetupConnector();
-
-//        var containers = await connector.GetContainers(context, Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c"));
-
-//        // Either null or empty is acceptable for an empty directory
-//        Assert.True(containers == null || !containers.Any());
-//    }
-
-//    #region Setup Helpers
-
-//    private (AmazonS3Connector Connector, ExecutionContext Context, Dictionary<string, object> Configuration, AmazonS3ConnectorConfiguration JobData) SetupConnector(StreamMode streamMode = StreamMode.EventStream)
-//    {
-//        var configuration = CreateConfiguration();
-//        var jobData = new AmazonS3ConnectorConfiguration(configuration);
-//        var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
-
-//        var container = new WindsorContainer();
-//        var applicationContext = new ApplicationContext(container);
-//        var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
-//        mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
-//            .Returns(new DateTimeOffset(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5)));
-
-//        var cache = new Mock<InMemoryApplicationCache>(MockBehavior.Loose, container) { CallBase = true };
-//        container.Register(Component.For<IApplicationCache>().Instance(cache.Object));
-
-//        var systemConnectionStrings = new Mock<ISystemConnectionStrings>();
-//        container.Register(Component.For<ISystemConnectionStrings>().Instance(systemConnectionStrings.Object));
-//        container.Register(Component.For<SystemContext>().Instance(new SystemContext(container)));
-//        container.Register(Component.For<ILogger<ExecutionContext>>().Instance(new Mock<ILogger<ExecutionContext>>().Object));
-//        container.Register(Component.For<ILogger<OrganizationDataStores>>().Instance(new Mock<ILogger<OrganizationDataStores>>().Object));
-
-//        var organizationDataShard = new Mock<IOrganizationDataShard>();
-//        systemConnectionStrings.Setup(x => x.SystemOrganizationDataShard).Returns(organizationDataShard.Object);
-
-//        var organizationId = Guid.NewGuid();
-//        var organization = new Organization(applicationContext, organizationId);
-//        var organizationRepository = new Mock<IOrganizationRepository>();
-//        organizationRepository.Setup(x => x.GetOrganization(It.IsAny<ExecutionContext>(), It.IsAny<Guid>())).Returns(organization);
-//        container.Register(Component.For<IOrganizationRepository>().Instance(organizationRepository.Object));
-
-//        var providerDefinitionDataStore = new Mock<IRelationalDataStore<ProviderDefinition>>();
-//        providerDefinitionDataStore.Setup(store => store.GetByIdAsync(It.IsAny<ExecutionContext>(), providerDefinitionId))
-//            .ReturnsAsync(new ProviderDefinition { IsEnabled = true, ProviderId = AmazonS3ConfigurationConstants.S3ProviderId, Id = providerDefinitionId });
-//        container.Register(Component.For<IRelationalDataStore<ProviderDefinition>>().Instance(providerDefinitionDataStore.Object));
-
-//        var streamRepository = new Mock<IStreamRepository>();
-//        container.Register(Component.For<IStreamRepository>().Instance(streamRepository.Object));
-
-//        var context = new ExecutionContext(applicationContext, organization, new Mock<ILogger<ExecutionContext>>().Object);
-
-//        var constantsMock = new Mock<IAmazonS3ConfigurationConstants>();
-//        constantsMock.Setup(x => x.CacheRecordsThresholdKeyName).Returns("abc");
-//        constantsMock.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
-//        constantsMock.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
-//        constantsMock.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
-//        constantsMock.Setup(x => x.ProviderId).Returns(AmazonS3ConfigurationConstants.S3ProviderId);
-
-//        var jobDataFactoryMock = new Mock<AmazonS3Factory>();
-//        jobDataFactoryMock.Setup(x => x.CreateStorageConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
-//            .ReturnsAsync(jobData);
-//        jobDataFactoryMock.Setup(x => x.CreateStorageConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<IDictionary<string, object>>(), It.IsAny<string>()))
-//            .ReturnsAsync(jobData);
-
-//        var client = new AmazonS3Client();
-//        var connector = new AmazonS3Connector(
-//            new Mock<ILogger<AmazonS3Connector>>().Object,
-//            applicationContext,
-//            constantsMock.Object,
-//            jobDataFactoryMock.Object,
-//            mockDateTimeOffsetProvider.Object);
-
-//        return (connector, context, configuration, jobData);
-//    }
-
-//    private static void SetupJobDataFactory(AmazonS3Connector connector, Dictionary<string, object> configuration, AmazonS3ConnectorConfiguration jobData)
-//    {
-//        // The connector uses the factory internally via VerifyConnection; the factory mock is already set up
-//        // to return the original jobData. For parameter-override tests, the connector calls
-//        // GetConfiguration with the provided dictionary which returns the overridden jobData.
-//    }
-
-//    private Dictionary<string, object> CreateConfiguration()
-//    {
-//        var accessKey = Environment.GetEnvironmentVariable("S3_ACCESSKEY");
-//        Assert.NotNull(accessKey);
-//        var secretKey = Environment.GetEnvironmentVariable("S3_SECRETKEY");
-//        Assert.NotNull(secretKey);
-//        var region = Environment.GetEnvironmentVariable("S3_REGION");
-//        Assert.NotNull(region);
-//        var bucketName = Environment.GetEnvironmentVariable("S3_BUCKETNAME");
-//        Assert.NotNull(bucketName);
-
-//        return new Dictionary<string, object>
-//        {
-//            { AmazonS3ConfigurationConstants.AccessKey, accessKey },
-//            { AmazonS3ConfigurationConstants.SecretKey, secretKey },
-//            { AmazonS3ConfigurationConstants.Region, region },
-//            { AmazonS3ConfigurationConstants.BucketName, bucketName },
-//            { AmazonS3ConfigurationConstants.DirectoryName, _testPrefix },
-//        };
-//    }
-
-//    private static IAmazonS3 CreateS3Client()
-//    {
-//        var accessKey = Environment.GetEnvironmentVariable("S3_ACCESSKEY");
-//        var secretKey = Environment.GetEnvironmentVariable("S3_SECRETKEY");
-//        var region = Environment.GetEnvironmentVariable("S3_REGION");
-//        if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey) || string.IsNullOrEmpty(region))
-//            return null;
-//        return new Amazon.S3.AmazonS3Client(accessKey, secretKey, RegionEndpoint.GetBySystemName(region));
-//    }
-
-//    private static string GetBucketName()
-//    {
-//        return Environment.GetEnvironmentVariable("S3_BUCKETNAME");
-//    }
-
-//    private static StreamModel CreateStreamModel(StreamMode mode, Guid providerDefinitionId)
-//    {
-//        return new StreamModel
-//        {
-//            Id = Guid.NewGuid(),
-//            ConnectorProviderDefinitionId = providerDefinitionId,
-//            ContainerName = "test",
-//            Mode = mode,
-//            ExportIncomingEdges = true,
-//            ExportOutgoingEdges = true,
-//            Status = StreamStatus.Started,
-//            OrganizationId = Guid.NewGuid(),
-//        };
-//    }
-
-//    private static ConnectorEntityData CreateBaseConnectorEntityData(StreamMode streamMode, VersionChangeType versionChangeType)
-//    {
-//        var data = new ConnectorEntityData(versionChangeType, streamMode,
-//            Guid.Parse("f55c66dc-7881-55c9-889f-344992e71cb8"),
-//            new ConnectorEntityPersistInfo("etypzcezkiehwq8vw4oqog==", 1), null,
-//            EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"),
-//            "/Person",
-//            new[]
-//            {
-//                new ConnectorPropertyData("user.lastName", "Picard",
-//                    new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
-//                new ConnectorPropertyData("Name", "Jean Luc Picard",
-//                    new EntityPropertyConnectorPropertyDataType(typeof(string))),
-//            },
-//            new[] { EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0") },
-//            new[]
-//            {
-//                new EntityEdge(
-//                    new EntityReference(EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0")),
-//                    new EntityReference(EntityCode.FromKey("/EntityA#Somewhere:1234")), "/EntityA")
-//            },
-//            new[]
-//            {
-//                new EntityEdge(new EntityReference(EntityCode.FromKey("/EntityB#Somewhere:5678")),
-//                    new EntityReference(EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0")),
-//                    "/EntityB")
-//            });
-//        return data;
-//    }
-
-//    #endregion
-//}
 public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connector, AmazonS3Factory, IAmazonS3ConfigurationConstants>
 {
     protected override Guid StorageProviderId => AmazonS3ConfigurationConstants.S3ProviderId;
@@ -425,11 +81,14 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         Assert.True(result.Success);
     }
 
-    [Fact]
-    public async Task VerifyConnection_WhenInvalidTenantId_ReturnInvalidCredentialsErrorMessage()
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public async Task VerifyConnection_WhenInvalidAccessKey_ReturnInvalidAccessKeyErrorMessage(string accessKey)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AmazonS3ConfigurationConstants.TenantId)] = "1";
+        configuration[nameof(AmazonS3ConfigurationConstants.AccessKey)] = accessKey;
         var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
@@ -439,14 +98,17 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
-        Assert.Equal(AmazonS3Connector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+        Assert.Equal(AmazonS3Connector.InvalidAccessKeyErrorMessage, result.ErrorMessage);
     }
 
-    [Fact]
-    public async Task VerifyConnection_WhenInvalidClientId_ReturnInvalidCredentialsErrorMessage()
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public async Task VerifyConnection_WhenInvalidSecretKey_ReturnInvalidSecretKeyErrorMessage(string secretKey)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AmazonS3ConfigurationConstants.ClientId)] = "1";
+        configuration[nameof(AmazonS3ConfigurationConstants.SecretKey)] = secretKey;
         var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
@@ -456,14 +118,20 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
-        Assert.Equal(AmazonS3Connector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+        Assert.Equal(AmazonS3Connector.InvalidSecretKeyErrorMessage, result.ErrorMessage);
     }
 
-    [Fact]
-    public async Task VerifyConnection_WhenInvalidClientSecret_ReturnInvalidCredentialsErrorMessage()
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    [InlineData("ALLCAPS")]
+    [InlineData("my_bucket")]
+    [InlineData("ab")]
+    public async Task VerifyConnection_WhenInvalidBucketName_ReturnInvalidBucketNameErrorMessage(string bucketName)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AmazonS3ConfigurationConstants.ClientSecret)] = "1";
+        configuration[nameof(AmazonS3ConfigurationConstants.BucketName)] = bucketName;
         var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
@@ -473,7 +141,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
-        Assert.Equal(AmazonS3Connector.InvalidCredentialsErrorMessage, result.ErrorMessage);
+        Assert.Equal(AmazonS3Connector.InvalidBucketNameErrorMessage, result.ErrorMessage);
     }
 
     [Theory]
@@ -481,10 +149,10 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     [InlineData("")]
     [InlineData(" ")]
     [InlineData("  ")]
-    public async Task VerifyConnection_WhenWorkspaceNameInvalid_ReturnWorkspaceNameInvalidErrorMessage(string workspaceName)
+    public async Task VerifyConnection_WhenInvalidRegion_ReturnInvalidRegionErrorMessage(string region)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AmazonS3ConfigurationConstants.WorkspaceName)] = workspaceName;
+        configuration[nameof(AmazonS3ConfigurationConstants.Region)] = region;
         var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
@@ -494,69 +162,52 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
-        Assert.Equal(AmazonS3Connector.InvalidWorkspaceErrorMessage, result.ErrorMessage);
+        Assert.Equal(AmazonS3Connector.InvalidRegionErrorMessage, result.ErrorMessage);
     }
 
-    [Fact]
-    public async Task VerifyConnection_WhenWorkspaceNotFound_ReturnWorkspaceNotFoundErrorMessage()
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AmazonS3ConfigurationConstants.WorkspaceName)] = "1";
-        var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
+    //[Theory]
+    //[InlineData("NotFiles/")]
+    //[InlineData("")]
+    //[InlineData(" ")]
+    //[InlineData("File")]
+    //[InlineData("File/")]
+    //[InlineData(null)]
+    //public async Task VerifyConnection_WhenItemFolderInvalid_ReturnInvalidFolderErrorMessage(string itemFolder)
+    //{
+    //    var configuration = CreateConfigurationWithoutStreamCache();
+    //    configuration[nameof(AmazonS3ConfigurationConstants.DirectoryName)] = itemFolder;
+    //    var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
-        var result = await connector.VerifyConnection(setupResult.Context, configuration);
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Equal(AmazonS3Connector.WorkspaceNotFoundErrorMessageFormat.FormatWith("1"), result.ErrorMessage);
-    }
+    //    var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
+    //    var connector = setupResult.ConnectorMock.Object;
+    //    setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+    //        .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
+    //    var result = await connector.VerifyConnection(setupResult.Context, configuration);
+    //    Assert.NotNull(result);
+    //    Assert.False(result.Success);
+    //    Assert.Equal(AmazonS3Connector.InvalidFolderErrorMessage, result.ErrorMessage);
+    //}
 
-    [Theory]
-    [InlineData("NotFiles/")]
-    [InlineData("")]
-    [InlineData(" ")]
-    [InlineData("File")]
-    [InlineData("File/")]
-    [InlineData(null)]
-    public async Task VerifyConnection_WhenItemFolderInvalid_ReturnInvalidFolderErrorMessage(string itemFolder)
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AmazonS3ConfigurationConstants.ItemFolder)] = itemFolder;
-        var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
+    //[Theory]
+    //[InlineData("Files/")]
+    //[InlineData("Files")]
+    //[InlineData("Files/path")]
+    //[InlineData("Files/path with space")]
+    //[InlineData("Files/クルード・イン")]
+    //public async Task VerifyConnection_WhenItemFolderValid_ReturnSuccess(string itemFolder)
+    //{
+    //    var configuration = CreateConfigurationWithoutStreamCache();
+    //    configuration[nameof(AmazonS3ConfigurationConstants.ItemFolder)] = itemFolder;
+    //    var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
-        var result = await connector.VerifyConnection(setupResult.Context, configuration);
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Equal(AmazonS3Connector.InvalidFolderErrorMessage, result.ErrorMessage);
-    }
-
-    [Theory]
-    [InlineData("Files/")]
-    [InlineData("Files")]
-    [InlineData("Files/path")]
-    [InlineData("Files/path with space")]
-    [InlineData("Files/クルード・イン")]
-    public async Task VerifyConnection_WhenItemFolderValid_ReturnInvalidFolderErrorMessage(string itemFolder)
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AmazonS3ConfigurationConstants.ItemFolder)] = itemFolder;
-        var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
-
-        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
-        var result = await connector.VerifyConnection(setupResult.Context, configuration);
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-    }
+    //    var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
+    //    var connector = setupResult.ConnectorMock.Object;
+    //    setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+    //        .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
+    //    var result = await connector.VerifyConnection(setupResult.Context, configuration);
+    //    Assert.NotNull(result);
+    //    Assert.True(result.Success);
+    //}
 
     [Fact]
     public async Task VerifyStoreData_EventStream()
@@ -670,38 +321,6 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                 values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
                 values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
                 values.Add(nameof(StorageConfigurationConstants.IsArrayColumnsEnabled), true);
-            });
-    }
-
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetCanLoadToTable()
-    {
-        var tableName = Guid.NewGuid().ToString("N");
-        await VerifyStoreData_Sync_WithStreamCache(
-            "pArQuet",
-            async (setupResult, filePath) =>
-            {
-                await AssertParquetResultEscaped(setupResult, filePath);
-                var storageConfiguration = setupResult.StorageConfiguration as AmazonS3ConnectorConfiguration;
-                var dataLakeClient = GetDataLakeClient(storageConfiguration);
-                var directoryName = $"{storageConfiguration.ItemName}.Lakehouse/Tables/{tableName}";
-
-                var tableFile = await WaitForFileToBeCreated(
-                    setupResult,
-                    paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList(),
-                    (_, _) => directoryName);
-
-                Assert.NotNull(tableFile);
-                var fileSystemClient = dataLakeClient.GetFileSystemClient(storageConfiguration.FileSystemName);
-                await fileSystemClient.DeleteDirectoryAsync(directoryName);
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-                values.Add(nameof(AmazonS3ConfigurationConstants.ShouldLoadToTable), true);
-                values.Add(nameof(AmazonS3ConfigurationConstants.TableName), tableName);
-                values[nameof(AmazonS3ConfigurationConstants.ContainerName)] = tableName;
             });
     }
 
@@ -890,60 +509,46 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         return exportJob;
     }
 
-    private static DataLakeServiceClient GetDataLakeClient(AmazonS3ConnectorConfiguration storageConfiguration)
-    {
-        var sharedKeyCredential = GetCredential(storageConfiguration);
-        return new DataLakeServiceClient(
-            new Uri("https://amazons3.dfs.fabric.microsoft.com"),
-            sharedKeyCredential);
-    }
-
-    private static ClientSecretCredential GetCredential(AmazonS3ConnectorConfiguration storageConfiguration)
-    {
-        return new ClientSecretCredential(storageConfiguration.TenantId, storageConfiguration.ClientId, storageConfiguration.ClientSecret);
-    }
+    //private static ClientSecretCredential GetCredential(AmazonS3ConnectorConfiguration storageConfiguration)
+    //{
+    //    return new ClientSecretCredential(storageConfiguration.TenantId, storageConfiguration.ClientId, storageConfiguration.ClientSecret);
+    //}
 
     private protected override Dictionary<string, object> CreateConfigurationWithoutStreamCache()
     {
-        var tenantId = Environment.GetEnvironmentVariable("AMAZONS3_TENANTID");
-        var clientId = Environment.GetEnvironmentVariable("AMAZONS3_CLIENTID");
-        var clientSecretEncoded = Environment.GetEnvironmentVariable("AMAZONS3_CLIENTSECRET");
-        var workspaceName = Environment.GetEnvironmentVariable("AMAZONS3_WORKSPACENAME");
-        var itemName = Environment.GetEnvironmentVariable("AMAZONS3_ITEMNAME");
+        var accessKey = Environment.GetEnvironmentVariable("S3_ACCESSKEY");
+        var secretKey = Environment.GetEnvironmentVariable("S3_SECRETKEY");
+        var region = Environment.GetEnvironmentVariable("S3_REGION");
+        var bucketName = Environment.GetEnvironmentVariable("S3_BUCKETNAME");
 
-        var clientSecretString = Encoding.UTF8.GetString(Convert.FromBase64String(clientSecretEncoded));
-        var maskedSecret = string.IsNullOrWhiteSpace(clientSecretEncoded) ? string.Empty
-            : $"{clientSecretEncoded[0..3]}{new string('*', Math.Max(clientSecretEncoded.Length - 3, 0))}";
+        var maskedSecret = string.IsNullOrWhiteSpace(secretKey) ? string.Empty
+            : $"{secretKey[0..3]}{new string('*', Math.Max(secretKey.Length - 3, 0))}";
         TestOutputHelper.WriteLine(
-            "Using TenantId: '{0}', ClientId: '{1}', ClientSecret: '{2}', WorkspaceName: '{3}', ItemName: '{4}'.",
-            tenantId,
-            clientId,
+            "Using AccessKey: '{0}', SecretKey: '{1}', Region: '{2}', BucketName: '{3}'.",
+            accessKey,
             maskedSecret,
-            workspaceName,
-            itemName);
-        Assert.NotNull(tenantId);
-        Assert.NotNull(clientId);
-        Assert.NotNull(clientSecretString);
-        Assert.NotNull(workspaceName);
-        Assert.NotNull(itemName);
+            region,
+            bucketName);
+        Assert.NotNull(accessKey);
+        Assert.NotNull(maskedSecret);
+        Assert.NotNull(region);
+        Assert.NotNull(bucketName);
 
-        var directoryName = $"xunit-{DateTime.Now.Ticks}";
+        var testPrefix = $"xunit-prefix-{DateTime.Now.Ticks}";
         return new Dictionary<string, object>()
         {
-            { nameof(AmazonS3ConfigurationConstants.TenantId), tenantId },
-            { nameof(AmazonS3ConfigurationConstants.ClientId), clientId },
-            { nameof(AmazonS3ConfigurationConstants.ClientSecret), clientSecretString },
-            { nameof(AmazonS3ConfigurationConstants.WorkspaceName), workspaceName },
-            { nameof(AmazonS3ConfigurationConstants.ItemName), itemName },
-            { nameof(AmazonS3ConfigurationConstants.ItemFolder), $"Files/{directoryName}" },
-            { nameof(AmazonS3ConfigurationConstants.ItemType), "Lakehouse" },
+            { AmazonS3ConfigurationConstants.AccessKey, accessKey },
+            { AmazonS3ConfigurationConstants.SecretKey, secretKey },
+            { AmazonS3ConfigurationConstants.Region, region },
+            { AmazonS3ConfigurationConstants.BucketName, bucketName },
+            { AmazonS3ConfigurationConstants.DirectoryName, testPrefix },
         };
     }
 
     private protected override Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
     {
         var baseConfiguration = CreateConfigurationWithoutStreamCache();
-        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("AMAZONS3_STREAMCACHE");
+        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("S3_STREAMCACHE");
         var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
         Console.WriteLine(streamCacheConnectionString);
         Assert.NotNull(streamCacheConnectionString);
@@ -982,24 +587,220 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         //container.Register(Component.For<AmazonS3Factory>().ImplementedBy<AmazonS3Factory>().LifestyleSingleton());
         var storageFactory = new Mock<AmazonS3Factory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new AmazonS3Client(NullLogger<AmazonS3Client>.Instance, data as AmazonS3ConnectorConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new AmazonS3StorageClient(NullLogger<AmazonS3StorageClient>.Instance, data as AmazonS3ConnectorConfiguration)));
         return storageFactory;
     }
 
-    private protected override DataLakeServiceClient GetDataLakeClient(SetupContainerResult setupContainerResult)
-    {
-        return GetDataLakeClient(setupContainerResult.StorageConfiguration as AmazonS3ConnectorConfiguration);
-    }
-
-    private protected override string GetDirectoryName(SetupContainerResult setupContainerResult)
+    private protected virtual IAmazonS3 CreateS3Client(SetupContainerResult setupContainerResult)
     {
         var config = setupContainerResult.StorageConfiguration as AmazonS3ConnectorConfiguration;
-        return $"{config.ItemName}.Lakehouse/{config.ItemFolder}";
+        return new AmazonS3Client(config.AccessKey, config.SecretKey, RegionEndpoint.GetBySystemName(config.Region));
+    }
+
+    private protected virtual string GetBucketName(SetupContainerResult setupContainerResult)
+    {
+        var config = setupContainerResult.StorageConfiguration as AmazonS3ConnectorConfiguration;
+        return config.BucketName;
+    }
+    private protected virtual string GetDirectoryName(SetupContainerResult setupContainerResult)
+    {
+        var config = setupContainerResult.StorageConfiguration as AmazonS3ConnectorConfiguration;
+        return config.DirectoryName;
     }
 
     private protected override StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration)
     {
         return new AmazonS3ConnectorConfiguration(configuration);
+    }
+
+    private protected override async Task<ExportedFilePath> WaitForFileToBeCreated(
+        SetupContainerResult setupContainerResult,
+        Func<IList<ExportedFilePath>, IList<ExportedFilePath>> filterPaths = null,
+        Func<SetupContainerResult, string> getDirectoryName = null)
+    {
+        ExportedFilePath path;
+        var d = DateTime.Now;
+        while (true)
+        {
+            if (DateTime.Now > d.AddSeconds(30))
+            {
+                throw new TimeoutException();
+            }
+
+            var client = CreateS3Client(setupContainerResult);
+            var directoryName = getDirectoryName == null ? GetDirectoryName(setupContainerResult) : getDirectoryName(setupContainerResult);
+
+
+            var s3Objects = await GetFiles(client, directoryName, GetBucketName(setupContainerResult));
+
+            var paths = s3Objects.Select(p =>
+            {
+                var fileName = Path.GetFileName(p.Key);
+                var directoryPath = p.Key[0..^fileName.Length];
+                var trimmedDirectoryPath = directoryPath.EndsWith("/") ? directoryPath[0..^1] : directoryPath;
+                return new ExportedFilePath(fileName, trimmedDirectoryPath, p.Size);
+            }).ToList();
+
+            paths = filterPaths == null ? paths : filterPaths(paths).ToList();
+
+            if (paths.Count == 0)
+            {
+                await Task.Delay(1000);
+                continue;
+            }
+
+            if (paths.Count > 1)
+            {
+                TestOutputHelper.WriteLine("Found multiple paths: {0}.", JsonConvert.SerializeObject(paths, Formatting.Indented));
+            }
+            path = paths.Single();
+
+            if (path.ContentLength > 0)
+            {
+                break;
+            }
+        }
+        return path;
+    }
+    async Task<List<S3Object>> GetFiles(IAmazonS3 client, string prefix, string bucketName)
+    {
+
+        var listRequest = new ListObjectsV2Request
+        {
+            BucketName = bucketName,
+            Prefix = string.IsNullOrEmpty(prefix) ? null : prefix + "/",
+        };
+
+        var result = new List<S3Object>();
+        ListObjectsV2Response response;
+        do
+        {
+            response = await client.ListObjectsV2Async(listRequest);
+
+            foreach (var s3Object in response.S3Objects)
+            {
+                if (!s3Object.Key.EndsWith("/"))
+                {
+                    result.Add(s3Object);
+                }
+            }
+
+            listRequest.ContinuationToken = response.NextContinuationToken;
+        } while (response?.IsTruncated == true);
+
+        return result;
+    }
+
+    private protected override async Task<Stream> GetContents(SetupContainerResult setupContainerResult, ExportedFilePath path)
+    {
+        var client = CreateS3Client(setupContainerResult);
+        var bucket = GetBucketName(setupContainerResult);
+        var key = $"{path.DirectoryPath}/{path.Name}";
+
+        var getResponse = await client.GetObjectAsync(bucket, key);
+        var memoryStream = new MemoryStream();
+        await getResponse.ResponseStream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+        return memoryStream;
+    }
+
+    private protected override async Task CleanUpExportedFile(SetupContainerResult setupContainerResult, ExportedFilePath path)
+    {
+        var client = CreateS3Client(setupContainerResult);
+        var bucket = GetBucketName(setupContainerResult);
+        var key = $"{path.DirectoryPath}/{path.Name}";
+        try
+        {
+            await client.DeleteObjectAsync(bucket, key);
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // File doesn't exist, nothing to delete
+        }
+    }
+
+    private protected override async Task CleanUpAfterImmediateOutputTest(SetupContainerResult setupContainerResult)
+    {
+        var client = CreateS3Client(setupContainerResult);
+        var bucket = GetBucketName(setupContainerResult);
+        var directoryName = GetDirectoryName(setupContainerResult);
+        var listRequest = new ListObjectsV2Request
+        {
+            BucketName = bucket,
+            Prefix = directoryName + "/",
+        };
+
+        ListObjectsV2Response response;
+        do
+        {
+            response = await client.ListObjectsV2Async(listRequest);
+            var objects = response.S3Objects;
+
+            if (objects != null && objects.Any())
+            {
+                var deleteRequest = new DeleteObjectsRequest
+                {
+                    BucketName = bucket,
+                    Objects = response.S3Objects.Select(o => new KeyVersion { Key = o.Key }).ToList(),
+                };
+
+                await client.DeleteObjectsAsync(deleteRequest);
+            }
+
+            listRequest.ContinuationToken = response.NextContinuationToken;
+        } while (response?.IsTruncated == true);
+    }
+
+    private protected override async Task CleanUpAfterFileOutputTest(SetupContainerResult setupContainerResult)
+    {
+        await CleanUpAfterImmediateOutputTest(setupContainerResult);
+        var streamModel = setupContainerResult.StreamModel;
+        var jobData = setupContainerResult.StorageConfiguration;
+        await DeleteTable(streamModel.Id, jobData.StreamCacheConnectionString);
+    }
+
+    private protected override async Task WaitForFileToBeDeleted(SetupContainerResult setupContainerResult, ExportedFilePath path)
+    {
+        var d = DateTime.Now;
+        while (true)
+        {
+            if (DateTime.Now > d.AddSeconds(30))
+            {
+                throw new TimeoutException("Timeout waiting for file to be deleted");
+            }
+
+            var client = CreateS3Client(setupContainerResult);
+            var bucket = GetBucketName(setupContainerResult);
+            var key = $"{path.DirectoryPath}/{path.Name}";
+
+            try
+            {
+                await client.GetObjectMetadataAsync(bucket, key);
+                await Task.Delay(1000);
+                continue;
+            }
+            catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                break;
+            }
+        }
+    }
+
+    private protected override async Task<DateTimeOffset> GetFileDataTime(ExecuteExportArg executeExportArg, ExportedFilePath path)
+    {
+        var client = CreateS3Client(executeExportArg.SetupContainerResult);
+        var bucket = GetBucketName(executeExportArg.SetupContainerResult);
+        var key = $"{path.DirectoryPath}/{path.Name}";
+        var metadata = await client.GetObjectMetadataAsync(bucket, key);
+        var metadataDict = new Dictionary<string, string>();
+        foreach (var metaKey in metadata.Metadata.Keys)
+        {
+            metadataDict[metaKey.Replace("x-amz-meta-", string.Empty)] = metadata.Metadata[metaKey];
+        }
+
+        var fileDataTime = metadataDict["DataTime"];
+
+        return DateTimeOffset.Parse(fileDataTime);
     }
 }
 

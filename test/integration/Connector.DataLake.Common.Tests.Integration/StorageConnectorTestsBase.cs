@@ -766,7 +766,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     private protected abstract Task<ExportedFilePath> WaitForFileToBeCreated(
         SetupContainerResult setupContainerResult,
         Func<IList<ExportedFilePath>, IList<ExportedFilePath>> filterPaths = null,
-        Func<SetupContainerResult, string, string> getDirectoryName = null);
+        Func<SetupContainerResult, string> getDirectoryName = null);
 
     protected record ExportedFilePath(string Name, string DirectoryPath, long? ContentLength);
     private protected abstract Task<Stream> GetContents(

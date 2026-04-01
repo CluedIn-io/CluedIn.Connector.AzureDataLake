@@ -26,7 +26,7 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
 
     public Task DeleteAsync()
     {
-        throw new NotImplementedException();
+        return DeleteIfExistsAsync();
     }
 
     public async Task DeleteIfExistsAsync()

@@ -14,12 +14,12 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AmazonS3.Connector;
 
-internal class AmazonS3Clienttt : IStorageClient
+internal class AmazonS3StorageClient : IStorageClient
 {
-    private readonly ILogger<AmazonS3Clienttt> _logger;
+    private readonly ILogger<AmazonS3StorageClient> _logger;
     private readonly AmazonS3ConnectorConfiguration _configuration;
 
-    public AmazonS3Clienttt(ILogger<AmazonS3Clienttt> logger, AmazonS3ConnectorConfiguration configuration)
+    public AmazonS3StorageClient(ILogger<AmazonS3StorageClient> logger, AmazonS3ConnectorConfiguration configuration)
     {
         _logger = logger;
         _configuration = configuration;

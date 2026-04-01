@@ -126,7 +126,10 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFact
 
     private protected DataLakeFileClient GetFileClient(SetupContainerResult setupContainerResult, ExportedFilePath path)
     {
-        var directoryClient = GetDataLakeDirectoryClient(setupContainerResult);
+        var client = GetDataLakeClient(setupContainerResult);
+        var fileSystemName = GetFileSystemName(setupContainerResult);
+        var fsClient = client.GetFileSystemClient(fileSystemName);
+        var directoryClient = fsClient.GetDirectoryClient(path.DirectoryPath);
         var fileClient = directoryClient.GetFileClient(path.Name);
         return fileClient;
     }
@@ -161,7 +164,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFact
     private protected override async Task<ExportedFilePath> WaitForFileToBeCreated(
         SetupContainerResult setupContainerResult,
         Func<IList<ExportedFilePath>, IList<ExportedFilePath>> filterPaths = null,
-        Func<SetupContainerResult, string, string> getDirectoryName = null)
+        Func<SetupContainerResult, string> getDirectoryName = null)
     {
         ExportedFilePath path;
         var d = DateTime.Now;
@@ -188,7 +191,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFact
             {
                 continue;
             }
-            var directoryName = getDirectoryName == null ? GetDirectoryName(setupContainerResult) : getDirectoryName(setupContainerResult, fileSystemName);
+            var directoryName = getDirectoryName == null ? GetDirectoryName(setupContainerResult) : getDirectoryName(setupContainerResult);
             var directoryClient = fileSystemClient.GetDirectoryClient(directoryName);
             if (!await directoryClient.ExistsAsync())
             {
@@ -199,7 +202,13 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFact
                 .Where(p => p.IsDirectory == false)
                 .Where(p => p.Name.Contains(directoryName))];
 
-            var paths = dataLakePaths.Select(p => new ExportedFilePath(p.Name[directoryName.Length..], directoryName, p.ContentLength)).ToList();
+            var paths = dataLakePaths.Select(p =>
+            {
+                var fileName = Path.GetFileName(p.Name);
+                var directoryPath = p.Name[0..^fileName.Length];
+                var trimmedDirectoryPath = directoryPath.EndsWith("/") ? directoryPath[0..^1] : directoryPath;
+                return new ExportedFilePath(fileName, trimmedDirectoryPath, p.ContentLength);
+            }).ToList();
 
             paths = filterPaths == null ? paths : filterPaths(paths).ToList();
 
