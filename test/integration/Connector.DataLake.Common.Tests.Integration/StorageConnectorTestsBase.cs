@@ -4,6 +4,7 @@ using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 using Castle.MicroKernel.Registration;
@@ -898,7 +899,25 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
 
     private protected abstract Dictionary<string, object> CreateConfigurationWithoutStreamCache();
 
-    private protected abstract Dictionary<string, object> CreateConfigurationWithStreamCache(string format);
+    private protected virtual Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
+    {
+        var baseConfiguration = CreateConfigurationWithoutStreamCache();
+        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
+        var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
+        Console.WriteLine(streamCacheConnectionString);
+        Assert.NotNull(streamCacheConnectionString);
+
+        var updatedConfiguration = new Dictionary<string, object>(baseConfiguration)
+        {
+            { nameof(StorageConfigurationConstants.IsStreamCacheEnabled), true },
+            { nameof(StorageConfigurationConstants.StreamCacheConnectionString), streamCacheConnectionString },
+            { nameof(StorageConfigurationConstants.OutputFormat), format },
+            { nameof(StorageConfigurationConstants.UseCurrentTimeForExport), true },
+            { nameof(StorageConfigurationConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
+            { nameof(StorageConfigurationConstants.ContainerName), "test" },
+        };
+        return updatedConfiguration;
+    }
 
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheCanHandleMultipleUpdates()

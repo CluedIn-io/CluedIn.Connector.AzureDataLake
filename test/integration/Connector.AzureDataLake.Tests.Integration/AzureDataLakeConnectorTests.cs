@@ -623,26 +623,6 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         };
     }
 
-    private protected override Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
-    {
-        var baseConfiguration = CreateConfigurationWithoutStreamCache();
-        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ADL2_STREAMCACHE");
-        var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
-        Console.WriteLine(streamCacheConnectionString);
-        Assert.NotNull(streamCacheConnectionString);
-
-        var updatedConfiguration = new Dictionary<string, object>(baseConfiguration)
-        {
-            { nameof(StorageConfigurationConstants.IsStreamCacheEnabled), true },
-            { nameof(StorageConfigurationConstants.StreamCacheConnectionString), streamCacheConnectionString },
-            { nameof(StorageConfigurationConstants.OutputFormat), format },
-            { nameof(StorageConfigurationConstants.UseCurrentTimeForExport), true },
-            { nameof(StorageConfigurationConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
-            { nameof(StorageConfigurationConstants.ContainerName), "test" },
-        };
-        return updatedConfiguration;
-    }
-
     protected override Mock<AzureDataLakeConnector> GetConnectorMock(
         ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
