@@ -12,8 +12,6 @@ using CluedIn.Connector.FileStorage.Common;
 
 using Microsoft.Extensions.Logging;
 
-using Parquet.Schema;
-
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
 internal class DataLakeClient : IStorageClient

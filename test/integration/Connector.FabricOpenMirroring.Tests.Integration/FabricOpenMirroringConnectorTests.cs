@@ -6,18 +6,14 @@ using System.Threading.Tasks;
 
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
-using Azure.Storage.Files.DataLake.Models;
 
 using Castle.Windsor;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
-using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 

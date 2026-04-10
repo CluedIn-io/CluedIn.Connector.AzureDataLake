@@ -2,11 +2,8 @@ using System;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
-using CluedIn.Core.Events;
 using CluedIn.Core.Events.Types;
 using CluedIn.Core.Streams;
-
-using Newtonsoft.Json.Linq;
 
 namespace CluedIn.Connector.FileStorage.Common.EventHandlers;
 

@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
-using CluedIn.Core.Jobs;
 
 using Microsoft.Extensions.Logging;
 

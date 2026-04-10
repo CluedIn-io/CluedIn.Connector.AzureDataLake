@@ -1,7 +1,6 @@
 using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 
-using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.SynapseDataEngineering.Connector;
 

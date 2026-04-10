@@ -6,9 +6,7 @@ using System.Threading.Tasks;
 
 using Azure.Storage;
 using Azure.Storage.Files.DataLake;
-using Azure.Storage.Files.DataLake.Models;
 
-using Castle.Core.Logging;
 using Castle.Windsor;
 
 using CluedIn.Connector.AzureDataLake.Connector;
@@ -18,11 +16,8 @@ using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
-using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
-
-using Hangfire.Storage;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -31,8 +26,6 @@ using Moq;
 
 using Xunit;
 using Xunit.Abstractions;
-
-using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
 
