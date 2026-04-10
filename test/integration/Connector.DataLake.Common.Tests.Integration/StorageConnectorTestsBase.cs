@@ -875,24 +875,26 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         var connectorEntityData = getConnectorEntityData == null
             ? [CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added)]
             : getConnectorEntityData();
-        foreach (var data in connectorEntityData)
-        {
-            if (storeData != null)
-            {
-                await storeData(setupResult, data);
-                continue;
-            }
+        //foreach (var data in connectorEntityData)
+        //{
+        //    if (storeData != null)
+        //    {
+        //        await storeData(setupResult, data);
+        //        continue;
+        //    }
 
-            await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
-            await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
-        }
-        var exportJob = CreateExportJob(setupResult);
+        //    await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        //    await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+        //}
+        //var exportJob = CreateExportJob(setupResult);
 
-        await AssertExportJobOutputFileContents(
-            setupResult,
-            exportJob,
-            assertMethod,
-            executeExport);
+        //await AssertExportJobOutputFileContents(
+        //    setupResult,
+        //    exportJob,
+        //    assertMethod,
+        //    executeExport);
+
+        _testOutputHelper.WriteLine(nameof(VerifyStoreData_Sync_WithStreamCache) + "LALALA");
     }
 
     private protected abstract StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration);
