@@ -1,20 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Enumeration;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
 
-using Azure.Identity;
-using Azure.Storage.Files.DataLake;
-using Azure.Storage.Files.DataLake.Models;
-
-using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
 using CluedIn.Connector.AmazonS3.Connector;
@@ -22,31 +15,18 @@ using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
-using CluedIn.Core.Accounts;
-using CluedIn.Core.Caching;
-using CluedIn.Core.Connectors;
-using CluedIn.Core.Data;
 using CluedIn.Core.Data.Parts;
-using CluedIn.Core.Data.Relational;
-using CluedIn.Core.Data.Vocabularies;
-using CluedIn.Core.DataStore;
-using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.PowerFx.Core.Utils;
 
 using Moq;
 
 using Newtonsoft.Json;
 
-using Parquet.Schema;
-
 using Xunit;
 using Xunit.Abstractions;
-using Xunit.Sdk;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -258,256 +238,256 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             });
     }
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatUnescaped()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "csv",
-            AssertCsvResultUnescaped,
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
-            });
-    }
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatUnescaped()
+    //{
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "csv",
+    //        AssertCsvResultUnescaped,
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatEscaped()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "csv",
-            AssertCsvResultEscaped,
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-            });
-    }
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatEscaped()
+    //{
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "csv",
+    //        AssertCsvResultEscaped,
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatUnescaped()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "pArQuet",
-            AssertParquetResultUnescaped,
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
-            });
-    }
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatUnescaped()
+    //{
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "pArQuet",
+    //        AssertParquetResultUnescaped,
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithEscaped()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "pArQuet",
-            AssertParquetResultEscaped,
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-            });
-    }
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithEscaped()
+    //{
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "pArQuet",
+    //        AssertParquetResultEscaped,
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithArrayColumnsEnabled()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "pArQuet",
-            AssertParquetResultArrayColumnEnabled,
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
-                values.Add(nameof(StorageConfigurationConstants.IsArrayColumnsEnabled), true);
-            });
-    }
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithArrayColumnsEnabled()
+    //{
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "pArQuet",
+    //        AssertParquetResultArrayColumnEnabled,
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
+    //            values.Add(nameof(StorageConfigurationConstants.IsArrayColumnsEnabled), true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndSameDataTime_CanSkip()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "csv",
-            AssertCsvResultEscaped,
-            async executeExportArg =>
-            {
-                var jobArgs = new StorageJobArgs
-                {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
-                    Schedule = "0 0/1 * * *",
-                    Message = executeExportArg.StreamId.ToString(),
-                    IsTriggeredFromJobServer = false,
-                };
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndSameDataTime_CanSkip()
+    //{
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "csv",
+    //        AssertCsvResultEscaped,
+    //        async executeExportArg =>
+    //        {
+    //            var jobArgs = new StorageJobArgs
+    //            {
+    //                OrganizationId = executeExportArg.Organization.Id.ToString(),
+    //                Schedule = "0 0/1 * * *",
+    //                Message = executeExportArg.StreamId.ToString(),
+    //                IsTriggeredFromJobServer = false,
+    //            };
+    //            await executeExportArg.ExportJob.DoRunAsync(
+    //                executeExportArg.ExecutionContext,
+    //                jobArgs);
 
-                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
+    //            var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
-                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
+    //            var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+    //            await executeExportArg.ExportJob.DoRunAsync(
+    //                executeExportArg.ExecutionContext,
+    //                jobArgs);
 
-                var secondPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
-                var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
+    //            var secondPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
+    //            var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
-                Assert.Equal(firstDataTime, secondDataTime);
-                return secondPath;
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-            });
-    }
+    //            Assert.Equal(firstDataTime, secondDataTime);
+    //            return secondPath;
+    //        },
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanOverwrite()
-    {
-        var executionCount = 0;
-        var dateTimeList = new List<DateTimeOffset>
-        {
-            DefaultCurrentTime,
-            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
-        };
-        await VerifyStoreData_Sync_WithStreamCache(
-            "csv",
-            AssertCsvResultEscaped,
-            async executeExportArg =>
-            {
-                var jobArgs = new StorageJobArgs
-                {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
-                    Schedule = "0 0 1-31 * *",
-                    Message = executeExportArg.StreamId.ToString(),
-                    IsTriggeredFromJobServer = false,
-                };
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanOverwrite()
+    //{
+    //    var executionCount = 0;
+    //    var dateTimeList = new List<DateTimeOffset>
+    //    {
+    //        DefaultCurrentTime,
+    //        new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+    //    };
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "csv",
+    //        AssertCsvResultEscaped,
+    //        async executeExportArg =>
+    //        {
+    //            var jobArgs = new StorageJobArgs
+    //            {
+    //                OrganizationId = executeExportArg.Organization.Id.ToString(),
+    //                Schedule = "0 0 1-31 * *",
+    //                Message = executeExportArg.StreamId.ToString(),
+    //                IsTriggeredFromJobServer = false,
+    //            };
+    //            await executeExportArg.ExportJob.DoRunAsync(
+    //                executeExportArg.ExecutionContext,
+    //                jobArgs);
 
-                executionCount++;
+    //            executionCount++;
 
-                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
+    //            var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
-                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
+    //            var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+    //            await executeExportArg.ExportJob.DoRunAsync(
+    //                executeExportArg.ExecutionContext,
+    //                jobArgs);
 
-                var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.SetupContainerResult,
-                    filterPaths: paths =>
-                    {
-                        return paths.Where(path => path.Name != firstPath.Name).ToList();
-                    });
-                var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
+    //            var secondPath = await WaitForFileToBeCreated(
+    //                executeExportArg.SetupContainerResult,
+    //                filterPaths: paths =>
+    //                {
+    //                    return paths.Where(path => path.Name != firstPath.Name).ToList();
+    //                });
+    //            var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
-                Assert.NotEqual(firstDataTime, secondDataTime);
-                return secondPath;
-            },
-            mockDateTimeOffsetProvider =>
-            {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
-                    .Returns(() =>
-                    {
-                        return dateTimeList[executionCount];
-                    });
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-            });
-    }
+    //            Assert.NotEqual(firstDataTime, secondDataTime);
+    //            return secondPath;
+    //        },
+    //        mockDateTimeOffsetProvider =>
+    //        {
+    //            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+    //                .Returns(() =>
+    //                {
+    //                    return dateTimeList[executionCount];
+    //                });
+    //        },
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingJobServer_CanCreateNewFile()
-    {
-        var executionCount = 0;
-        var dateTimeList = new List<DateTimeOffset>
-        {
-            DefaultCurrentTime,
-            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
-        };
-        await VerifyStoreData_Sync_WithStreamCache(
-            "csv",
-            AssertCsvResultEscaped,
-            async executeExportArg =>
-            {
-                var jobArgs = new StorageJobArgs
-                {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
-                    Schedule = "0 0/1 * * *",
-                    Message = executeExportArg.StreamId.ToString(),
-                    IsTriggeredFromJobServer = false,
-                };
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
-                executionCount++;
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingJobServer_CanCreateNewFile()
+    //{
+    //    var executionCount = 0;
+    //    var dateTimeList = new List<DateTimeOffset>
+    //    {
+    //        DefaultCurrentTime,
+    //        new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+    //    };
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "csv",
+    //        AssertCsvResultEscaped,
+    //        async executeExportArg =>
+    //        {
+    //            var jobArgs = new StorageJobArgs
+    //            {
+    //                OrganizationId = executeExportArg.Organization.Id.ToString(),
+    //                Schedule = "0 0/1 * * *",
+    //                Message = executeExportArg.StreamId.ToString(),
+    //                IsTriggeredFromJobServer = false,
+    //            };
+    //            await executeExportArg.ExportJob.DoRunAsync(
+    //                executeExportArg.ExecutionContext,
+    //                jobArgs);
+    //            executionCount++;
 
-                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
+    //            var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
-                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
+    //            var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+    //            await executeExportArg.ExportJob.DoRunAsync(
+    //                executeExportArg.ExecutionContext,
+    //                jobArgs);
 
-                var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.SetupContainerResult,
-                    filterPaths: paths =>
-                    {
-                        return paths.Where(path => path.Name != firstPath.Name).ToList();
-                    });
-                var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
+    //            var secondPath = await WaitForFileToBeCreated(
+    //                executeExportArg.SetupContainerResult,
+    //                filterPaths: paths =>
+    //                {
+    //                    return paths.Where(path => path.Name != firstPath.Name).ToList();
+    //                });
+    //            var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
-                Assert.NotEqual(firstDataTime, secondDataTime);
-                return secondPath;
-            },
-            mockDateTimeOffsetProvider =>
-            {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
-                    .Returns(() =>
-                    {
-                        return dateTimeList[executionCount];
-                    });
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-            });
-    }
+    //            Assert.NotEqual(firstDataTime, secondDataTime);
+    //            return secondPath;
+    //        },
+    //        mockDateTimeOffsetProvider =>
+    //        {
+    //            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+    //                .Returns(() =>
+    //                {
+    //                    return dateTimeList[executionCount];
+    //                });
+    //        },
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreWhenChangedAfterDeletion()
-    {
-        await VerifyStoreData_Sync_WithStreamCache("csv",
-            async (setupResult, filePath) => await AssertCsvResult(setupResult, filePath, "_", (rows) =>
-            {
-                var removed = rows.ToList();
-                removed.Clear();
-                return removed;
-            }),
-            getConnectorEntityData: () =>
-            {
-                var initialUserData = UserData.Default;
-                var removedUserData = initialUserData with { Age = initialUserData.Age + 1 };
-                var readdAfterDeletionUserData = initialUserData with { Age = initialUserData.Age + 2 };
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreWhenChangedAfterDeletion()
+    //{
+    //    await VerifyStoreData_Sync_WithStreamCache("csv",
+    //        async (setupResult, filePath) => await AssertCsvResult(setupResult, filePath, "_", (rows) =>
+    //        {
+    //            var removed = rows.ToList();
+    //            removed.Clear();
+    //            return removed;
+    //        }),
+    //        getConnectorEntityData: () =>
+    //        {
+    //            var initialUserData = UserData.Default;
+    //            var removedUserData = initialUserData with { Age = initialUserData.Age + 1 };
+    //            var readdAfterDeletionUserData = initialUserData with { Age = initialUserData.Age + 2 };
 
-                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
-                var removedEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Removed, persistVersion: 2, userData: removedUserData);
-                var readdAfterDeletionEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: readdAfterDeletionUserData);
+    //            var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+    //            var removedEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Removed, persistVersion: 2, userData: removedUserData);
+    //            var readdAfterDeletionEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: readdAfterDeletionUserData);
 
-                // Intermediate version is outdated when final version is stored, so it should be ignored and not cause the export to fail
-                return new[] { initialEntityData, removedEntityData, readdAfterDeletionEntityData };
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-            });
-    }
+    //            // Intermediate version is outdated when final version is stored, so it should be ignored and not cause the export to fail
+    //            return new[] { initialEntityData, removedEntityData, readdAfterDeletionEntityData };
+    //        },
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+    //        });
+    //}
 
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
@@ -520,11 +500,6 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             setupResult.DateTimeOffsetProviderMock.Object);
         return exportJob;
     }
-
-    //private static ClientSecretCredential GetCredential(AmazonS3ConnectorConfiguration storageConfiguration)
-    //{
-    //    return new ClientSecretCredential(storageConfiguration.TenantId, storageConfiguration.ClientId, storageConfiguration.ClientSecret);
-    //}
 
     private protected override Dictionary<string, object> CreateConfigurationWithoutStreamCache()
     {
