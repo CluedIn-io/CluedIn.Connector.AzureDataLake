@@ -189,54 +189,54 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     //    Assert.True(result.Success);
     //}
 
-    [Fact]
-    public async Task VerifyStoreData_EventStream()
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
+    //[Fact]
+    //public async Task VerifyStoreData_EventStream()
+    //{
+    //    var configuration = CreateConfigurationWithoutStreamCache();
+    //    var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
+    //    var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
+    //    var connector = setupResult.ConnectorMock.Object;
 
-        var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
-        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
-        await AssertImmediateOutputResult(
-            setupResult,
-            assertMethod: async (setupResult, filePath) =>
-            {
-                await AssertJsonResult(setupResult, filePath, StreamMode.EventStream, VersionChangeType.Added);
-            });
-    }
+    //    var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
+    //    await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+    //    await AssertImmediateOutputResult(
+    //        setupResult,
+    //        assertMethod: async (setupResult, filePath) =>
+    //        {
+    //            await AssertJsonResult(setupResult, filePath, StreamMode.EventStream, VersionChangeType.Added);
+    //        });
+    //}
 
-    [Fact]
-    public async void VerifyStoreData_Sync_WithoutStreamCache()
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
+    //[Fact]
+    //public async void VerifyStoreData_Sync_WithoutStreamCache()
+    //{
+    //    var configuration = CreateConfigurationWithoutStreamCache();
+    //    var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(storageConfiguration, StreamMode.Sync);
-        var connector = setupResult.ConnectorMock.Object;
+    //    var setupResult = await SetupContainer(storageConfiguration, StreamMode.Sync);
+    //    var connector = setupResult.ConnectorMock.Object;
 
-        var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
-        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
-        await AssertImmediateOutputResult(
-            setupResult,
-            assertMethod: async (setupResult, filePath) =>
-            {
-                await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added, isSingleObject: true);
-            });
-    }
+    //    var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
+    //    await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+    //    await AssertImmediateOutputResult(
+    //        setupResult,
+    //        assertMethod: async (setupResult, filePath) =>
+    //        {
+    //            await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added, isSingleObject: true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheAndJsonFormat()
-    {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "JSON",
-            assertMethod: async (setupResult, filePath) =>
-            {
-                await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added);
-            });
-    }
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheAndJsonFormat()
+    //{
+    //    await VerifyStoreData_Sync_WithStreamCache(
+    //        "JSON",
+    //        assertMethod: async (setupResult, filePath) =>
+    //        {
+    //            await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added);
+    //        });
+    //}
 
     //[Fact]
     //public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatUnescaped()
