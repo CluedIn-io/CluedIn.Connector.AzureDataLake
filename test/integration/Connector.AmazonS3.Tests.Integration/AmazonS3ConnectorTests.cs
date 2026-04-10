@@ -227,16 +227,16 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             });
     }
 
-    //[Fact]
-    //public async Task VerifyStoreData_Sync_WithStreamCacheAndJsonFormat()
-    //{
-    //    await VerifyStoreData_Sync_WithStreamCache(
-    //        "JSON",
-    //        assertMethod: async (setupResult, filePath) =>
-    //        {
-    //            await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added);
-    //        });
-    //}
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheAndJsonFormat()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "JSON",
+            assertMethod: async (setupResult, filePath) =>
+            {
+                await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added);
+            });
+    }
 
     //[Fact]
     //public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatUnescaped()
