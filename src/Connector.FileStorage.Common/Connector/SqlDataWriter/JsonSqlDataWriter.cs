@@ -23,11 +23,11 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         bool isInitialExport,
         SqlDataReader reader)
     {
+        await using var stringWriter = new StreamWriter(outputStream);
         if (reader != null)
         {
-            throw new Exception("HMMM11111111888");
+            throw new Exception("HMMM22222888");
         }
-        await using var stringWriter = new StreamWriter(outputStream);
         await using var writer = new JsonTextWriter(stringWriter);
         writer.Formatting = Formatting.Indented;
 
