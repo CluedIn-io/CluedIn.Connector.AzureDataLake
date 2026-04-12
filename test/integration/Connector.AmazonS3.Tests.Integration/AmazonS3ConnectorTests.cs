@@ -588,10 +588,11 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         Func<SetupContainerResult, string> getDirectoryName = null)
     {
         ExportedFilePath path;
-        var d = DateTime.Now;
+        var startTime = DateTime.Now;
+        var timeoutTime = startTime.AddSeconds(30);
         while (true)
         {
-            if (DateTime.Now > d.AddSeconds(30))
+            if (DateTime.Now > timeoutTime)
             {
                 throw new TimeoutException();
             }
@@ -600,7 +601,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             var directoryName = getDirectoryName == null ? GetDirectoryName(setupContainerResult) : getDirectoryName(setupContainerResult);
 
 
-            var s3Objects = await GetFiles(client, directoryName, GetBucketName(setupContainerResult));
+            var s3Objects = await GetFiles(client, directoryName, GetBucketName(setupContainerResult), timeoutTime);
 
             var paths = s3Objects.Select(p =>
             {
@@ -631,7 +632,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         }
         return path;
     }
-    async Task<List<S3Object>> GetFiles(IAmazonS3 client, string prefix, string bucketName)
+    async Task<List<S3Object>> GetFiles(IAmazonS3 client, string prefix, string bucketName, DateTime timeoutTime)
     {
 
         var listRequest = new ListObjectsV2Request
@@ -644,6 +645,13 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         ListObjectsV2Response response;
         do
         {
+            if (DateTime.Now > timeoutTime)
+            {
+                _testOutputHelper.WriteLine("Timeout while waiting for S3 objects with prefix '{0}' in bucket '{1}'.", prefix, bucketName);
+                _testOutputHelper.WriteLine("Results {0}", JsonConvert.SerializeObject(result, Formatting.Indented));
+                throw new TimeoutException("Timeout while waiting for S3 objects.");
+            }
+
             response = await client.ListObjectsV2Async(listRequest);
 
             foreach (var s3Object in response.S3Objects)
