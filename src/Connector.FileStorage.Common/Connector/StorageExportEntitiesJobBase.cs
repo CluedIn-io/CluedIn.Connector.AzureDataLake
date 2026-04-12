@@ -123,10 +123,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         await InitializeBaseDirectoryAsync(context, connection, configuration, exportJobData, storageClient, baseDirectoryPath);
         await InitializeOutputDirectoryAsync(context, connection, configuration, exportJobData, storageClient, outputDirectoryPath);
-        if (exportJobData != null)
-        {
-            throw new Exception("HMMM2222");
-        }
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
@@ -172,6 +168,10 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             [DataTimeKey] = asOfTime,
         });
 
+        if (exportJobData != null)
+        {
+            throw new Exception("HMMM33333333333");
+        }
         var outputFilePath = outputDirectoryPath.GetFilePath(outputFileName);
         IStorageFileClient temporaryFileClient;
         var temporaryFilePath = outputDirectoryPath.GetFilePath(temporaryOutputFileName);
