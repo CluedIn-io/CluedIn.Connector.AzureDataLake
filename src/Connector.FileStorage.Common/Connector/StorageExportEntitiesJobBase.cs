@@ -234,11 +234,11 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
 
+            await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             if (exportJobData != null)
             {
-                throw new Exception("HMMM6666");
+                throw new Exception("HMMM7777");
             }
-            await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             return await sqlDataWriter?.WriteAsync(context, configuration, outputStream, fieldNamesToUse, IsInitialExport, reader);
         }
 
