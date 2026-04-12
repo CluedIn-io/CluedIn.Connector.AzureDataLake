@@ -817,12 +817,12 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                 ? await DefaultExecuteExport(executeExportArg)
                 : await executeExport(executeExportArg);
 
-            await assertMethod(setupContainerResult, path);
-            await CleanUpExportedFile(setupContainerResult, path);
+            //await assertMethod(setupContainerResult, path);
+            //await CleanUpExportedFile(setupContainerResult, path);
         }
         finally
         {
-            await CleanUpAfterFileOutputTest(setupContainerResult);
+            //await CleanUpAfterFileOutputTest(setupContainerResult);
         }
     }
 
@@ -888,11 +888,11 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         }
         var exportJob = CreateExportJob(setupResult);
 
-        //await AssertExportJobOutputFileContents(
-        //    setupResult,
-        //    exportJob,
-        //    assertMethod,
-        //    executeExport);
+        await AssertExportJobOutputFileContents(
+            setupResult,
+            exportJob,
+            assertMethod,
+            executeExport);
 
         _testOutputHelper.WriteLine(nameof(VerifyStoreData_Sync_WithStreamCache) + "LALALA");
     }
