@@ -191,10 +191,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             temporaryFileClient.Uri);
 
         var totalRows = await writeFileContentsAsync();
-        if (exportJobData != null)
-        {
-            throw new Exception("HMMM5555");
-        }
         if (configuration.IsDeltaMode && totalRows == 0 && !GetIsEmptyFileAllowed(exportJobData))
         {
             context.Log.LogDebug(
@@ -237,6 +233,11 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
+
+            if (exportJobData != null)
+            {
+                throw new Exception("HMMM6666");
+            }
             await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
             return await sqlDataWriter?.WriteAsync(context, configuration, outputStream, fieldNamesToUse, IsInitialExport, reader);
         }
