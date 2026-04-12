@@ -240,71 +240,71 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             });
     }
 
-    //[Fact]
-    //public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatUnescaped()
-    //{
-    //    await VerifyStoreData_Sync_WithStreamCache(
-    //        "csv",
-    //        AssertCsvResultUnescaped,
-    //        configureAuthentication: (values) =>
-    //        {
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
-    //        });
-    //}
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatUnescaped()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultUnescaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
+            });
+    }
 
-    //[Fact]
-    //public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatEscaped()
-    //{
-    //    await VerifyStoreData_Sync_WithStreamCache(
-    //        "csv",
-    //        AssertCsvResultEscaped,
-    //        configureAuthentication: (values) =>
-    //        {
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-    //        });
-    //}
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheAndCsvFormatEscaped()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultEscaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+            });
+    }
 
-    //[Fact]
-    //public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatUnescaped()
-    //{
-    //    await VerifyStoreData_Sync_WithStreamCache(
-    //        "pArQuet",
-    //        AssertParquetResultUnescaped,
-    //        configureAuthentication: (values) =>
-    //        {
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
-    //        });
-    //}
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatUnescaped()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "pArQuet",
+            AssertParquetResultUnescaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
+            });
+    }
 
-    //[Fact]
-    //public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithEscaped()
-    //{
-    //    await VerifyStoreData_Sync_WithStreamCache(
-    //        "pArQuet",
-    //        AssertParquetResultEscaped,
-    //        configureAuthentication: (values) =>
-    //        {
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-    //        });
-    //}
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithEscaped()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "pArQuet",
+            AssertParquetResultEscaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+            });
+    }
 
-    //[Fact]
-    //public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithArrayColumnsEnabled()
-    //{
-    //    await VerifyStoreData_Sync_WithStreamCache(
-    //        "pArQuet",
-    //        AssertParquetResultArrayColumnEnabled,
-    //        configureAuthentication: (values) =>
-    //        {
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
-    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
-    //            values.Add(nameof(StorageConfigurationConstants.IsArrayColumnsEnabled), true);
-    //        });
-    //}
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheAndParquetFormatWithArrayColumnsEnabled()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "pArQuet",
+            AssertParquetResultArrayColumnEnabled,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
+                values.Add(nameof(StorageConfigurationConstants.IsArrayColumnsEnabled), true);
+            });
+    }
 
     //[Fact]
     //public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndSameDataTime_CanSkip()
