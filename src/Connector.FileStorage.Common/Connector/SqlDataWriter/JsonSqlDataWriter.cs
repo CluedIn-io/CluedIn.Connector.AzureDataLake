@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+
 using CluedIn.Core;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -23,6 +27,10 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         await using var writer = new JsonTextWriter(stringWriter);
         writer.Formatting = Formatting.Indented;
 
+        if (stringWriter != null)
+        {
+            throw new Exception("HMMM888");
+        }
         var totalProcessed = 0L;
         await writer.WriteStartArrayAsync();
         while (await reader.ReadAsync())

@@ -230,8 +230,6 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheAndJsonFormat()
     {
-        System.Console.WriteLine("Starting test: " + nameof(VerifyStoreData_Sync_WithStreamCacheAndJsonFormat));
-        _testOutputHelper.WriteLine("Starting test: " + nameof(VerifyStoreData_Sync_WithStreamCacheAndJsonFormat));
         await VerifyStoreData_Sync_WithStreamCache(
             "JSON",
             assertMethod: async (setupResult, filePath) =>
