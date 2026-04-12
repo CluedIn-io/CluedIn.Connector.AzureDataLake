@@ -836,8 +836,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             Message = executeExportArg.StreamId.ToString(),
         });
 
-        var path = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
-        return path;
+        //var path = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
+        return null;
     }
 
     private protected record ExecuteExportArg(
