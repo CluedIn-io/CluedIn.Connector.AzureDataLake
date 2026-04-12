@@ -183,10 +183,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             throw;
         }
 
-        if (exportJobData != null)
-        {
-            throw new Exception("HMMM44444");
-        }
         context.Log.LogInformation(
             "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}).",
             outputFileName,
@@ -195,6 +191,10 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             temporaryFileClient.Uri);
 
         var totalRows = await writeFileContentsAsync();
+        if (exportJobData != null)
+        {
+            throw new Exception("HMMM5555");
+        }
         if (configuration.IsDeltaMode && totalRows == 0 && !GetIsEmptyFileAllowed(exportJobData))
         {
             context.Log.LogDebug(
