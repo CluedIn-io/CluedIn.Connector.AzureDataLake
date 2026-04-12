@@ -168,10 +168,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             [DataTimeKey] = asOfTime,
         });
 
-        if (exportJobData != null)
-        {
-            throw new Exception("HMMM33333333333");
-        }
         var outputFilePath = outputDirectoryPath.GetFilePath(outputFileName);
         IStorageFileClient temporaryFileClient;
         var temporaryFilePath = outputDirectoryPath.GetFilePath(temporaryOutputFileName);
@@ -187,6 +183,10 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             throw;
         }
 
+        if (exportJobData != null)
+        {
+            throw new Exception("HMMM44444");
+        }
         context.Log.LogInformation(
             "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}).",
             outputFileName,
