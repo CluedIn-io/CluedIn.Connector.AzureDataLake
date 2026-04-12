@@ -90,10 +90,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamModel.Id);
             return;
         }
-        if (exportJobData != null)
-        {
-            throw new Exception("HMMM1");
-        }
         var storageClient = await CreateStorageClient(context, configuration);
         await storageClient.CreateDirectoryIfNotExists(outputDirectoryPath);
 
@@ -127,6 +123,10 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         await InitializeBaseDirectoryAsync(context, connection, configuration, exportJobData, storageClient, baseDirectoryPath);
         await InitializeOutputDirectoryAsync(context, connection, configuration, exportJobData, storageClient, outputDirectoryPath);
+        if (exportJobData != null)
+        {
+            throw new Exception("HMMM2222");
+        }
         var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
