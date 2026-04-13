@@ -19,7 +19,7 @@ public sealed class OneLakeConnectorComponent : StorageConnectorComponentBase
     /// <summary>Starts this instance.</summary>
     public override void Start()
     {
-        DefaultStartInternal<IOneLakeConfigurationConstants, OneLakeFactory, OneLakeExportEntitiesJob>();
+        DefaultStartInternal<IOneLakeConfigurationConstants, OneLakeStorageFactory, OneLakeExportEntitiesJob>();
     }
 
     public const string ComponentName = "OneLake";

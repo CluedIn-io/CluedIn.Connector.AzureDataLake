@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureDataLake;
 
-public class AzureDataLakeFactory : StorageFactoryBase, IStorageFactory
+public class AzureDataLakeStorageFactory : StorageFactoryBase, IStorageFactory
 {
     public override Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration configuration)
     {
@@ -19,8 +19,8 @@ public class AzureDataLakeFactory : StorageFactoryBase, IStorageFactory
             throw new ApplicationException($"Provided job data is not of expected type '{typeof(AzureDataLakeConnectorConfiguration)}'. It is '{configuration.GetType()}'.");
         }
 
-        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<DataLakeClient>>();
-        return Task.FromResult<IStorageClient>(new DataLakeClient(logger, castedConfiguration));
+        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<DataLakeStorageClient>>();
+        return Task.FromResult<IStorageClient>(new DataLakeStorageClient(logger, castedConfiguration));
     }
 
     protected override Task<IStorageConfiguration> CreateStorageConfigurationInternal(

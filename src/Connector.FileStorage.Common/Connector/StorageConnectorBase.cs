@@ -33,7 +33,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private readonly ILogger<StorageConnectorBase> _logger;
         private readonly ApplicationContext _applicationContext;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
-        private readonly IStorageFactory _storageFactory;
+        private readonly IStorageFactory _storageStorageFactory;
         private readonly PartitionedBuffer<Partition, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
@@ -56,20 +56,20 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             [typeof(string)] = "NVARCHAR(MAX)"
         };
 
-        protected IStorageFactory StorageFactory => _storageFactory;
+        protected IStorageFactory StorageStorageFactory => _storageStorageFactory;
 
         protected StorageConnectorBase(
             ILogger<StorageConnectorBase> logger,
             ApplicationContext applicationContext,
             IStorageConfigurationConstants constants,
-            IStorageFactory storageFactory,
+            IStorageFactory storageStorageFactory,
             IDateTimeOffsetProvider dateTimeOffsetProvider)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
             _applicationContext = applicationContext;
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
-            _storageFactory = storageFactory;
+            _storageStorageFactory = storageStorageFactory;
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
@@ -102,7 +102,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         {
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
-            var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
+            var configuration = await _storageStorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
 
             // matching output format of previous version of the connector
             var data = connectorEntityData.Properties.ToDictionary(property => property.Name, property => property.Value);
@@ -510,7 +510,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             {
                 var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
 
-                var client = await _storageFactory.CreateStorageClient(executionContext, configurations);
+                var client = await _storageStorageFactory.CreateStorageClient(executionContext, configurations);
                 var baseDirectory = await client.GetBaseDirectoryPath();
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
@@ -560,7 +560,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         {
             try
             {
-                var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, config.ToDictionary(config => config.Key, config => config.Value));
+                var configuration = await _storageStorageFactory.CreateStorageConfiguration(executionContext, config.ToDictionary(config => config.Key, config => config.Value));
                 return await VerifyConnectionInternal(executionContext, configuration);
             }
             catch (Exception e)
@@ -627,7 +627,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
         protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration jobData)
         {
-            var client = await _storageFactory.CreateStorageClient(executionContext, jobData);
+            var client = await _storageStorageFactory.CreateStorageClient(executionContext, jobData);
             await client.VerifyConnection();
             return SuccessfulConnectionVerification;
         }
@@ -734,7 +734,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
             await using var executionContext = _applicationContext.CreateExecutionContext(organizationId);
-            var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
+            var client = await _storageStorageFactory.CreateStorageClient(executionContext, configuration);
             var baseDirectory = await client.GetBaseDirectoryPath();
             await client.SaveData(new FilePath(fileName, baseDirectory), content, JsonMimeType);
         }
@@ -755,8 +755,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         {
             _logger.LogInformation($"DataLakeConnector.GetContainers: entry");
 
-            var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, "");
-            var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
+            var configuration = await _storageStorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, "");
+            var client = await _storageStorageFactory.CreateStorageClient(executionContext, configuration);
             var baseDirectory = await client.GetBaseDirectoryPath();
             var files = await client.GetFilesInDirectory(baseDirectory);
             return files.Select(file => new StorageContainer()
@@ -808,7 +808,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
 
-            var jobData = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
+            var jobData = await _storageStorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
             if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
             {
                 _logger.LogDebug("Skipping renaming of cache table because stream cache connection string is null or whitespace.");

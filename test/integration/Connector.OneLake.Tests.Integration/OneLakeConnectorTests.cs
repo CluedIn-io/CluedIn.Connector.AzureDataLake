@@ -29,7 +29,7 @@ using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.OneLake.Tests.Integration;
 
-public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector, OneLakeFactory, IOneLakeConfigurationConstants>
+public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector, OneLakeStorageFactory, IOneLakeConfigurationConstants>
 {
     protected override Guid StorageProviderId => OneLakeConfigurationConstants.DataLakeProviderId;
     protected override bool IsFixedFileSystem => true;
@@ -508,7 +508,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
 
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
-        var logger = new Mock<ILogger<OneLakeClient>>();
+        var logger = new Mock<ILogger<OneLakeStorageClient>>();
         var exportJob = new OneLakeExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
@@ -572,7 +572,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<IOneLakeConfigurationConstants> constantsMock,
-        Mock<OneLakeFactory> storageConfigurationFactory)
+        Mock<OneLakeStorageFactory> storageConfigurationFactory)
     {
         var mockConnector = new Mock<OneLakeConnector>(
             new Mock<ILogger<OneLakeConnector>>().Object,
@@ -583,14 +583,14 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         return mockConnector;
     }
 
-    protected override Mock<OneLakeFactory> CreateStorageFactoryMock(
+    protected override Mock<OneLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
         //container.Register(Component.For<OneLakeFactory>().ImplementedBy<OneLakeFactory>().LifestyleSingleton());
-        var storageFactory = new Mock<OneLakeFactory>();
+        var storageFactory = new Mock<OneLakeStorageFactory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OneLakeClient(NullLogger<OneLakeClient>.Instance, data as OneLakeConnectorConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration)));
         return storageFactory;
     }
 

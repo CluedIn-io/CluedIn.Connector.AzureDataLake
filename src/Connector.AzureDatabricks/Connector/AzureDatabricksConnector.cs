@@ -13,7 +13,7 @@ public class AzureDatabricksConnector : StorageConnectorBase
         ILogger<AzureDatabricksConnector> logger,
         ApplicationContext applicationContext,
         IAzureDatabricksConfigurationConstants configurationConstants,
-        AzureDatabricksFactory storageFactory,
+        AzureDatabricksStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(logger, applicationContext, configurationConstants, storageFactory, dateTimeOffsetProvider)
     {

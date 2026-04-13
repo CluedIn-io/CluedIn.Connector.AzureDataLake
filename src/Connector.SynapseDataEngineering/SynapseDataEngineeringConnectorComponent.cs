@@ -20,7 +20,7 @@ namespace CluedIn.Connector.SynapseDataEngineering
         /// <summary>Starts this instance.</summary>
         public override void Start()
         {
-            DefaultStartInternal<ISynapseDataEngineeringConfigurationConstants, SynapseDataEngineeringFactory, SynapseDataEngineeringExportEntitiesJob>();
+            DefaultStartInternal<ISynapseDataEngineeringConfigurationConstants, SynapseDataEngineeringStorageFactory, SynapseDataEngineeringExportEntitiesJob>();
         }
 
         public const string ComponentName = "Synapse Data Engineering";

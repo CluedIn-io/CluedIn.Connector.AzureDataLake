@@ -10,6 +10,6 @@ internal class InstallComponents : InstallComponentsBase
 {
     public override void Install(IWindsorContainer container, IConfigurationStore store)
     {
-        DefaultInstall<OpenMirroringExportEntitiesJob, IOpenMirroringConfigurationConstants, OpenMirroringConfigurationConstants, OpenMirroringFactory>(container, store);
+        DefaultInstall<OpenMirroringExportEntitiesJob, IOpenMirroringConfigurationConstants, OpenMirroringConfigurationConstants, OpenMirroringStorageFactory>(container, store);
     }
 }

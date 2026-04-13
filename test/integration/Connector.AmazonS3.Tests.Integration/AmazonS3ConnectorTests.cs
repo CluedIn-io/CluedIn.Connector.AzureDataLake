@@ -37,7 +37,7 @@ namespace CluedIn.Connector.AmazonS3.Tests.Integration;
 /// Requires environment variables: S3_ACCESSKEY, S3_SECRETKEY, S3_REGION, S3_BUCKETNAME
 /// Tests will fail if environment variables are not set.
 /// </summary>
-public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connector, AmazonS3Factory, IAmazonS3ConfigurationConstants>
+public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connector, AmazonS3StorageFactory, IAmazonS3ConfigurationConstants>
 {
     protected override Guid StorageProviderId => AmazonS3ConfigurationConstants.S3ProviderId;
 
@@ -536,7 +536,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<IAmazonS3ConfigurationConstants> constantsMock,
-        Mock<AmazonS3Factory> storageConfigurationFactory)
+        Mock<AmazonS3StorageFactory> storageConfigurationFactory)
     {
         var mockConnector = new Mock<AmazonS3Connector>(
             new Mock<ILogger<AmazonS3Connector>>().Object,
@@ -547,12 +547,12 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         return mockConnector;
     }
 
-    protected override Mock<AmazonS3Factory> CreateStorageFactoryMock(
+    protected override Mock<AmazonS3StorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
         //container.Register(Component.For<AmazonS3Factory>().ImplementedBy<AmazonS3Factory>().LifestyleSingleton());
-        var storageFactory = new Mock<AmazonS3Factory>();
+        var storageFactory = new Mock<AmazonS3StorageFactory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
             .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new AmazonS3StorageClient(NullLogger<AmazonS3StorageClient>.Instance, data as AmazonS3ConnectorConfiguration)));
         return storageFactory;

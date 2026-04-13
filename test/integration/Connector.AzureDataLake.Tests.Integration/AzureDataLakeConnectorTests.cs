@@ -29,7 +29,7 @@ using Xunit.Abstractions;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
 
-public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataLakeConnector, AzureDataLakeFactory, IAzureDataLakeConfigurationConstants>
+public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataLakeConnector, AzureDataLakeStorageFactory, IAzureDataLakeConfigurationConstants>
 {
     protected override Guid StorageProviderId => AzureDataLakeConfigurationConstants.DataLakeProviderId;
 
@@ -620,7 +620,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<IAzureDataLakeConfigurationConstants> constantsMock,
-        Mock<AzureDataLakeFactory> jobDataFactory)
+        Mock<AzureDataLakeStorageFactory> jobDataFactory)
     {
         var mockConnector = new Mock<AzureDataLakeConnector>(
             new Mock<ILogger<AzureDataLakeConnector>>().Object,
@@ -631,13 +631,13 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         return mockConnector;
     }
 
-    protected override Mock<AzureDataLakeFactory> CreateStorageFactoryMock(
+    protected override Mock<AzureDataLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
-        var dataFactoryMock = new Mock<AzureDataLakeFactory>();
+        var dataFactoryMock = new Mock<AzureDataLakeStorageFactory>();
         dataFactoryMock.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new DataLakeClient(NullLogger<DataLakeClient>.Instance, data as IDataLakeStorageConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new DataLakeStorageClient(NullLogger<DataLakeStorageClient>.Instance, data as IDataLakeStorageConfiguration)));
         return dataFactoryMock;
     }
 }

@@ -10,6 +10,6 @@ internal class InstallComponents : InstallComponentsBase
 {
     public override void Install(IWindsorContainer container, IConfigurationStore store)
     {
-        DefaultInstall<OneLakeExportEntitiesJob, IOneLakeConfigurationConstants, OneLakeConfigurationConstants, OneLakeFactory>(container, store);
+        DefaultInstall<OneLakeExportEntitiesJob, IOneLakeConfigurationConstants, OneLakeConfigurationConstants, OneLakeStorageFactory>(container, store);
     }
 }

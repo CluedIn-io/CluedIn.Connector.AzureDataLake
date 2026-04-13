@@ -14,12 +14,12 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.DataLake.Common.Connector;
 
-internal class DataLakeClient : IStorageClient
+internal class DataLakeStorageClient : IStorageClient
 {
-    private readonly ILogger<DataLakeClient> _logger;
+    private readonly ILogger<DataLakeStorageClient> _logger;
     private readonly IDataLakeStorageConfiguration _storageConfiguration;
 
-    public DataLakeClient(ILogger<DataLakeClient> logger, IDataLakeStorageConfiguration storageConfiguration)
+    public DataLakeStorageClient(ILogger<DataLakeStorageClient> logger, IDataLakeStorageConfiguration storageConfiguration)
     {
         _logger = logger;
         _storageConfiguration = storageConfiguration;
@@ -65,7 +65,7 @@ internal class DataLakeClient : IStorageClient
     public async Task<IStorageFileClient> GetFileClient(FilePath filePath)
     {
         var directoryClient = await GetDirectoryClientAsync(filePath.DirectoryPath, createIfNotExists: false);
-        return new FileClient(filePath,directoryClient.GetFileClient(filePath.Name));
+        return new DataLakeStorageFileClient(filePath,directoryClient.GetFileClient(filePath.Name));
     }
 
     public async Task<FileMetadata> GetFileMetadata(FilePath filePath)
@@ -280,48 +280,5 @@ internal class DataLakeClient : IStorageClient
         return castedJobData;
     }
 
-    internal class FileClient : IStorageFileClient
-    {
-        private readonly FilePath _filePath;
-        private DataLakeFileClient _fileClient;
-
-        public FileClient(FilePath filePath, DataLakeFileClient fileClient)
-        {
-            _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
-            _fileClient = fileClient ?? throw new ArgumentNullException(nameof(fileClient));
-        }
-
-        public Uri Uri => _fileClient.Uri;
-
-        public async Task DeleteAsync()
-        {
-            await _fileClient.DeleteAsync();
-        }
-
-        public async Task DeleteIfExistsAsync()
-        {
-            await _fileClient?.DeleteIfExistsAsync();
-        }
-
-        public async Task<bool> ExistsAsync()
-        {
-            return await _fileClient.ExistsAsync();
-        }
-
-        public async Task<Stream> OpenWriteAsync(bool overwrite)
-        {
-            await using var outputStream = await _fileClient.OpenWriteAsync(overwrite);
-            return new DataLakeBufferedWriteStream(outputStream);
-        }
-
-        public async Task RenameAsync(FilePath targetPath)
-        {
-            await _fileClient.RenameAsync(targetPath.FullPath);
-        }
-
-        public async Task SetMetadataAsync(FileMetadata fileMetadata)
-        {
-            await _fileClient.SetMetadataAsync(fileMetadata.Metadata);
-        }
-    }
+    
 }

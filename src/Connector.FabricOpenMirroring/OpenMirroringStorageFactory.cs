@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.FabricOpenMirroring;
 
-public class OpenMirroringFactory : StorageFactoryBase, IStorageFactory
+public class OpenMirroringStorageFactory : StorageFactoryBase, IStorageFactory
 {
     protected override Task<IStorageConfiguration> CreateStorageConfigurationInternal(
         ExecutionContext executionContext,
@@ -36,9 +36,9 @@ public class OpenMirroringFactory : StorageFactoryBase, IStorageFactory
 
     public override async Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration storageConfiguration)
     {
-        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<OpenMirroringClient>>();
+        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<OpenMirroringStorageClient>>();
         var dateTimeOffsetProvider = executionContext.ApplicationContext.Container.Resolve<IDateTimeOffsetProvider>();
-        var client = new OpenMirroringClient(logger, dateTimeOffsetProvider, storageConfiguration as OpenMirroringConnectorConfiguration);
+        var client = new OpenMirroringStorageClient(logger, dateTimeOffsetProvider, storageConfiguration as OpenMirroringConnectorConfiguration);
         return client;
     }
 }

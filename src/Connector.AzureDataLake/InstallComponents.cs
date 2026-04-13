@@ -10,6 +10,6 @@ internal class InstallComponents : InstallComponentsBase
 {
     public override void Install(IWindsorContainer container, IConfigurationStore store)
     {
-        DefaultInstall<AzureDataLakeExportEntitiesJob, IAzureDataLakeConfigurationConstants, AzureDataLakeConfigurationConstants, AzureDataLakeFactory>(container, store);
+        DefaultInstall<AzureDataLakeExportEntitiesJob, IAzureDataLakeConfigurationConstants, AzureDataLakeConfigurationConstants, AzureDataLakeStorageFactory>(container, store);
     }
 }

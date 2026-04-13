@@ -13,9 +13,9 @@ public class AzureAIStudioConnector : StorageConnectorBase
         ILogger<AzureAIStudioConnector> logger,
         ApplicationContext applicationContext,
         IAzureAIStudioConfigurationConstants constants,
-        AzureAIStudioJobDataFactory dataLakeJobDataFactory,
+        AzureAIStudioStorageFactory dataLakeStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeStorageFactory, dateTimeOffsetProvider)
     {
     }
 

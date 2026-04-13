@@ -20,7 +20,7 @@ namespace CluedIn.Connector.AzureDatabricks
         /// <summary>Starts this instance.</summary>
         public override void Start()
         {
-            DefaultStartInternal<IAzureDatabricksConfigurationConstants, AzureDatabricksFactory, AzureDatabricksExportEntitiesJob>();
+            DefaultStartInternal<IAzureDatabricksConfigurationConstants, AzureDatabricksStorageFactory, AzureDatabricksExportEntitiesJob>();
         }
 
         public const string ComponentName = "Azure Databricks";

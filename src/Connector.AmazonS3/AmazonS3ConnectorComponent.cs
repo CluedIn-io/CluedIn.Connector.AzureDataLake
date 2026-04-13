@@ -18,7 +18,7 @@ public sealed class AmazonS3ConnectorComponent : StorageConnectorComponentBase
 
     public override void Start()
     {
-        DefaultStartInternal<IAmazonS3ConfigurationConstants, AmazonS3Factory, AmazonS3ExportEntitiesJob>();
+        DefaultStartInternal<IAmazonS3ConfigurationConstants, AmazonS3StorageFactory, AmazonS3ExportEntitiesJob>();
     }
 
     public const string ComponentName = "Amazon S3";

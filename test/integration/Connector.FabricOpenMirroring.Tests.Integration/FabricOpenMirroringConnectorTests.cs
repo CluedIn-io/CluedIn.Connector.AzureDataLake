@@ -29,7 +29,7 @@ using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;
 
-public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirroringConnector, OpenMirroringFactory, IOpenMirroringConfigurationConstants>
+public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirroringConnector, OpenMirroringStorageFactory, IOpenMirroringConfigurationConstants>
 {
     protected override Guid StorageProviderId => OpenMirroringConfigurationConstants.DataLakeProviderId;
     protected override bool IsFixedFileSystem => true;
@@ -511,7 +511,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<IOpenMirroringConfigurationConstants> constantsMock,
-        Mock<OpenMirroringFactory> jobDataFactory)
+        Mock<OpenMirroringStorageFactory> jobDataFactory)
     {
         var mockConnector = new Mock<OpenMirroringConnector>(
             new Mock<ILogger<OpenMirroringConnector>>().Object,
@@ -522,13 +522,13 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         return mockConnector;
     }
 
-    protected override Mock<OpenMirroringFactory> CreateStorageFactoryMock(
+    protected override Mock<OpenMirroringStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
-        var dataFactoryMock = new Mock<OpenMirroringFactory>();
+        var dataFactoryMock = new Mock<OpenMirroringStorageFactory>();
         dataFactoryMock.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OpenMirroringClient(NullLogger<OpenMirroringClient>.Instance, mockDateTimeOffsetProvider.Object, data as OpenMirroringConnectorConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OpenMirroringStorageClient(NullLogger<OpenMirroringStorageClient>.Instance, mockDateTimeOffsetProvider.Object, data as OpenMirroringConnectorConfiguration)));
         return dataFactoryMock;
     }
 

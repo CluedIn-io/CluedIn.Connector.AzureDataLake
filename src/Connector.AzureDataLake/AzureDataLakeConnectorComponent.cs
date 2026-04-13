@@ -21,7 +21,7 @@ namespace CluedIn.Connector.AzureDataLake
 
         public override void Start()
         {
-            DefaultStartInternal<IAzureDataLakeConfigurationConstants, AzureDataLakeFactory, AzureDataLakeExportEntitiesJob>();
+            DefaultStartInternal<IAzureDataLakeConfigurationConstants, AzureDataLakeStorageFactory, AzureDataLakeExportEntitiesJob>();
         }
 
         private protected override IDataMigrator GetDataMigrator(IStorageConfigurationConstants constants, IStorageFactory storageFactory)

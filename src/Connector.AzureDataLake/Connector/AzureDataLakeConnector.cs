@@ -27,7 +27,7 @@ public class AzureDataLakeConnector : StorageConnectorBase
         ILogger<AzureDataLakeConnector> logger,
         ApplicationContext applicationContext,
         IAzureDataLakeConfigurationConstants constants,
-        AzureDataLakeFactory storageFactory,
+        AzureDataLakeStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
     {

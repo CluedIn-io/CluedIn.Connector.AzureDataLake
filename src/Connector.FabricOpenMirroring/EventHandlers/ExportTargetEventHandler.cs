@@ -21,7 +21,7 @@ internal class ExportTargetEventHandler : IDisposable
     private readonly ApplicationContext _applicationContext;
     private readonly IStorageConfigurationConstants _configurationConstants;
     private readonly IStorageFactory _storageFactory;
-    private readonly OpenMirroringClient _openMirroringDataLakeClient;
+    private readonly OpenMirroringStorageClient _openMirroringStorageDataLakeClient;
     private bool _disposedValue;
 
     public ExportTargetEventHandler(
@@ -29,13 +29,13 @@ internal class ExportTargetEventHandler : IDisposable
         ApplicationContext applicationContext,
         IStorageConfigurationConstants constants,
         IStorageFactory jobDataFactory,
-        OpenMirroringClient openMirroringDataLakeClient)
+        OpenMirroringStorageClient openMirroringStorageDataLakeClient)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
         _configurationConstants = constants ?? throw new ArgumentNullException(nameof(constants));
         _storageFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
-        _openMirroringDataLakeClient = openMirroringDataLakeClient ?? throw new ArgumentNullException(nameof(openMirroringDataLakeClient));
+        _openMirroringStorageDataLakeClient = openMirroringStorageDataLakeClient ?? throw new ArgumentNullException(nameof(openMirroringStorageDataLakeClient));
 
         _registerExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<RegisterExportTargetEvent>(ProcessEvent);
         _updateExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
@@ -106,6 +106,6 @@ internal class ExportTargetEventHandler : IDisposable
             throw new ApplicationException($"Failed to get job data for ProviderDefinitionId {providerDefinitionId}.");
         }
 
-        await _openMirroringDataLakeClient.UpdateOrCreateMirroredDatabaseAsync(jobData, providerDefinition.IsEnabled);
+        await _openMirroringStorageDataLakeClient.UpdateOrCreateMirroredDatabaseAsync(jobData, providerDefinition.IsEnabled);
     }
 }

@@ -29,7 +29,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
     {
         var containerName = streamModel.ContainerName;
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _storageStorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
         var action = new ConnectorAction(RunExportActionName, "Run Export", "Run export now", [], []);
         var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
 
@@ -123,7 +123,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var containerName = streamModel.ContainerName;
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _storageStorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;
@@ -184,7 +184,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var containerName = streamModel.ContainerName;
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _storageStorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;
@@ -238,7 +238,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var containerName = streamModel.ContainerName;
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _storageStorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;

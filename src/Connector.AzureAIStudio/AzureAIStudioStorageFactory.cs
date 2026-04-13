@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureAIStudio;
 
-public class AzureAIStudioJobDataFactory : StorageFactoryBase, IStorageFactory
+public class AzureAIStudioStorageFactory : StorageFactoryBase, IStorageFactory
 {
     public override Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration jobData)
     {
@@ -19,8 +19,8 @@ public class AzureAIStudioJobDataFactory : StorageFactoryBase, IStorageFactory
             throw new ApplicationException($"Provided job data is not of expected type '{typeof(AzureAIStudioConnectorConfiguration)}'. It is '{jobData.GetType()}'.");
         }
 
-        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<DataLakeClient>>();
-        return Task.FromResult<IStorageClient>(new DataLakeClient(logger, castedJobData));
+        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<DataLakeStorageClient>>();
+        return Task.FromResult<IStorageClient>(new DataLakeStorageClient(logger, castedJobData));
     }
 
     protected override Task<IStorageConfiguration> CreateStorageConfigurationInternal(

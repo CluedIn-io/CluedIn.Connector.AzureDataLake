@@ -19,7 +19,7 @@ public sealed class AzureAIStudioConnectorComponent : StorageConnectorComponentB
     /// <summary>Starts this instance.</summary>
     public override void Start()
     {
-        DefaultStartInternal<IAzureAIStudioConfigurationConstants, AzureAIStudioJobDataFactory, AzureAIStudioExportEntitiesJob>();
+        DefaultStartInternal<IAzureAIStudioConfigurationConstants, AzureAIStudioStorageFactory, AzureAIStudioExportEntitiesJob>();
     }
 
     public const string ComponentName = "Azure AI Studio";

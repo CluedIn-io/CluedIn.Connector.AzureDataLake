@@ -18,9 +18,9 @@ using CluedIn.Connector.FileStorage.Common;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
-internal class OpenMirroringClient : DataLakeClient
+internal class OpenMirroringStorageClient : DataLakeStorageClient
 {
-    private readonly ILogger<OpenMirroringClient> _logger;
+    private readonly ILogger<OpenMirroringStorageClient> _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     private readonly OpenMirroringConnectorConfiguration _jobData;
     private static readonly TimeSpan CreationTimeOut = TimeSpan.FromMinutes(10);
@@ -34,8 +34,8 @@ internal class OpenMirroringClient : DataLakeClient
         },
     };
 
-    public OpenMirroringClient(
-        ILogger<OpenMirroringClient> logger,
+    public OpenMirroringStorageClient(
+        ILogger<OpenMirroringStorageClient> logger,
         IDateTimeOffsetProvider dateTimeOffsetProvider,
         OpenMirroringConnectorConfiguration jobData):
         base(logger, jobData)

@@ -11,22 +11,22 @@ namespace CluedIn.Connector.OneLake.Connector;
 
 internal class OneLakeExportEntitiesJob : StorageExportEntitiesJobBase
 {
-    private readonly OneLakeFactory _storageFactory;
+    private readonly OneLakeStorageFactory _storageStorageFactory;
 
     public OneLakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IOneLakeConfigurationConstants dataLakeConstants,
-        OneLakeFactory storageFactory,
+        OneLakeStorageFactory storageStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeConstants, storageFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeConstants, storageStorageFactory, dateTimeOffsetProvider)
     {
-        _storageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
+        _storageStorageFactory = storageStorageFactory ?? throw new ArgumentNullException(nameof(storageStorageFactory));
     }
 
     private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
-        var client = await _storageFactory.CreateStorageClient(context, exportJobData.StorageConfiguration) as OneLakeClient;
+        var client = await _storageStorageFactory.CreateStorageClient(context, exportJobData.StorageConfiguration) as OneLakeStorageClient;
         var configuration = exportJobData.StorageConfiguration as OneLakeConnectorConfiguration;
         if (!configuration.ShouldLoadToTable)
         {

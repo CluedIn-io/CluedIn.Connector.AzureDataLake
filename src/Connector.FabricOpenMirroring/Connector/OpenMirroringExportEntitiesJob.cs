@@ -33,9 +33,9 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IOpenMirroringConfigurationConstants dataLakeConstants,
-        OpenMirroringFactory dataLakeJobDataFactory,
+        OpenMirroringStorageFactory dataLakeJobDataStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataStorageFactory, dateTimeOffsetProvider)
     {
         DateTimeOffsetProvider = dateTimeOffsetProvider;
     }

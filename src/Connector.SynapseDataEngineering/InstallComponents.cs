@@ -10,6 +10,6 @@ internal class InstallComponents : InstallComponentsBase
 {
     public override void Install(IWindsorContainer container, IConfigurationStore store)
     {
-        DefaultInstall<SynapseDataEngineeringExportEntitiesJob, ISynapseDataEngineeringConfigurationConstants, SynapseDataEngineeringConfigurationConstants, SynapseDataEngineeringFactory>(container, store);
+        DefaultInstall<SynapseDataEngineeringExportEntitiesJob, ISynapseDataEngineeringConfigurationConstants, SynapseDataEngineeringConfigurationConstants, SynapseDataEngineeringStorageFactory>(container, store);
     }
 }

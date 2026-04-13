@@ -10,6 +10,6 @@ internal class InstallComponents : InstallComponentsBase
 {
     public override void Install(IWindsorContainer container, IConfigurationStore store)
     {
-        DefaultInstall<AzureDatabricksExportEntitiesJob, IAzureDatabricksConfigurationConstants, AzureDatabricksConfigurationConstants, AzureDatabricksFactory>(container, store);
+        DefaultInstall<AzureDatabricksExportEntitiesJob, IAzureDatabricksConfigurationConstants, AzureDatabricksConfigurationConstants, AzureDatabricksStorageFactory>(container, store);
     }
 }

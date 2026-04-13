@@ -13,9 +13,9 @@ public class SynapseDataEngineeringConnector : StorageConnectorBase
         ILogger<SynapseDataEngineeringConnector> logger,
         ApplicationContext applicationContext,
         ISynapseDataEngineeringConfigurationConstants constants,
-        SynapseDataEngineeringFactory dataLakeJobDataFactory,
+        SynapseDataEngineeringStorageFactory dataLakeJobDataStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeJobDataStorageFactory, dateTimeOffsetProvider)
     {
     }
 

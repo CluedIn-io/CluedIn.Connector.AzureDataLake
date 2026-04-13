@@ -24,19 +24,19 @@ public class OpenMirroringConnector : StorageConnectorBase
     internal const string WorkspaceNotFoundErrorCode = "WorkspaceNotFound";
 
     private readonly ILogger<OpenMirroringConnector> _logger;
-    private readonly OpenMirroringFactory _storageFactory;
+    private readonly OpenMirroringStorageFactory _storageStorageFactory;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
 
     public OpenMirroringConnector(
         ILogger<OpenMirroringConnector> logger,
         ApplicationContext applicationContext,
         IOpenMirroringConfigurationConstants constants,
-        OpenMirroringFactory storageFactory,
+        OpenMirroringStorageFactory storageStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, storageStorageFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _storageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
+        _storageStorageFactory = storageStorageFactory ?? throw new ArgumentNullException(nameof(storageStorageFactory));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
@@ -62,7 +62,7 @@ public class OpenMirroringConnector : StorageConnectorBase
         var isHealthCheckVerification = IsHealthCheckVerification(casted);
         var shouldTolerateMissingDirectory = !isHealthCheckVerification && casted.ShouldCreateMirroredDatabase;
 
-        var client = await _storageFactory.CreateStorageClient(executionContext, casted) as OpenMirroringClient;
+        var client = await _storageStorageFactory.CreateStorageClient(executionContext, casted) as OpenMirroringStorageClient;
         if (shouldTolerateMissingDirectory)
         {
             if (await client.HasValidWorkspaceAsync())
@@ -110,9 +110,9 @@ public class OpenMirroringConnector : StorageConnectorBase
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var containerName = streamModel.ContainerName;
 
-        var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await StorageStorageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId, containerName);
         var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, configuration, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), configuration.OutputFormat);
-        var client = await StorageFactory.CreateStorageClient(executionContext, configuration);
+        var client = await StorageStorageFactory.CreateStorageClient(executionContext, configuration);
         await client.DeleteDirectory(new DirectoryPath(configuration.RootDirectoryPath).GetSubDirectoryPath(subDirectory));
         await base.ArchiveContainer(executionContext, streamModel);
     }

@@ -14,48 +14,48 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
-internal class OneLakeClient : DataLakeClient
+internal class OneLakeStorageClient : DataLakeStorageClient
 {
-    private readonly OneLakeConnectorConfiguration _jobData;
+    private readonly OneLakeConnectorConfiguration _configuration;
 
-    public ILogger<OneLakeClient> Logger { get; }
+    public ILogger<OneLakeStorageClient> Logger { get; }
 
-    public OneLakeClient(ILogger<OneLakeClient> logger, OneLakeConnectorConfiguration jobData): base(logger, jobData)
+    public OneLakeStorageClient(ILogger<OneLakeStorageClient> logger, OneLakeConnectorConfiguration configuration): base(logger, configuration)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _jobData = jobData ?? throw new ArgumentNullException(nameof(jobData));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
     internal async Task LoadToTableAsync(string sourceFileName, string targetTableName)
     {
-        if (!_jobData.ShouldLoadToTable)
+        if (!_configuration.ShouldLoadToTable)
         {
             return;
         }
 
-        var sharedKeyCredential = new ClientSecretCredential(_jobData.TenantId, _jobData.ClientId, _jobData.ClientSecret);
+        var sharedKeyCredential = new ClientSecretCredential(_configuration.TenantId, _configuration.ClientId, _configuration.ClientSecret);
         var tokenResult = await sharedKeyCredential.GetTokenAsync(
-        new TokenRequestContext(new string[]
-        {
+        new TokenRequestContext(
+        [
             "https://api.fabric.microsoft.com/.default"
-        }));
+        ]));
         var token = tokenResult.Token;
 
         var httpClient = new HttpClient();
 
-        var workspace = await GetWorkspaceAsync(httpClient, token, _jobData.WorkspaceName);
+        var workspace = await GetWorkspaceAsync(httpClient, token, _configuration.WorkspaceName);
         if (workspace == null)
         {
-            throw new ApplicationException($"Workspace {_jobData.WorkspaceName}is not found.");
+            throw new ApplicationException($"Workspace {_configuration.WorkspaceName}is not found.");
         }
 
-        var lakehouse = await GetLakehouseAsync(httpClient, token, workspace.Id, _jobData.ItemName);
+        var lakehouse = await GetLakehouseAsync(httpClient, token, workspace.Id, _configuration.ItemName);
         if (lakehouse == null)
         {
-            throw new ApplicationException($"Lakehouse {_jobData.ItemName} is not found in workspace {workspace.Id}.");
+            throw new ApplicationException($"Lakehouse {_configuration.ItemName} is not found in workspace {workspace.Id}.");
         }
 
-        var filePath = $"{_jobData.ItemFolder}/{sourceFileName}";
+        var filePath = $"{_configuration.ItemFolder}/{sourceFileName}";
         await LoadTableAsync(httpClient, token, workspace.Id, lakehouse.Id.Value, targetTableName, filePath);
     }
 

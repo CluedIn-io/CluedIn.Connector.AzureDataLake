@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.SynapseDataEngineering;
 
-public class SynapseDataEngineeringFactory : StorageFactoryBase, IStorageFactory
+public class SynapseDataEngineeringStorageFactory : StorageFactoryBase, IStorageFactory
 {
     public override Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration jobData)
     {
@@ -19,8 +19,8 @@ public class SynapseDataEngineeringFactory : StorageFactoryBase, IStorageFactory
             throw new ApplicationException($"Provided job data is not of expected type '{typeof(SynapseDataEngineeringConnectorConfiguration)}'. It is '{jobData.GetType()}'.");
         }
 
-        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<DataLakeClient>>();
-        return Task.FromResult<IStorageClient>(new DataLakeClient(logger, castedJobData));
+        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<DataLakeStorageClient>>();
+        return Task.FromResult<IStorageClient>(new DataLakeStorageClient(logger, castedJobData));
     }
 
     protected override Task<IStorageConfiguration> CreateStorageConfigurationInternal(

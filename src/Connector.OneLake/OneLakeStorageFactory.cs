@@ -9,16 +9,16 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake;
 
-public class OneLakeFactory : StorageFactoryBase, IStorageFactory
+public class OneLakeStorageFactory : StorageFactoryBase, IStorageFactory
 {
     public override async Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration jobData)
     {
         return await CreateDataLakeClient(executionContext, jobData as OneLakeConnectorConfiguration);
     }
-    private Task<OneLakeClient> CreateDataLakeClient(ExecutionContext executionContext, OneLakeConnectorConfiguration jobData)
+    private Task<OneLakeStorageClient> CreateDataLakeClient(ExecutionContext executionContext, OneLakeConnectorConfiguration jobData)
     {
-        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<OneLakeClient>>();
-        var client = new OneLakeClient(logger, jobData);
+        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<OneLakeStorageClient>>();
+        var client = new OneLakeStorageClient(logger, jobData);
         return Task.FromResult(client);
     }
 

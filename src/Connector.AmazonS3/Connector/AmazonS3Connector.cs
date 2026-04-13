@@ -27,7 +27,7 @@ public class AmazonS3Connector : StorageConnectorBase
         ILogger<AmazonS3Connector> logger,
         ApplicationContext applicationContext,
         IAmazonS3ConfigurationConstants constants,
-        AmazonS3Factory storageFactory,
+        AmazonS3StorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
     {

@@ -10,6 +10,6 @@ internal class InstallComponents : InstallComponentsBase
 {
     public override void Install(IWindsorContainer container, IConfigurationStore store)
     {
-        DefaultInstall<AmazonS3ExportEntitiesJob, IAmazonS3ConfigurationConstants, AmazonS3ConfigurationConstants, AmazonS3Factory>(container, store);
+        DefaultInstall<AmazonS3ExportEntitiesJob, IAmazonS3ConfigurationConstants, AmazonS3ConfigurationConstants, AmazonS3StorageFactory>(container, store);
     }
 }

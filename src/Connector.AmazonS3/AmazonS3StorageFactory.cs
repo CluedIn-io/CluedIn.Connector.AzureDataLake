@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AmazonS3;
 
-public class AmazonS3Factory : StorageFactoryBase, IStorageFactory
+public class AmazonS3StorageFactory : StorageFactoryBase, IStorageFactory
 {
     protected override Task<IStorageConfiguration> CreateStorageConfigurationInternal(
         ExecutionContext executionContext,

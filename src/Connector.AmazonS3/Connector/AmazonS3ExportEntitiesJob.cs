@@ -10,7 +10,7 @@ internal class AmazonS3ExportEntitiesJob : StorageExportEntitiesJobBase
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IAmazonS3ConfigurationConstants dataLakeConstants,
-        AmazonS3Factory dataLakeJobDataFactory,
+        AmazonS3StorageFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
         : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {

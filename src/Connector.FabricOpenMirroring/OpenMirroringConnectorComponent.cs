@@ -23,7 +23,7 @@ public sealed class OpenMirroringConnectorComponent : StorageConnectorComponentB
     /// <summary>Starts this instance.</summary>
     public override void Start()
     {
-        DefaultStartInternal<IOpenMirroringConfigurationConstants, OpenMirroringFactory, OpenMirroringExportEntitiesJob>();
+        DefaultStartInternal<IOpenMirroringConfigurationConstants, OpenMirroringStorageFactory, OpenMirroringExportEntitiesJob>();
     }
 
     public const string ComponentName = "FabricOpenMirroring";
@@ -36,7 +36,7 @@ public sealed class OpenMirroringConnectorComponent : StorageConnectorComponentB
     {
         var logger = Container.Resolve<ILogger<ExportTargetEventHandler>>();
         var dateTimeProvider = Container.Resolve<IDateTimeOffsetProvider>();
-        var fabricClient = Container.Resolve<OpenMirroringClient>();
+        var fabricClient = Container.Resolve<OpenMirroringStorageClient>();
         _exportTargetEventHandler = new(logger, ApplicationContext, constants, storageFactory, fabricClient);
         base.SubscribeToEvents(constants, storageFactory, jobQueue);
     }
