@@ -239,6 +239,11 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             {
                 return await sqlDataWriter?.WriteAsync(context, configuration, outputStream, fieldNamesToUse, IsInitialExport, reader);
             }
+            catch (Exception ex)
+            {
+                context.Log.LogError(ex, "Error writing to file '{FileName}' for StreamId {StreamId} and DataTime {DataTime}.", temporaryOutputFileName, streamId, asOfTime);
+                throw;
+            }
             finally
             {
                 await outputStream.DisposeAsync();

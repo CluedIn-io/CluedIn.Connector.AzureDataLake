@@ -37,6 +37,10 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
 
         //    throw new Exception("HMMM1111222222888xxxxxxxxxxx" + outputStream.CanSeek + " " + outputStream.Position + " " + outputStream.CanWrite + " " + outputStream.CanRead + " " + outputStream.Length);
         //}
+        if (outputStream.GetType().FullName.Contains("S3"))
+        {
+            outputStream.Flush();
+        }
         await using var stringWriter = new StreamWriter(outputStream);
         //if (reader != null)
         //{

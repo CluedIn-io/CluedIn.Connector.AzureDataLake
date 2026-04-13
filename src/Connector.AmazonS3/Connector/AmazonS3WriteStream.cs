@@ -51,6 +51,7 @@ internal class AmazonS3WriteStream : Stream
     public override void Flush()
     {
         // Don't upload on every flush to avoid excessive uploads
+        Aaa();
     }
 
     public override async Task FlushAsync(CancellationToken cancellationToken)
@@ -58,9 +59,17 @@ internal class AmazonS3WriteStream : Stream
         // Don't upload on every flush to avoid excessive uploads
     }
 
+    public void Aaa()
+    {
+        if (_disposed)
+        {
+            throw new Exception("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD disposed");
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
-        throw new NotSupportedException("sssssssssssssDispose is not supported. Use DisposeAsync instead.");
+        //throw new NotSupportedException("sssssssssssssDispose is not supported. Use DisposeAsync instead.");
         if (!_disposed && disposing)
         {
             _disposed = true;
@@ -73,7 +82,7 @@ internal class AmazonS3WriteStream : Stream
 
     public override async ValueTask DisposeAsync()
     {
-        throw new Exception("DKDKDKDKKDKDKD DisposeAsync is not supported. Use FlushAsync instead.");
+        //throw new Exception("DKDKDKDKKDKDKD DisposeAsync is not supported. Use FlushAsync instead.");
         if (!_disposed)
         {
             _disposed = true;
