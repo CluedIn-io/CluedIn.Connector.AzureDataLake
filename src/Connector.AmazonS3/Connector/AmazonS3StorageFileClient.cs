@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net;
 using System.Threading.Tasks;
 
 using Amazon.S3;
@@ -14,6 +15,7 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
     private readonly FilePath _filePath;
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
+    private static int BufferSize => 4 * 1024 * 1024; // 8 MB buffer for streaming
 
     public AmazonS3StorageFileClient(IAmazonS3 s3Client, string bucketName, FilePath filePath)
     {
@@ -35,7 +37,7 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
         {
             await _s3Client.DeleteObjectAsync(_bucketName, _filePath.GetKey());
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             // File doesn't exist, nothing to delete
         }
@@ -48,7 +50,7 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
             await _s3Client.GetObjectMetadataAsync(_bucketName, _filePath.GetKey());
             return true;
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             return false;
         }
@@ -56,7 +58,7 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
 
     public async Task<Stream> OpenWriteAsync(bool overwrite)
     {
-        return new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey());
+        return new BufferedStream(new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey()), BufferSize);
     }
 
     public async Task RenameAsync(FilePath targetPath)
@@ -104,7 +106,7 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
 
             await _s3Client.CopyObjectAsync(copyRequest);
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             // Object doesn't exist yet, metadata will be set when the file is uploaded
         }
