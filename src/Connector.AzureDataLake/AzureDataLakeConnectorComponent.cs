@@ -12,7 +12,7 @@ namespace CluedIn.Connector.AzureDataLake
     [Component(nameof(AzureDataLakeConnectorComponent), "Providers", ComponentType.Service,
         ServerComponents.ProviderWebApi,
         Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
-    public sealed class AzureDataLakeConnectorComponent : DataLakeConnectorComponentBase
+    public sealed class AzureDataLakeConnectorComponent : StorageConnectorComponentBase
     {
         public AzureDataLakeConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
         {
@@ -21,10 +21,10 @@ namespace CluedIn.Connector.AzureDataLake
 
         public override void Start()
         {
-            DefaultStartInternal<IAzureDataLakeConstants, AzureDataLakeJobDataFactory, AzureDataLakeExportEntitiesJob>();
+            DefaultStartInternal<IAzureDataLakeConfigurationConstants, AzureDataLakeStorageFactory, AzureDataLakeExportEntitiesJob>();
         }
 
-        private protected override IDataMigrator GetDataMigrator(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory)
+        private protected override IDataMigrator GetDataMigrator(IStorageConfigurationConstants constants, IStorageFactory storageFactory)
         {
             return new AzureDataLakeDataMigrator(
                 Log,
@@ -32,7 +32,7 @@ namespace CluedIn.Connector.AzureDataLake
                 Container.Resolve<DbContextOptions<CluedInEntities>>(),
                 ShortConnectorComponentName,
                 constants,
-                jobDataFactory);
+                storageFactory);
         }
 
         public const string ComponentName = "Azure Data Lake Storage Gen2";

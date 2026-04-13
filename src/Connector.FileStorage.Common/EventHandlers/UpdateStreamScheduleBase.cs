@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
@@ -16,8 +17,8 @@ internal abstract class UpdateStreamScheduleBase
 {
 
     protected ApplicationContext ApplicationContext { get; }
-    protected IDataLakeConstants Constants { get; }
-    protected IDataLakeJobDataFactory JobDataFactory { get; }
+    protected IStorageConfigurationConstants Constants { get; }
+    protected IStorageFactory JobDataFactory { get; }
 
     protected Type ExportEntitiesJobType { get; }
     protected IScheduledJobQueue JobQueue { get; }
@@ -25,8 +26,8 @@ internal abstract class UpdateStreamScheduleBase
 
     protected UpdateStreamScheduleBase(
         ApplicationContext applicationContext,
-        IDataLakeConstants constants,
-        IDataLakeJobDataFactory jobDataFactory,
+        IStorageConfigurationConstants constants,
+        IStorageFactory jobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider,
         Type exportEntitiesJobType,
         IScheduledJobQueue jobQueue)
@@ -84,7 +85,7 @@ internal abstract class UpdateStreamScheduleBase
     private void UpdateJobServerClientSchedule(StreamModel stream)
     {
         var jobServerClient = ApplicationContext.Container.Resolve<IJobServerClient>();
-        var exportJob = ApplicationContext.Container.Resolve(ExportEntitiesJobType) as DataLakeExportEntitiesJobBase;
+        var exportJob = ApplicationContext.Container.Resolve(ExportEntitiesJobType) as StorageExportEntitiesJobBase;
         exportJob.Schedule(jobServerClient, CronSchedules.NeverCron, stream.Id.ToString());
     }
 

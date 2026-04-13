@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
-using CluedIn.Core.Events;
 using CluedIn.Core.Events.Types;
 
 using Microsoft.Extensions.Logging;
@@ -16,20 +15,20 @@ internal class RemoveStreamEventHandler : UpdateStreamScheduleBase, IDisposable
 
     public RemoveStreamEventHandler(
         ApplicationContext applicationContext,
-        IDataLakeConstants constants,
-        IDataLakeJobDataFactory jobDataFactory,
+        IStorageConfigurationConstants constants,
+        IStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider,
         Type exportEntitiesJobType,
         IScheduledJobQueue jobQueue)
         : base(
             applicationContext,
             constants,
-            jobDataFactory,
+            storageFactory,
             dateTimeOffsetProvider,
             exportEntitiesJobType,
             jobQueue)
     {
-        _subscription = ApplicationContext.System.Events.Local.Subscribe<RemoveStreamEvent>(ProcessEvent);
+        _subscription = ApplicationContext.System.Events.SubscribeAsync<RemoveStreamEvent>(ProcessEventAsync);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -45,7 +44,7 @@ internal class RemoveStreamEventHandler : UpdateStreamScheduleBase, IDisposable
         }
     }
 
-    private void ProcessEvent(RemoveStreamEvent eventData)
+    private async Task ProcessEventAsync(RemoveStreamEvent eventData)
     {
         if (!eventData.TryGetResourceInfo("AccountId", "StreamId", out var organizationId, out var streamId))
         {
@@ -61,6 +60,8 @@ internal class RemoveStreamEventHandler : UpdateStreamScheduleBase, IDisposable
         {
             executionContext.Log.LogWarning("Failed to remove job {StreamId} from queue.", streamId);
         }
+
+
     }
 
     public void Dispose()

@@ -15,7 +15,7 @@ internal class ValueHelper
             2 = DELETE
             3 = UPSERT
          */
-        if (key.Equals(DataLakeConstants.ChangeTypeKey, StringComparison.Ordinal))
+        if (key.Equals(StorageConfigurationConstants.ChangeTypeKey, StringComparison.Ordinal))
         {
             var changeType = Enum.Parse<VersionChangeType>(valueFromBase as string);
             var value = changeType switch

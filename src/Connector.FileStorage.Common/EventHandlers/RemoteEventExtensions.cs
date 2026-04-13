@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using CluedIn.Core;
 using CluedIn.Core.Events;

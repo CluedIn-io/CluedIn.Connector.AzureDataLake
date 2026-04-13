@@ -14,15 +14,15 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureDataLake;
 
-internal class AzureDataLakeDataMigrator : DataLakeDataMigrator
+internal class AzureDataLakeDataMigrator : StorageDataMigrator
 {
     public AzureDataLakeDataMigrator(
         ILogger logger,
         ApplicationContext applicationContext,
         DbContextOptions<CluedInEntities> cluedInEntitiesDbContextOptions,
         string componentName,
-        IDataLakeConstants constants,
-        IDataLakeJobDataFactory dataLakeJobDataFactory) : base(logger, applicationContext, cluedInEntitiesDbContextOptions, componentName, constants, dataLakeJobDataFactory)
+        IStorageConfigurationConstants storageConfigurationConstants,
+        IStorageFactory storageFactory) : base(logger, applicationContext, cluedInEntitiesDbContextOptions, componentName, storageConfigurationConstants, storageFactory)
     {
     }
 

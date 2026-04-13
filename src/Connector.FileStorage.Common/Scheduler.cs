@@ -1,11 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
-using CluedIn.Core.Jobs;
 
 using Microsoft.Extensions.Logging;
 
@@ -227,9 +226,9 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
         await jobInstance.DoRunAsync(executionContext, jobArgs);
     }
 
-    private static DataLakeJobArgs CreateDataLakeJobArgs(SchedulerQueuedJob jobData, DateTimeOffset previousRunTime)
+    private static StorageJobArgs CreateDataLakeJobArgs(SchedulerQueuedJob jobData, DateTimeOffset previousRunTime)
     {
-        return new DataLakeJobArgs
+        return new StorageJobArgs
         {
             Message = jobData.Key,
             Schedule = jobData.Schedule.CronSchedule,
@@ -238,11 +237,11 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
         };
     }
 
-    private DataLakeJobBase CreateJobInstance(Type jobType)
+    private StorageJobBase CreateJobInstance(Type jobType)
     {
-        if (_applicationContext.Container.Resolve(jobType) is not DataLakeJobBase jobInstance)
+        if (_applicationContext.Container.Resolve(jobType) is not StorageJobBase jobInstance)
         {
-            throw new ApplicationException($"Job {jobType} is not of type {typeof(DataLakeJobBase)}.");
+            throw new ApplicationException($"Job {jobType} is not of type {typeof(StorageJobBase)}.");
         }
 
         return jobInstance;

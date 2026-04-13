@@ -1,4 +1,4 @@
-﻿using CluedIn.Core.Crawling;
+using CluedIn.Core.Crawling;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Providers;
 using CluedIn.Core.Webhooks;
@@ -56,9 +56,9 @@ namespace CluedIn.Connector.FileStorage.Common
             // WARNING: The log output can contain sensitive information
             _logger.LogDebug($"GetCrawlJobData config input: {JsonConvert.SerializeObject(configuration)}");
 
-            if (!configuration.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out var _))
+            if (!configuration.TryGetValue(StorageConfigurationConstants.ProviderDefinitionIdKey, out var _))
             {
-                configuration.Add(DataLakeConstants.ProviderDefinitionIdKey, providerDefinitionId);
+                configuration.Add(StorageConfigurationConstants.ProviderDefinitionIdKey, providerDefinitionId);
             }
             return Task.FromResult<CrawlJobData>(new CrawlJobDataWrapper(configuration));
         }

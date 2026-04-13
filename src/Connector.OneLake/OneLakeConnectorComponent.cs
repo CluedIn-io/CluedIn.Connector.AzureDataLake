@@ -9,7 +9,7 @@ namespace CluedIn.Connector.OneLake;
 [Component(nameof(OneLakeConnectorComponent), "Providers", ComponentType.Service,
     ServerComponents.ProviderWebApi,
     Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
-public sealed class OneLakeConnectorComponent : DataLakeConnectorComponentBase
+public sealed class OneLakeConnectorComponent : StorageConnectorComponentBase
 {
     public OneLakeConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
     {
@@ -19,7 +19,7 @@ public sealed class OneLakeConnectorComponent : DataLakeConnectorComponentBase
     /// <summary>Starts this instance.</summary>
     public override void Start()
     {
-        DefaultStartInternal<IOneLakeConstants, OneLakeJobDataFactory, OneLakeExportEntitiesJob>();
+        DefaultStartInternal<IOneLakeConfigurationConstants, OneLakeStorageFactory, OneLakeExportEntitiesJob>();
     }
 
     public const string ComponentName = "OneLake";

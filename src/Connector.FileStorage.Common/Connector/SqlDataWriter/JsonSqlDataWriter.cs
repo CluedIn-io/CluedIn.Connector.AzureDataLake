@@ -1,9 +1,13 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+
 using CluedIn.Core;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -13,7 +17,7 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
 {
     public override async Task<long> WriteOutputAsync(
         ExecutionContext context,
-        IDataLakeJobData configuration,
+        IStorageConfiguration configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
         bool isInitialExport,
@@ -22,7 +26,6 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         await using var stringWriter = new StreamWriter(outputStream);
         await using var writer = new JsonTextWriter(stringWriter);
         writer.Formatting = Formatting.Indented;
-
         var totalProcessed = 0L;
         await writer.WriteStartArrayAsync();
         while (await reader.ReadAsync())
@@ -63,7 +66,7 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         return totalProcessed;
     }
 
-    protected override object GetValue(string key, SqlDataReader reader, IDataLakeJobData configuration)
+    protected override object GetValue(string key, SqlDataReader reader, IStorageConfiguration configuration)
     {
         var value = base.GetValue(key, reader, configuration);
         if (value == null)

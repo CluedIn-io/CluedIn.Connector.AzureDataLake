@@ -1,4 +1,4 @@
-﻿using CluedIn.Core.Providers;
+using CluedIn.Core.Providers;
 using System;
 
 namespace CluedIn.Connector.FileStorage.Common

@@ -10,6 +10,6 @@ internal class InstallComponents : InstallComponentsBase
 {
     public override void Install(IWindsorContainer container, IConfigurationStore store)
     {
-        DefaultInstall<AzureAIStudioExportEntitiesJob, AzureAIStudioClient, IAzureAIStudioConstants, AzureAIStudioConstants, AzureAIStudioJobDataFactory>(container, store);
+        DefaultInstall<AzureAIStudioExportEntitiesJob, IAzureAIStudioConfigurationConstants, AzureAIStudioConfigurationConstants, AzureAIStudioStorageFactory>(container, store);
     }
 }

@@ -1,6 +1,8 @@
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
+
 using Microsoft.Extensions.Logging;
+
 using System.Collections.Generic;
 
 namespace CluedIn.Connector.OneLake;
@@ -8,18 +10,18 @@ namespace CluedIn.Connector.OneLake;
 public class OneLakeConnectorProvider : ConnectorProviderBase<OneLakeConnectorProvider>
 {
     public OneLakeConnectorProvider([NotNull] ApplicationContext appContext,
-        IOneLakeConstants configuration, ILogger<OneLakeConnectorProvider> logger)
+        IOneLakeConfigurationConstants configuration, ILogger<OneLakeConnectorProvider> logger)
         : base(appContext, configuration, logger)
     {
     }
 
     protected override IEnumerable<string> ProviderNameParts => new[]
     {
-       OneLakeConstants.WorkspaceName,
-       OneLakeConstants.ItemFolder,
-       OneLakeConstants.ItemType,
-       OneLakeConstants.ItemName,
-       OneLakeConstants.ClientId,
-       OneLakeConstants.TenantId,
+       OneLakeConfigurationConstants.WorkspaceName,
+       OneLakeConfigurationConstants.ItemFolder,
+       OneLakeConfigurationConstants.ItemType,
+       OneLakeConfigurationConstants.ItemName,
+       OneLakeConfigurationConstants.ClientId,
+       OneLakeConfigurationConstants.TenantId,
     };
 }

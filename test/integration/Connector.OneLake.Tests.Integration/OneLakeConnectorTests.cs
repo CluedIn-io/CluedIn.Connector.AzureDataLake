@@ -6,18 +6,19 @@ using System.Threading.Tasks;
 
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
-using Azure.Storage.Files.DataLake.Models;
 
+using Castle.Windsor;
+
+using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
-using CluedIn.Connector.FileStorage.Common.Tests.Integration;
 using CluedIn.Connector.OneLake.Connector;
 using CluedIn.Core;
-using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Moq;
 
@@ -28,9 +29,9 @@ using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.OneLake.Tests.Integration;
 
-public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector, OneLakeJobDataFactory, IOneLakeConstants>
+public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector, OneLakeStorageFactory, IOneLakeConfigurationConstants>
 {
-    protected override Guid DataLakeProviderId => OneLakeConstants.DataLakeProviderId;
+    protected override Guid StorageProviderId => OneLakeConfigurationConstants.DataLakeProviderId;
     protected override bool IsFixedFileSystem => true;
 
     public OneLakeConnectorTests(ITestOutputHelper testOutputHelper)
@@ -42,12 +43,12 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyConnection_WhenValidCredentials_ReturnSuccess()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new OneLakeConnectorJobData(configuration);
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.True(result.Success);
@@ -57,13 +58,13 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyConnection_WhenInvalidTenantId_ReturnInvalidCredentialsErrorMessage()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.TenantId)] = "1";
-        var jobData = new OneLakeConnectorJobData(configuration);
+        configuration[nameof(OneLakeConfigurationConstants.TenantId)] = "1";
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -74,13 +75,13 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyConnection_WhenInvalidClientId_ReturnInvalidCredentialsErrorMessage()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.ClientId)] = "1";
-        var jobData = new OneLakeConnectorJobData(configuration);
+        configuration[nameof(OneLakeConfigurationConstants.ClientId)] = "1";
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -91,13 +92,13 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyConnection_WhenInvalidClientSecret_ReturnInvalidCredentialsErrorMessage()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.ClientSecret)] = "1";
-        var jobData = new OneLakeConnectorJobData(configuration);
+        configuration[nameof(OneLakeConfigurationConstants.ClientSecret)] = "1";
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -112,13 +113,13 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyConnection_WhenWorkspaceNameInvalid_ReturnWorkspaceNameInvalidErrorMessage(string workspaceName)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.WorkspaceName)] = workspaceName;
-        var jobData = new OneLakeConnectorJobData(configuration);
+        configuration[nameof(OneLakeConfigurationConstants.WorkspaceName)] = workspaceName;
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -129,13 +130,13 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyConnection_WhenWorkspaceNotFound_ReturnWorkspaceNotFoundErrorMessage()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.WorkspaceName)] = "1";
-        var jobData = new OneLakeConnectorJobData(configuration);
+        configuration[nameof(OneLakeConfigurationConstants.WorkspaceName)] = "1";
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -152,13 +153,13 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyConnection_WhenItemFolderInvalid_ReturnInvalidFolderErrorMessage(string itemFolder)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.ItemFolder)] = itemFolder;
-        var jobData = new OneLakeConnectorJobData(configuration);
+        configuration[nameof(OneLakeConfigurationConstants.ItemFolder)] = itemFolder;
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -171,16 +172,16 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     [InlineData("Files/path")]
     [InlineData("Files/path with space")]
     [InlineData("Files/クルード・イン")]
-    public async Task VerifyConnection_WhenItemFolderValid_ReturnInvalidFolderErrorMessage(string itemFolder)
+    public async Task VerifyConnection_WhenItemFolderValid_ReturnSuccess(string itemFolder)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.ItemFolder)] = itemFolder;
-        var jobData = new OneLakeConnectorJobData(configuration);
+        configuration[nameof(OneLakeConfigurationConstants.ItemFolder)] = itemFolder;
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.True(result.Success);
@@ -190,20 +191,18 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyStoreData_EventStream()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new OneLakeConnectorJobData(configuration);
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
 
         var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
         await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
         await AssertImmediateOutputResult(
-            jobData.FileSystemName,
-            jobData.RootDirectoryPath,
-            GetDataLakeClient(jobData),
-            assertMethod: async (fileClient) =>
+            setupResult,
+            assertMethod: async (setupResult, filePath) =>
             {
-                await AssertJsonResult(fileClient, StreamMode.EventStream, VersionChangeType.Added);
+                await AssertJsonResult(setupResult, filePath, StreamMode.EventStream, VersionChangeType.Added);
             });
     }
 
@@ -211,20 +210,18 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async void VerifyStoreData_Sync_WithoutStreamCache()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        var jobData = new OneLakeConnectorJobData(configuration);
+        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
 
-        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
 
         var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
         await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
         await AssertImmediateOutputResult(
-            jobData.FileSystemName,
-            jobData.RootDirectoryPath,
-            GetDataLakeClient(jobData),
-            assertMethod: async (fileClient) =>
+            setupResult,
+            assertMethod: async (setupResult, filePath) =>
             {
-                await AssertJsonResult(fileClient, StreamMode.Sync, VersionChangeType.Added, isSingleObject: true);
+                await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added, isSingleObject: true);
             });
     }
 
@@ -233,9 +230,9 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "JSON",
-            assertMethod: async (fileClient, _, _) =>
+            assertMethod: async (setupResult, filePath) =>
             {
-                await AssertJsonResult(fileClient, StreamMode.Sync, VersionChangeType.Added);
+                await AssertJsonResult(setupResult, filePath, StreamMode.Sync, VersionChangeType.Added);
             });
     }
 
@@ -247,8 +244,8 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertCsvResultUnescaped,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), false);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), false);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
             });
     }
 
@@ -260,8 +257,8 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertCsvResultEscaped,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
@@ -273,8 +270,8 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertParquetResultUnescaped,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), false);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), false);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
             });
     }
 
@@ -286,8 +283,8 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertParquetResultEscaped,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
@@ -299,9 +296,9 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertParquetResultArrayColumnEnabled,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), false);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), false);
-                values.Add(nameof(DataLakeConstants.IsArrayColumnsEnabled), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), false);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), false);
+                values.Add(nameof(StorageConfigurationConstants.IsArrayColumnsEnabled), true);
             });
     }
 
@@ -311,28 +308,28 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         var tableName = Guid.NewGuid().ToString("N");
         await VerifyStoreData_Sync_WithStreamCache(
             "pArQuet",
-            async (fileClient, fileSystemClient, setupContainerResult) =>
+            async (setupResult, filePath) =>
             {
-                await AssertParquetResultEscaped(fileClient, fileSystemClient, setupContainerResult);
-                var jobData = setupContainerResult.DataLakeJobData as OneLakeConnectorJobData;
-                var dataLakeClient = GetDataLakeClient(jobData);
-                var directoryName = $"{jobData.ItemName}.Lakehouse/Tables/{tableName}";
+                await AssertParquetResultEscaped(setupResult, filePath);
+                var storageConfiguration = setupResult.StorageConfiguration as OneLakeConnectorConfiguration;
+                var dataLakeClient = GetDataLakeClient(storageConfiguration);
+                var directoryName = $"{storageConfiguration.ItemName}.Lakehouse/Tables/{tableName}";
 
                 var tableFile = await WaitForFileToBeCreated(
-                    jobData.FileSystemName,
-                    directoryName,
-                    dataLakeClient,
-                    paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList());
+                    setupResult,
+                    paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList(),
+                    _ => directoryName);
 
                 Assert.NotNull(tableFile);
+                var fileSystemClient = dataLakeClient.GetFileSystemClient(storageConfiguration.FileSystemName);
                 await fileSystemClient.DeleteDirectoryAsync(directoryName);
             },
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
-                values.Add(nameof(OneLakeConstants.ShouldLoadToTable), true);
-                values.Add(nameof(OneLakeConstants.TableName), tableName);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(OneLakeConfigurationConstants.ShouldLoadToTable), true);
+                values.Add(nameof(OneLakeConfigurationConstants.TableName), tableName);
             });
     }
 
@@ -344,7 +341,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertCsvResultEscaped,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
@@ -355,20 +352,14 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
-                var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
-                var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client);
+                var secondPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
                 Assert.Equal(firstDataTime, secondDataTime);
@@ -390,7 +381,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertCsvResultEscaped,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
@@ -403,10 +394,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
 
                 executionCount++;
 
-                var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -414,9 +402,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client,
+                    executeExportArg.SetupContainerResult,
                     filterPaths: paths =>
                     {
                         return paths.Where(path => path.Name != firstPath.Name).ToList();
@@ -450,7 +436,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertCsvResultEscaped,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
@@ -462,10 +448,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     jobArgs);
                 executionCount++;
 
-                var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -473,9 +456,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client,
+                    executeExportArg.SetupContainerResult,
                     filterPaths: paths =>
                     {
                         return paths.Where(path => path.Name != firstPath.Name).ToList();
@@ -495,54 +476,11 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             });
     }
 
-    private protected override async Task VerifyStoreData_Sync_WithStreamCache(
-        string format,
-        Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
-        Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
-        Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
-        Action<Dictionary<string, object>> configureAuthentication = null,
-        Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
-        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null,
-        Func<IDataLakeJobData, SetupContainerResult, string> configureDirectoryName = null)
-    {
-        var configuration = CreateConfigurationWithStreamCache(format);
-        configureAuthentication?.Invoke(configuration);
-        var jobData = new OneLakeConnectorJobData(configuration);
-
-        var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
-        var connector = setupResult.ConnectorMock.Object;
-
-        var connectorEntityData = getConnectorEntityData == null
-            ? [CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added)]
-            : getConnectorEntityData();
-        foreach (var data in connectorEntityData)
-        {
-            if (storeData != null)
-            {
-                await storeData(setupResult, data);
-                continue;
-            }
-
-            await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
-            await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
-        }
-        var exportJob = CreateExportJob(setupResult);
-
-        await AssertExportJobOutputFileContents(
-            jobData.FileSystemName,
-            jobData.RootDirectoryPath,
-            setupResult,
-            GetDataLakeClient(jobData),
-            exportJob,
-            assertMethod,
-            executeExport);
-    }
-
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreWhenChangedAfterDeletion()
     {
         await VerifyStoreData_Sync_WithStreamCache("csv",
-            async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
+            async (setupResult, filePath) => await AssertCsvResult(setupResult, filePath, "_", (rows) =>
             {
                 var removed = rows.ToList();
                 removed.Clear();
@@ -563,39 +501,37 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             },
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
 
-    private protected override DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
+    private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
-        var logger = new Mock<ILogger<OneLakeClient>>();
-        var dataLakeClient = new OneLakeClient(logger.Object);
+        var logger = new Mock<ILogger<OneLakeStorageClient>>();
         var exportJob = new OneLakeExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
-            dataLakeClient,
             setupResult.ConstantsMock.Object,
-            setupResult.JobDataFactoryMock.Object,
+            setupResult.StorageFactoryMock.Object,
             setupResult.DateTimeOffsetProviderMock.Object);
         return exportJob;
     }
 
-    private static DataLakeServiceClient GetDataLakeClient(OneLakeConnectorJobData jobData)
+    private static DataLakeServiceClient GetDataLakeClient(OneLakeConnectorConfiguration storageConfiguration)
     {
-        var sharedKeyCredential = GetCredential(jobData);
+        var sharedKeyCredential = GetCredential(storageConfiguration);
         return new DataLakeServiceClient(
             new Uri("https://onelake.dfs.fabric.microsoft.com"),
             sharedKeyCredential);
     }
 
-    private static ClientSecretCredential GetCredential(OneLakeConnectorJobData jobData)
+    private static ClientSecretCredential GetCredential(OneLakeConnectorConfiguration storageConfiguration)
     {
-        return new ClientSecretCredential(jobData.TenantId, jobData.ClientId, jobData.ClientSecret);
+        return new ClientSecretCredential(storageConfiguration.TenantId, storageConfiguration.ClientId, storageConfiguration.ClientSecret);
     }
 
-    private Dictionary<string, object> CreateConfigurationWithoutStreamCache()
+    private protected override Dictionary<string, object> CreateConfigurationWithoutStreamCache()
     {
         var tenantId = Environment.GetEnvironmentVariable("ONELAKE_TENANTID");
         var clientId = Environment.GetEnvironmentVariable("ONELAKE_CLIENTID");
@@ -622,49 +558,56 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         var directoryName = $"xunit-{DateTime.Now.Ticks}";
         return new Dictionary<string, object>()
         {
-            { nameof(OneLakeConstants.TenantId), tenantId },
-            { nameof(OneLakeConstants.ClientId), clientId },
-            { nameof(OneLakeConstants.ClientSecret), clientSecretString },
-            { nameof(OneLakeConstants.WorkspaceName), workspaceName },
-            { nameof(OneLakeConstants.ItemName), itemName },
-            { nameof(OneLakeConstants.ItemFolder), $"Files/{directoryName}" },
-            { nameof(OneLakeConstants.ItemType), "Lakehouse" },
+            { nameof(OneLakeConfigurationConstants.TenantId), tenantId },
+            { nameof(OneLakeConfigurationConstants.ClientId), clientId },
+            { nameof(OneLakeConfigurationConstants.ClientSecret), clientSecretString },
+            { nameof(OneLakeConfigurationConstants.WorkspaceName), workspaceName },
+            { nameof(OneLakeConfigurationConstants.ItemName), itemName },
+            { nameof(OneLakeConfigurationConstants.ItemFolder), $"Files/{directoryName}" },
+            { nameof(OneLakeConfigurationConstants.ItemType), "Lakehouse" },
         };
-    }
-
-    private Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
-    {
-        var baseConfiguration = CreateConfigurationWithoutStreamCache();
-        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("ONELAKE_STREAMCACHE");
-        var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
-        Console.WriteLine(streamCacheConnectionString);
-        Assert.NotNull(streamCacheConnectionString);
-
-        var updatedConfiguration = new Dictionary<string, object>(baseConfiguration)
-        {
-            { nameof(DataLakeConstants.IsStreamCacheEnabled), true },
-            { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
-            { nameof(DataLakeConstants.OutputFormat), format },
-            { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
-            { nameof(DataLakeConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
-            { nameof(DataLakeConstants.ContainerName), "test" },
-        };
-        return updatedConfiguration;
     }
 
     protected override Mock<OneLakeConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
-        Mock<IOneLakeConstants> constantsMock,
-        Mock<OneLakeJobDataFactory> jobDataFactory)
+        Mock<IOneLakeConfigurationConstants> constantsMock,
+        Mock<OneLakeStorageFactory> storageConfigurationFactory)
     {
-        var logger = new Mock<ILogger<OneLakeClient>>();
         var mockConnector = new Mock<OneLakeConnector>(
             new Mock<ILogger<OneLakeConnector>>().Object,
-            new OneLakeClient(logger.Object),
+            applicationContext,
             constantsMock.Object,
-            jobDataFactory.Object,
+            storageConfigurationFactory.Object,
             mockDateTimeOffsetProvider.Object);
         return mockConnector;
+    }
+
+    protected override Mock<OneLakeStorageFactory> CreateStorageFactoryMock(
+        WindsorContainer container,
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
+    {
+        //container.Register(Component.For<OneLakeFactory>().ImplementedBy<OneLakeFactory>().LifestyleSingleton());
+        var storageFactory = new Mock<OneLakeStorageFactory>();
+        storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration)));
+        return storageFactory;
+    }
+
+    private protected override DataLakeServiceClient GetDataLakeClient(SetupContainerResult setupContainerResult)
+    {
+        return GetDataLakeClient(setupContainerResult.StorageConfiguration as OneLakeConnectorConfiguration);
+    }
+
+    private protected override string GetDirectoryName(SetupContainerResult setupContainerResult)
+    {
+        var config = setupContainerResult.StorageConfiguration as OneLakeConnectorConfiguration;
+        return $"{config.ItemName}.Lakehouse/{config.ItemFolder}";
+    }
+
+    private protected override StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration)
+    {
+        return new OneLakeConnectorConfiguration(configuration);
     }
 }
 

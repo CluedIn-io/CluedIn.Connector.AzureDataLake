@@ -1,21 +1,18 @@
-using System;
-
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
 namespace CluedIn.Connector.AzureDatabricks.Connector;
 
-internal class AzureDatabricksExportEntitiesJob : DataLakeExportEntitiesJobBase
+internal class AzureDatabricksExportEntitiesJob : StorageExportEntitiesJobBase
 {
     public AzureDatabricksExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        AzureDatabricksClient dataLakeClient,
-        IAzureDatabricksConstants dataLakeConstants,
-        AzureDatabricksJobDataFactory dataLakeJobDataFactory,
+        IAzureDatabricksConfigurationConstants configurationConstants,
+        AzureDatabricksStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
     {
     }
 }

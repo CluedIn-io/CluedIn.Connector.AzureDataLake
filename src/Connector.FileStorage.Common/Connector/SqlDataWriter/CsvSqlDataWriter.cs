@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -15,7 +15,7 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
 {
     public override async Task<long> WriteOutputAsync(
         ExecutionContext context,
-        IDataLakeJobData configuration,
+        IStorageConfiguration configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
         bool isInitialExport,
@@ -60,7 +60,7 @@ internal class CsvSqlDataWriter : SqlDataWriterBase
         return totalProcessed;
     }
 
-    protected virtual string GetFieldName(IDataLakeJobData configuration, string fieldName)
+    protected virtual string GetFieldName(IStorageConfiguration configuration, string fieldName)
     {
         return configuration.ShouldEscapeVocabularyKeys ? EscapeVocabularyKey(fieldName) : fieldName;
     }
