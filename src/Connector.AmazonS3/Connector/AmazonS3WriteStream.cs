@@ -65,6 +65,10 @@ internal class AmazonS3WriteStream : Stream
         {
             throw new Exception("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD disposed");
         }
+        else
+        {
+            throw new Exception("NOTTTTTTTTTTTTTTT disposed");
+        }
     }
 
     protected override void Dispose(bool disposing)
