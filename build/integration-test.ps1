@@ -72,6 +72,7 @@ function Run-Setup() {
 	
 	Write-Host "LSET EXIT CDOE $LASTEXITCODE"
 	Write-Host "WEEEEEEEEEEEEE"
+	Get-Content "log.txt" | Write-Host
 	Get-Contents "log.txt" | Write-Host
 }
 
