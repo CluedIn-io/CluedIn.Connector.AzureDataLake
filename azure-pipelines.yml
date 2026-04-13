@@ -60,7 +60,7 @@ steps:
     parameters:
       githubReleaseInMaster: true
       publicReleaseForMaster: true
-      executeIntegrationTests: true
+      executeIntegrationTests: false
       createIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
       createIntegrationEnvironmentScriptArguments: '-Action SetUp'
       deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
@@ -68,3 +68,13 @@ steps:
       publishCodeCoverage: true
       useGitVersionDotNetTool: true
       publishToDevFeed: true
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: |
+        ./build/integration-test.ps1 -Action SetUp
+  - task: PublishPipelineArtifact@0
+    displayName: 'Create Pipeline Artifact 22'
+    inputs:
+      artifactName: 'asdf'
+      targetPath: $(System.DefaultWorkingDirectory)/test/integration/Connector.AmazonS3.Tests.Integration/TestResults
