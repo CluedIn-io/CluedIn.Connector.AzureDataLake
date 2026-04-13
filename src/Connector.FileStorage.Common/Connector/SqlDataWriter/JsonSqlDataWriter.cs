@@ -28,15 +28,15 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         //    throw new Exception("HMMM1111888");
         //}
         Console.WriteLine("DLDJSLDJFSLDFJEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
-        if (outputStream.CanSeek && outputStream.Position > 0)
-        {
-            throw new Exception("HMMM1111222222888");
-        }
-        if (reader != null)
-        {
+        //if (outputStream.CanSeek && outputStream.Position > 0)
+        //{
+        //    throw new Exception("HMMM1111222222888");
+        //}
+        //if (reader != null)
+        //{
 
-            throw new Exception("HMMM1111222222888xxxxxxxxxxx" + outputStream.CanSeek + " " + outputStream.Position + " " + outputStream.CanWrite + " " + outputStream.CanRead + " " + outputStream.Length);
-        }
+        //    throw new Exception("HMMM1111222222888xxxxxxxxxxx" + outputStream.CanSeek + " " + outputStream.Position + " " + outputStream.CanWrite + " " + outputStream.CanRead + " " + outputStream.Length);
+        //}
         await using var stringWriter = new StreamWriter(outputStream);
         //if (reader != null)
         //{
