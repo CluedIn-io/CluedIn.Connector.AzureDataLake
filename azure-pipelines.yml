@@ -73,6 +73,7 @@ steps:
       targetType: 'inline'
       script: |
         ./build/integration-test.ps1 -Action SetUp
+        ./build/integration-test.ps1 -Action TearDown
   - task: PublishPipelineArtifact@0
     displayName: 'Create Pipeline Artifact 22'
     inputs:

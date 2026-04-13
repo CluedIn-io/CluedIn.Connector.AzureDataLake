@@ -80,7 +80,6 @@ function Run-Setup() {
 	Get-Content "log.txt" | Write-Host
 	Write-Host "WSSSSSSSSSSSSSSS"
 	Get-Content "log.txt" | Write-Host
-	Get-Contents "log.txt" | Write-Host
 }
 
 function Run-TearDown() {
