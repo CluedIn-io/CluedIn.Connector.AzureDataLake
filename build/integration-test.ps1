@@ -72,6 +72,13 @@ function Run-Setup() {
 	
 	Write-Host "LSET EXIT CDOE $LASTEXITCODE"
 	Write-Host "WEEEEEEEEEEEEE"
+	$contents = Get-ChildItem -Path "./test/integration/Connector.AmazonS3.Tests.Integration/" -Recurse | where { $_.Name -like "*.dmp" } | Get-Content
+	[System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($contents)) | Write-Host
+	Write-Host "WAAAAAAAAAAAAAAAA"
+	$contents = Get-ChildItem -Path "./test/integration/Connector.AmazonS3.Tests.Integration/" -Recurse | where { $_.Name -like "*Sequence*" } | Get-Content | Write-Host
+	Write-Host "WUUUUUUUUUUUUUU"
+	Get-Content "log.txt" | Write-Host
+	Write-Host "WSSSSSSSSSSSSSSS"
 	Get-Content "log.txt" | Write-Host
 	Get-Contents "log.txt" | Write-Host
 }
