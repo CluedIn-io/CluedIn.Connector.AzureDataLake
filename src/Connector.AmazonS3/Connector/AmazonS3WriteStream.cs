@@ -50,25 +50,17 @@ internal class AmazonS3WriteStream : Stream
 
     public override void Flush()
     {
-        // Don't upload on every flush to avoid excessive uploads
-        Aaa();
+    }
+
+    public override void Close()
+    {
+        UploadAsync().GetAwaiter().GetResult();
+        base.Close();
     }
 
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
         // Don't upload on every flush to avoid excessive uploads
-    }
-
-    public void Aaa()
-    {
-        if (_disposed)
-        {
-            throw new Exception("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD disposed");
-        }
-        else
-        {
-            throw new Exception("NOTTTTTTTTTTTTTTT disposed");
-        }
     }
 
     protected override void Dispose(bool disposing)
@@ -77,7 +69,6 @@ internal class AmazonS3WriteStream : Stream
         if (!_disposed && disposing)
         {
             _disposed = true;
-            UploadAsync().GetAwaiter().GetResult();
             _buffer.Dispose();
         }
 
@@ -90,7 +81,6 @@ internal class AmazonS3WriteStream : Stream
         if (!_disposed)
         {
             _disposed = true;
-            await UploadAsync();
             await _buffer.DisposeAsync();
         }
 
