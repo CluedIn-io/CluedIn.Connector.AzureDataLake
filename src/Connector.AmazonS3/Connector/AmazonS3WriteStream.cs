@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.S3.Model;
 
+using Nest;
+
 namespace CluedIn.Connector.AmazonS3.Connector;
 
 /// <summary>
@@ -14,11 +16,13 @@ namespace CluedIn.Connector.AmazonS3.Connector;
 /// </summary>
 internal class AmazonS3WriteStream : Stream
 {
+    private const int MaxBufferSize = 4 * 1024 * 1024;
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
     private readonly string _key;
-    private readonly MemoryStream _buffer;
+    private MemoryStream _buffer;
     private bool _disposed;
+    private readonly object _bufferLock = new();
 
     public AmazonS3WriteStream(IAmazonS3 s3Client, string bucketName, string key)
     {
@@ -40,32 +44,54 @@ internal class AmazonS3WriteStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        _buffer.Write(buffer, offset, count);
+        bool shouldFlush = WriteInternal(buffer, offset, count);
+        if (shouldFlush)
+        {
+            UploadAsync().GetAwaiter().GetResult();
+        }
     }
 
-    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-        return _buffer.WriteAsync(buffer, offset, count, cancellationToken);
+        var shouldFlush = WriteInternal(buffer, offset, count);
+        if (shouldFlush)
+        {
+            await UploadAsync();
+        }
+    }
+
+    private bool WriteInternal(byte[] buffer, int offset, int count)
+    {
+        bool shouldFlush = false;
+        lock (_bufferLock)
+        {
+            _buffer.Write(buffer, offset, count);
+            if (_buffer.Length >= MaxBufferSize) // flush if buffer exceeds 4MB
+            {
+                shouldFlush = true;
+            }
+        }
+
+        return shouldFlush;
     }
 
     public override void Flush()
     {
+        FlushAsync().GetAwaiter().GetResult();
     }
 
     public override void Close()
     {
-        UploadAsync().GetAwaiter().GetResult();
         base.Close();
     }
 
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
-        // Don't upload on every flush to avoid excessive uploads
+        await UploadAsync();
     }
 
     protected override void Dispose(bool disposing)
     {
-        //throw new NotSupportedException("sssssssssssssDispose is not supported. Use DisposeAsync instead.");
         if (!_disposed && disposing)
         {
             _disposed = true;
@@ -77,7 +103,6 @@ internal class AmazonS3WriteStream : Stream
 
     public override async ValueTask DisposeAsync()
     {
-        //throw new Exception("DKDKDKDKKDKDKD DisposeAsync is not supported. Use FlushAsync instead.");
         if (!_disposed)
         {
             _disposed = true;
@@ -89,12 +114,22 @@ internal class AmazonS3WriteStream : Stream
 
     private async Task UploadAsync()
     {
-        _buffer.Position = 0;
+        if (_buffer.Length == 0)
+        {
+            return; // nothing to upload
+        }
+
+        var sendStream = _buffer;
+        lock (_bufferLock)
+        {
+            _buffer = new MemoryStream();
+        }
+
         var putRequest = new PutObjectRequest
         {
             BucketName = _bucketName,
             Key = _key,
-            InputStream = _buffer,
+            InputStream = sendStream,
         };
 
         await _s3Client.PutObjectAsync(putRequest);

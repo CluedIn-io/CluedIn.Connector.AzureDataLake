@@ -41,9 +41,17 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
         }
     }
 
-    public Task<bool> ExistsAsync()
+    public async Task<bool> ExistsAsync()
     {
-        throw new NotImplementedException();
+        try
+        {
+            await _s3Client.GetObjectMetadataAsync(_bucketName, _filePath.GetKey());
+            return true;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
     }
 
     public async Task<Stream> OpenWriteAsync(bool overwrite)
