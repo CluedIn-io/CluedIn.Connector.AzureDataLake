@@ -233,21 +233,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
-
-            var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
-            try
-            {
-                return await sqlDataWriter?.WriteAsync(context, configuration, outputStream, fieldNamesToUse, IsInitialExport, reader);
-            }
-            catch (Exception ex)
-            {
-                context.Log.LogError(ex, "Error writing to file '{FileName}' for StreamId {StreamId} and DataTime {DataTime}.", temporaryOutputFileName, streamId, asOfTime);
-                throw;
-            }
-            finally
-            {
-                await outputStream.DisposeAsync();
-            }
+            await using var outputStream = await temporaryFileClient.OpenWriteAsync(configuration.IsOverwriteEnabled);
+            return await sqlDataWriter?.WriteAsync(context, configuration, outputStream, fieldNamesToUse, IsInitialExport, reader);
         }
 
         async Task setFilePropertiesAsync()
