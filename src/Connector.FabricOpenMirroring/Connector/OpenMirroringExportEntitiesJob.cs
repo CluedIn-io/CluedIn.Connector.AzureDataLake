@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 
 using Azure.Storage.Files.DataLake;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
-using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
@@ -19,7 +19,7 @@ using CluedIn.Core.Streams.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
-using static CluedIn.Connector.DataLake.Common.DataLakeConstants;
+using static CluedIn.Connector.FileStorage.Common.DataLakeConstants;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 

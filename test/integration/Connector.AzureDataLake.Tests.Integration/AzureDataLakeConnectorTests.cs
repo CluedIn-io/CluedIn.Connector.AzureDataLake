@@ -9,9 +9,9 @@ using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
 using CluedIn.Connector.AzureDataLake.Connector;
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
-using CluedIn.Connector.DataLake.Common.Tests.Integration;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Tests.Integration;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;

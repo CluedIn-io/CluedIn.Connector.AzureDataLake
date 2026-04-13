@@ -11,8 +11,7 @@ using Azure.Storage.Files.DataLake.Models;
 
 using Castle.MicroKernel.Registration;
 using Castle.Windsor;
-
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
 using CluedIn.Core.Caching;
@@ -43,7 +42,7 @@ using Xunit.Abstractions;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
-namespace CluedIn.Connector.DataLake.Common.Tests.Integration;
+namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 
 public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFactory, TConstants>
     where TConnector : DataLakeConnector

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 
 namespace CluedIn.Connector.FabricOpenMirroring;

@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-
-using CluedIn.Connector.DataLake.Common.Buffers;
+using CluedIn.Connector.FileStorage.Common.Buffers;
 using CluedIn.Core;
 
-namespace CluedIn.Connector.DataLake.Common.Tests.Unit;
+namespace CluedIn.Connector.FileStorage.Common.Tests.Unit;
 
 public class ChannelBasedBufferTests : BufferTestsBase
 {

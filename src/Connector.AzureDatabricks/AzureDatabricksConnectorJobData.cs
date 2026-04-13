@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 
 namespace CluedIn.Connector.AzureDatabricks;
 

@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities;

@@ -1,5 +1,5 @@
 using CluedIn.Connector.AzureDatabricks.Connector;
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 
 using ComponentHost;
