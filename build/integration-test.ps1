@@ -68,10 +68,11 @@ function Run-Setup() {
 	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand
 	
 	Get-Location
-	dotnet test --blame-hang-timeout 1m ./test/integration/Connector.AmazonS3.Tests.Integration/Connector.AmazonS3.Tests.Integration.csproj --configuration Release --no-restore --no-build
+	dotnet test --blame-hang-timeout 1m --blame --blame-hang-dump-type full --diag log.txt ./test/integration/Connector.AmazonS3.Tests.Integration/Connector.AmazonS3.Tests.Integration.csproj --configuration Release --no-restore --no-build
 	
 	Write-Host "LSET EXIT CDOE $LASTEXITCODE"
 	Write-Host "WEEEEEEEEEEEEE"
+	Get-Contents "log.txt" | Write-Host
 }
 
 function Run-TearDown() {
