@@ -60,7 +60,7 @@ steps:
     parameters:
       githubReleaseInMaster: true
       publicReleaseForMaster: true
-      executeIntegrationTests: ${{ parameters.runIntegrationTests }}
+      executeIntegrationTests: true
       createIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
       createIntegrationEnvironmentScriptArguments: '-Action SetUp'
       deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'

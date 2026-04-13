@@ -66,6 +66,12 @@ function Run-Setup() {
 	$createDatabaseCommand = "CREATE DATABASE [$databaseName]"
 	Write-Host "##[command]docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand"
 	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand
+	
+	Get-Location
+	dotnet test ./test/integration/Connector.AmazonS3.Tests.Integration/Connector.AmazonS3.Tests.Integration.csproj --configuration Release --no-restore --no-build
+	
+	Write-Host "LSET EXIT CDOE $LASTEXITCODE"
+	Write-Host "WEEEEEEEEEEEEE"
 }
 
 function Run-TearDown() {
