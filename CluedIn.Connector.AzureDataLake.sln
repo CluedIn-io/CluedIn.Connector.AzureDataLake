@@ -74,6 +74,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FileStorage.Commo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FileStorage.Common.Tests.Integration", "test\integration\Connector.FileStorage.Common.Tests.Integration\Connector.FileStorage.Common.Tests.Integration.csproj", "{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AmazonS3", "src\Connector.AmazonS3\Connector.AmazonS3.csproj", "{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AmazonS3.Tests.Unit", "test\unit\Connector.AmazonS3.Tests.Unit\Connector.AmazonS3.Tests.Unit.csproj", "{7F845977-5E4D-02A4-36B2-70C510EE0A10}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AmazonS3.Tests.Integration", "test\integration\Connector.AmazonS3.Tests.Integration\Connector.AmazonS3.Tests.Integration.csproj", "{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -140,6 +146,18 @@ Global
 		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -166,6 +184,9 @@ Global
 		{6667221D-5BAA-4071-1684-1425D6C83070} = {5256D9B9-8A1D-480D-A8F0-1A69AFA59B31}
 		{408F3EE8-92AF-B119-889F-A66F5A3CE72D} = {F5373611-431E-459B-B775-5A31DDEC5B21}
 		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45} = {5256D9B9-8A1D-480D-A8F0-1A69AFA59B31}
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10} = {F5373611-431E-459B-B775-5A31DDEC5B21}
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E6A866CB-824C-4271-8EA6-053B7FC4B134}
