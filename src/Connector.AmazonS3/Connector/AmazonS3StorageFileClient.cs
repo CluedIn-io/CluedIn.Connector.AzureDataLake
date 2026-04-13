@@ -46,9 +46,9 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
         throw new NotImplementedException();
     }
 
-    public Task<Stream> OpenWriteAsync(bool overwrite)
+    public async Task<Stream> OpenWriteAsync(bool overwrite)
     {
-        return Task.FromResult<Stream>(new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey()));
+        return new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey());
     }
 
     public async Task RenameAsync(FilePath targetPath)
