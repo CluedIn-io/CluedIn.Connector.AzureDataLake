@@ -60,6 +60,7 @@ internal class AmazonS3WriteStream : Stream
 
     protected override void Dispose(bool disposing)
     {
+        throw new NotSupportedException("sssssssssssssDispose is not supported. Use DisposeAsync instead.");
         if (!_disposed && disposing)
         {
             _disposed = true;
@@ -72,6 +73,7 @@ internal class AmazonS3WriteStream : Stream
 
     public override async ValueTask DisposeAsync()
     {
+        throw new Exception("DKDKDKDKKDKDKD DisposeAsync is not supported. Use FlushAsync instead.");
         if (!_disposed)
         {
             _disposed = true;

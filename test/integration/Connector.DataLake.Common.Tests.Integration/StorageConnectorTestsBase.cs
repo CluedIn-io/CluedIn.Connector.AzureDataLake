@@ -872,6 +872,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
         var connector = setupResult.ConnectorMock.Object;
 
+        Console.WriteLine("VerifyStoreData_Sync_WithStreamCache ABC");
         var connectorEntityData = getConnectorEntityData == null
             ? [CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added)]
             : getConnectorEntityData();
@@ -883,9 +884,12 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                 continue;
             }
 
+            Console.WriteLine("VerifyStoreData_Sync_WithStreamCache Before Store data");
             await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+            Console.WriteLine("VerifyStoreData_Sync_WithStreamCache after Store data");
             await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
         }
+        Console.WriteLine("VerifyStoreData_Sync_WithStreamCache 222");
         var exportJob = CreateExportJob(setupResult);
 
         await AssertExportJobOutputFileContents(

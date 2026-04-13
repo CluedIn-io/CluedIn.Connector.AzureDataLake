@@ -23,18 +23,32 @@ internal class JsonSqlDataWriter : SqlDataWriterBase
         bool isInitialExport,
         SqlDataReader reader)
     {
-        await using var stringWriter = new StreamWriter(outputStream);
+        //if (reader != null)
+        //{
+        //    throw new Exception("HMMM1111888");
+        //}
+        Console.WriteLine("DLDJSLDJFSLDFJEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
+        if (outputStream.CanSeek && outputStream.Position > 0)
+        {
+            throw new Exception("HMMM1111222222888");
+        }
         if (reader != null)
         {
-            throw new Exception("HMMM22222888");
+
+            throw new Exception("HMMM1111222222888xxxxxxxxxxx" + outputStream.CanSeek + " " + outputStream.Position + " " + outputStream.CanWrite + " " + outputStream.CanRead + " " + outputStream.Length);
         }
+        await using var stringWriter = new StreamWriter(outputStream);
+        //if (reader != null)
+        //{
+        //    throw new Exception("HMMM22222888");
+        //}
         await using var writer = new JsonTextWriter(stringWriter);
         writer.Formatting = Formatting.Indented;
 
-        if (stringWriter != null)
-        {
-            throw new Exception("HMMM888");
-        }
+        //if (stringWriter != null)
+        //{
+        //    throw new Exception("HMMM888");
+        //}
         var totalProcessed = 0L;
         await writer.WriteStartArrayAsync();
         while (await reader.ReadAsync())
