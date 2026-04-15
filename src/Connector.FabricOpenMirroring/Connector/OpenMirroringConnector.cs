@@ -108,7 +108,7 @@ public class OpenMirroringConnector : DataLakeConnector
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var containerName = streamModel.ContainerName;
 
-        var jobData = await DataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+        var jobData = await DataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
         var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, jobData, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), jobData.OutputFormat);
         await Client.DeleteDirectory(jobData, subDirectory);
         await base.ArchiveContainer(executionContext, streamModel);

@@ -104,7 +104,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
-            var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+            var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
 
             // matching output format of previous version of the connector
             var data = connectorEntityData.Properties.ToDictionary(property => property.Name, property => property.Value);
@@ -808,7 +808,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             _logger.LogInformation($"DataLakeConnector.GetContainers: entry");
 
-            var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, "");
+            var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId);
 
             return await _client.GetFilesInDirectory(jobData);
         }
@@ -852,10 +852,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         private async Task RenameCacheTableIfExists(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
         {
-            var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-            var containerName = streamModel.ContainerName;
-
-            var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+            var jobData = await _dataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
             if (string.IsNullOrWhiteSpace(jobData.StreamCacheConnectionString))
             {
                 _logger.LogDebug("Skipping renaming of cache table because stream cache connection string is null or whitespace.");

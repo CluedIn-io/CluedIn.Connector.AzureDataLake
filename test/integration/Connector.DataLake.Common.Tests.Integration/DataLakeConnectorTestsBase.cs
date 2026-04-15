@@ -183,7 +183,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         var constantsMock = CreateConstantsMock();
         var jobDataFactoryMock = CreateJobDataFactoryMock(container);
         var connectorMock = GetConnectorMock(mockDateTimeOffsetProvider, constantsMock, jobDataFactoryMock);
-        jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
+        jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<IReadOnlyStreamModel>()))
             .ReturnsAsync(jobData);
         connectorMock.CallBase = true;
 

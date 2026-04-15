@@ -27,9 +27,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         ExecutionContext executionContext,
         IReadOnlyStreamModel streamModel)
     {
-        var containerName = streamModel.ContainerName;
-        var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
         var action = new ConnectorAction(RunExportActionName, "Run Export", "Run export now", [], []);
         var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
 
@@ -121,9 +119,8 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         ExecuteConnectorActionRequest request)
     {
         var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
-        var containerName = streamModel.ContainerName;
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;
@@ -182,9 +179,8 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         ExecuteConnectorActionRequest request)
     {
         var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
-        var containerName = streamModel.ContainerName;
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;
@@ -236,9 +232,8 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         ExecuteConnectorActionRequest request)
     {
         var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
-        var containerName = streamModel.ContainerName;
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
-        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;

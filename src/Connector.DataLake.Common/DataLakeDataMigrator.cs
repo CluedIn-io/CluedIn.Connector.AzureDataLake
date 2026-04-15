@@ -1,12 +1,11 @@
 using System;
-using System.Reflection;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
-using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Relational;
-using CluedIn.Core.DataStore;
 using CluedIn.Core.DataStore.Entities;
+using CluedIn.Core.Streams;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -17,6 +16,7 @@ internal class DataLakeDataMigrator : DataMigrator
 {
     protected readonly IDataLakeConstants _dataLakeConstants;
     protected readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
+    private const int StreamsPerPage = 100;
 
     public DataLakeDataMigrator(
         ILogger logger,
@@ -77,7 +77,6 @@ internal class DataLakeDataMigrator : DataMigrator
         await MigrateForOrganizations("SoftDeleteDefault", MigrateSoftDeleteForProviderDefinition);
         async Task MigrateSoftDeleteForProviderDefinition(ExecutionContext context, string componentMigrationName)
         {
-            var invalidCacheMethod = typeof(AuthenticationDetailsHelper).GetMethod("InvalidateCacheAsync", [typeof(ApplicationContext), typeof(Guid)]);
             var organizationId = context.Organization.Id;
             var store = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
             var definitions = await store.SelectAsync(
@@ -86,54 +85,34 @@ internal class DataLakeDataMigrator : DataMigrator
                                 && definition.ProviderId == _dataLakeConstants.ProviderId);
             foreach (var definition in definitions)
             {
-                if (definition.AccountId != string.Empty)
-                {
-                    _logger.LogDebug("Skipping provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
-                        componentMigrationName,
-                        organizationId,
-                        definition.Id);
-                    continue;
-                }
-
                 _logger.LogInformation("Begin provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
                     componentMigrationName,
                     organizationId,
                     definition.Id);
-                var configurationRepository = context.ApplicationContext.Container.Resolve<IConfigurationRepository>();
-                var configuration = configurationRepository.GetConfigurationById(context, definition.Id);
-                if (configuration == null)
+                var streamRepository = _applicationContext.Container.Resolve<IStreamRepository>();
+                var streamsCount = await streamRepository.GetOrganizationStreamsCount(context, filterConnectorProviderDefinitionId: definition.Id);
+                var streamsPerPage = StreamsPerPage;
+                var totalPages = (streamsCount + streamsPerPage - 1) / streamsPerPage;
+
+                for (var i = 0; i < totalPages; ++i)
                 {
-                    _logger.LogWarning("Configuration not found for ProviderDefinition '{ProviderDefinitionId}' during migration: '{MigrationName}' for organization '{OrganizationId}'. Skipping.",
-                        definition.Id,
-                        componentMigrationName,
-                        organizationId);
-                    continue;
+                    var streams = await streamRepository.GetOrganizationStreams(context, i, streamsPerPage, filterConnectorProviderDefinitionId: definition.Id);
+                    foreach (var stream in streams)
+                    {
+                        var connectorProperties = stream.ConnectorProperties == null ? new Dictionary<string, object>() : new Dictionary<string, object>(stream.ConnectorProperties);
+                        connectorProperties.TryAdd(
+                            DataLakeConstants.IsSoftDelete,
+                            false);
+
+                        await streamRepository.UpdateStream(context, stream.Id, stream, context.Organization.Id, stream.ModifiedBy);
+                    }
                 }
-                configuration[nameof(DataLakeConstants.IsSoftDelete)] = false;
-                configurationRepository.UpdateConfiguration(context, definition.Id, configuration);
-                if (invalidCacheMethod == null)
-                {
-                    _logger.LogWarning("InvalidateCacheAsync method not found on AuthenticationDetailsHelper. Cache will not be cleared for ProviderDefinition '{ProviderDefinitionId}' during migration.",
-                        definition.Id);
-                }
-                ClearConfigurationCache(context, definition.Id, invalidCacheMethod);
+
                 _logger.LogInformation("End provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
                     componentMigrationName,
                     organizationId,
                     definition.Id);
             }
-        }
-    }
-
-    private async Task ClearConfigurationCache(
-        ExecutionContext context,
-        Guid definitionId,
-        MethodInfo invalidCacheMethod)
-    {
-        var returnValue = (Task)invalidCacheMethod.Invoke(null, [context.ApplicationContext, definitionId]);
-        if (returnValue != null)
-        {
-            await returnValue;
         }
     }
 }
