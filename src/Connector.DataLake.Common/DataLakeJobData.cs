@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace CluedIn.Connector.DataLake.Common;
@@ -21,6 +21,8 @@ internal abstract class DataLakeJobData : CrawlJobDataWrapper, IDataLakeJobData
     public virtual bool ShouldEscapeVocabularyKeys => GetConfigurationValue(DataLakeConstants.ShouldEscapeVocabularyKeys) as bool? ?? false;
     public string CustomCron => GetConfigurationValue(DataLakeConstants.CustomCron) as string;
     public virtual bool IsDeltaMode => GetConfigurationValue(DataLakeConstants.IsDeltaMode) as bool? ?? false;
+
+    public virtual bool IsSoftDelete => GetConfigurationValue(DataLakeConstants.IsSoftDelete) as bool? ?? true;
     public virtual bool IsOverwriteEnabled => GetConfigurationValue(DataLakeConstants.IsOverwriteEnabled) as bool? ?? true;
     public virtual bool IsArrayColumnsEnabled => GetConfigurationValue(DataLakeConstants.IsArrayColumnsEnabled) as bool? ?? false;
 

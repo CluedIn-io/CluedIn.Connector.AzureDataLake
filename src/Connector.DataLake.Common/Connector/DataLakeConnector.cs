@@ -144,6 +144,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 AddToData(DataLakeConstants.EpochKey, now.ToUnixTimeMilliseconds());
             }
 
+            var useSoftDelete = GetUseSoftDelete(jobData);
+            if (!data.ContainsKey(DataLakeConstants.ChangeTypeKey))
+            {
+                AddToData(DataLakeConstants.ChangeTypeKey, connectorEntityData.ChangeType.ToString());
+            }
+
             // end match previous version of the connector
             if (streamModel.ExportOutgoingEdges)
             {
@@ -158,10 +164,6 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             {
                 if (jobData.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
                 {
-                    if (!data.ContainsKey(DataLakeConstants.ChangeTypeKey))
-                    {
-                        AddToData(DataLakeConstants.ChangeTypeKey, connectorEntityData.ChangeType.ToString());
-                    }
                     return await WriteToCacheTable(streamModel, connectorEntityData, jobData, data, dataValueTypes);
                 }
                 else
@@ -174,6 +176,11 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 _logger.LogError(ex, "Exception thrown. Returning SaveResult.ReQueue");
                 return SaveResult.ReQueue;
             }
+        }
+
+        private static bool GetUseSoftDelete(IDataLakeJobData jobData)
+        {
+            return jobData.IsDeltaMode || jobData.IsSoftDelete;
         }
 
         private static Type RemoveNullableType(Type type)
@@ -243,12 +250,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 dataValueTypes);
             var tableName = GetCacheTableName(syncItem.StreamId);
 
+            var useSoftDelete = GetUseSoftDelete(configurations);
             try
             {
                 using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
                 await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
                 await connection.OpenAsync();
-                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: true);
+                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: useSoftDelete);
                 transactionScope.Complete();
             }
             catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
@@ -269,7 +277,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     {
                         await EnsureCacheTableExists(connection, tableName, syncItem);
                     }
-                    await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: true);
+                    await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: useSoftDelete);
                     transactionScope.Complete();
                 }
                 catch (Exception ex2)
@@ -316,59 +324,13 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
             else
             {
-                // Prevent updates to removed records
-                // But allow recreation of removed records (e.g: Unmerge Deduplication)
-                var changeTypeConstraint = syncItem.ChangeType == VersionChangeType.Changed
-                    ? $"AND [{DataLakeConstants.ChangeTypeKey}] != '{VersionChangeType.Removed.ToString()}'"
-                    : string.Empty;
-
-                var insertOrUpdateSql = $"""
-                        IF EXISTS (
-                            SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
-                            WHERE
-                                [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey})
-                        BEGIN
-                            UPDATE
-                                [{tableName}]
-                            SET
-                                {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}
-                            WHERE
-                                [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
-                                [{DataLakeConstants.PersistVersionKey}] < @EntityPersionVersion
-                              {changeTypeConstraint};
-                        END
-                        ELSE
-                        BEGIN
-                            INSERT INTO
-                                [{tableName}]
-                                ([{DataLakeConstants.IdKey}]{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
-                            VALUES(@{DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
-                        END
-                        """;
-                var command = new SqlCommand(insertOrUpdateSql, connection)
+                if (useSoftDelete)
                 {
-                    CommandType = CommandType.Text
-                };
-                command.Parameters.Add(new SqlParameter($"@EntityPersionVersion", syncItem.PersistVersion));
-                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
-
-                for (var i = 0; i < propertyKeys.Count; i++)
-                {
-                    var key = propertyKeys[i];
-                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
+                    await InsertWithSoftDelete();
                 }
-
-                var rowsAffected = await command.ExecuteNonQueryAsync();
-                if (rowsAffected != 1)
+                else
                 {
-                    // check if row exists to determine if failure was due to update condition not being met or some other issue
-                    if (rowsAffected == 0)
-                    {
-                        await VerifyRowUpToDate(connection, syncItem, tableName);
-                        return;
-                    }
-
-                    throw new ApplicationException($"Rows affected for upsert of is not 1, it is {rowsAffected} for item {syncItem.EntityId}.");
+                    await InsertWithHardDelete();
                 }
             }
 
@@ -456,6 +418,104 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                     persistVersion < syncItem.PersistVersion)
                 {
                     throw new ApplicationException($"Unable to update cache table item {syncItem.EntityId} from PersistVersion '{persistVersion}' to '{syncItem.PersistVersion}'.");
+                }
+            }
+
+            async Task InsertWithSoftDelete()
+            {
+                // Prevent updates to removed records
+                // But allow recreation of removed records (e.g: Unmerge Deduplication)
+                var changeTypeConstraint = syncItem.ChangeType == VersionChangeType.Changed
+                    ? $"AND [{DataLakeConstants.ChangeTypeKey}] != '{VersionChangeType.Removed.ToString()}'"
+                    : string.Empty;
+
+                var insertOrUpdateSql = $"""
+                                         IF EXISTS (
+                                             SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
+                                             WHERE
+                                                 [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey})
+                                         BEGIN
+                                             UPDATE
+                                                 [{tableName}]
+                                             SET
+                                                 {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}
+                                             WHERE
+                                                 [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
+                                                 [{DataLakeConstants.PersistVersionKey}] < @EntityPersionVersion
+                                               {changeTypeConstraint};
+                                         END
+                                         ELSE
+                                         BEGIN
+                                             INSERT INTO
+                                                 [{tableName}]
+                                                 ([{DataLakeConstants.IdKey}]{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                                             VALUES(@{DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
+                                         END
+                                         """;
+                var command = new SqlCommand(insertOrUpdateSql, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.Add(new SqlParameter($"@EntityPersionVersion", syncItem.PersistVersion));
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
+
+                for (var i = 0; i < propertyKeys.Count; i++)
+                {
+                    var key = propertyKeys[i];
+                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
+                }
+
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected != 1)
+                {
+                    // check if row exists to determine if failure was due to update condition not being met or some other issue
+                    if (rowsAffected == 0)
+                    {
+                        await VerifyRowUpToDate(connection, syncItem, tableName);
+                        return;
+                    }
+
+                    throw new ApplicationException($"Rows affected for upsert of is not 1, it is {rowsAffected} for item {syncItem.EntityId}.");
+                }
+            }
+
+            async Task InsertWithHardDelete()
+            {
+                var insertOrUpdateSql = $"""
+                                         IF EXISTS (
+                                             SELECT 1 FROM [{tableName}] WITH (XLOCK, ROWLOCK)
+                                             WHERE {DataLakeConstants.IdKey} = @{DataLakeConstants.IdKey})
+                                         BEGIN
+                                             UPDATE
+                                                [{tableName}]
+                                             SET
+                                                 {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}
+                                             WHERE [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
+                                         END
+                                         ELSE
+                                         BEGIN
+                                             INSERT INTO
+                                                [{tableName}]
+                                                ([{DataLakeConstants.IdKey}]{string.Join(string.Empty, propertyKeys.Select(key => $", [{key}]"))})
+                                             VALUES(@{DataLakeConstants.IdKey}{string.Join(string.Empty, propertyKeys.Select((_, index) => $", @p{index}"))})
+                                         END
+                                         """;
+                var command = new SqlCommand(insertOrUpdateSql, connection)
+                {
+                    CommandType = CommandType.Text
+                };
+                command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
+
+                for (var i = 0; i < propertyKeys.Count; i++)
+                {
+                    var key = propertyKeys[i];
+                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
+                }
+
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                if (rowsAffected != 1)
+                {
+                    throw new ApplicationException($"Rows affected for insertion of is not 1, it is {rowsAffected}.");
                 }
             }
         }

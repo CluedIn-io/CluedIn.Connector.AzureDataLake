@@ -26,6 +26,7 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     public const string ShouldEscapeVocabularyKeys = nameof(ShouldEscapeVocabularyKeys);
     public const string CustomCron = nameof(CustomCron);
     public const string IsDeltaMode = nameof(IsDeltaMode);
+    public const string IsSoftDelete = nameof(IsSoftDelete);
     public const string IsOverwriteEnabled = nameof(IsOverwriteEnabled);
     public const string IsArrayColumnsEnabled = nameof(IsArrayColumnsEnabled);
 
