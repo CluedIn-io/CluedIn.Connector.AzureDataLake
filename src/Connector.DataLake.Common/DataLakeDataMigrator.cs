@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
+using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
+using CluedIn.Core.DataStore;
 using CluedIn.Core.DataStore.Entities;
 using CluedIn.Core.Events;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -20,7 +24,6 @@ internal class DataLakeDataMigrator : DataMigrator
     private readonly DbContextOptions<CluedInEntities> _cluedInEntitiesDbContextOptions;
     protected readonly IDataLakeConstants _dataLakeConstants;
     protected readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
-    private const int StreamsPerPage = 100;
 
     public DataLakeDataMigrator(
         ILogger logger,
@@ -90,6 +93,18 @@ internal class DataLakeDataMigrator : DataMigrator
                 definition => definition.OrganizationId == context.Organization.Id
                                 && definition.ProviderId == _dataLakeConstants.ProviderId);
 
+            var connectionStrings = context.ApplicationContext.System.ConnectionStrings;
+            var connectionStringKey = DataLakeConstants.StreamCacheConnectionStringKey;
+            var configurationKey = DataLakeConstants.StreamCacheConnectionString;
+            if (!connectionStrings.ConnectionStringExists(connectionStringKey))
+            {
+                throw new InvalidOperationException("Stream cache connection string is not found.");
+            }
+
+            await using var connection = new SqlConnection(connectionStrings.GetConnectionString(connectionStringKey));
+            await connection.OpenAsync();
+
+            var configurationRepository = context.ApplicationContext.Container.Resolve<IConfigurationRepository>();
             foreach (var definition in definitions)
             {
                 _logger.LogInformation("Begin provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
@@ -101,72 +116,78 @@ internal class DataLakeDataMigrator : DataMigrator
                     .Where(stream => stream.OrganizationId == organizationId &&
                             stream.ConnectorProviderDefinitionId == definition.Id)
                     .ToListAsync();
-                //var streamRepository = _applicationContext.Container.Resolve<IStreamRepository>();
-                //var streamsCount = await streamRepository.GetOrganizationStreamsCount(context, filterConnectorProviderDefinitionId: definition.Id);
-                //var streamsPerPage = StreamsPerPage;
-                //var totalPages = (streamsCount + streamsPerPage - 1) / streamsPerPage;
 
-                //for (var i = 0; i < totalPages; ++i)
+                var configuration = configurationRepository.GetConfigurationById(context, definition.Id);
+                if (!IsStreamCacheEnabled(configuration))
                 {
-                    //var streams = await streamRepository.GetOrganizationStreams(context, i, streamsPerPage, filterConnectorProviderDefinitionId: definition.Id);
-                    foreach (var stream in streams)
-                    {
-                        if (stream.Status == StreamStatus.Stopped || stream.Status == StreamStatus.New)
-                        {
-                            _logger.LogInformation("Skipping stream migration for stream '{StreamId}' with status '{StreamStatus}'.",
-                                stream.Id,
-                                stream.Status);
-                            continue;
-                        }
-                        _logger.LogInformation("Updating connector properties for migration for stream '{StreamId}' with status '{StreamStatus}'.",
-                            stream.Id,
-                            stream.Status);
-
-                        var connectorProperties = stream.ConnectorProperties ?? new Dictionary<string, object>();
-                        if (connectorProperties.TryAdd(DataLakeConstants.IsSoftDelete, false))
-                        {
-                            stream.ConnectorProperties = connectorProperties;
-                            await dbContext.SaveChangesAsync();
-                        }
-
-                        var remoteEventService = context.ApplicationContext.Container.Resolve<IRemoteEventService>();
-                        remoteEventService.PublishUpdateStreamEvent(context, stream.Id);
-                        //var mappings = await streamRepository.GetStreamMappings(context, stream.Id);
-
-                        //var connectorProperties = stream.ConnectorProperties == null ? new Dictionary<string, object>() : new Dictionary<string, object>(stream.ConnectorProperties);
-                        //connectorProperties.TryAdd(
-                        //    DataLakeConstants.IsSoftDelete,
-                        //    false);
-                        //var setupConnectorModel = new SetupConnectorModel
-                        //{
-                        //    ConnectorProviderDefinitionId = stream.ConnectorProviderDefinitionId.Value,
-                        //    ContainerName = stream.ContainerName,
-                        //    ExportIncomingEdgeProperties = stream.ExportIncomingEdgeProperties,
-                        //    ExportOutgoingEdgeProperties = stream.ExportOutgoingEdgeProperties,
-                        //    ExportIncomingEdges = stream.ExportIncomingEdges,
-                        //    ExportOutgoingEdges = stream.ExportOutgoingEdges,
-                        //    Mode = stream.Mode.Value,
-                        //    DataTypes = mappings.Select(mapping => new DataTypeEntry
-                        //    {
-                        //        Key = mapping.SourceDataType,
-                        //        Type = mapping.SourceObjectType,
-                        //    }).ToList(),
-                        //    OldContainerName = stream.ContainerName,
-                        //    ConnectorProperties = connectorProperties
-                        //};
-                        //await streamRepository.SetupConnector(context, stream.Id, setupConnectorModel);
-
-                        _logger.LogInformation("Updated connector properties for migration for stream '{StreamId}' with status '{StreamStatus}'.",
-                            stream.Id,
-                            stream.Status);
-                    }
+                    _logger.LogInformation("Stream cache is not enabled for ProviderDefinition '{ProviderDefinitionId}'. Skipping stream migration for soft delete.",
+                        definition.Id);
                 }
 
+                foreach (var stream in streams)
+                {
+                    if (stream.Mode != StreamMode.Sync)
+                    {
+                        _logger.LogInformation("Skipping stream migration for stream '{StreamId}' with mode '{StreamMode}'.",
+                            stream.Id,
+                            stream.Mode);
+                        continue;
+                    }
+
+                    if (stream.Status == StreamStatus.Stopped || stream.Status == StreamStatus.New)
+                    {
+                        _logger.LogInformation("Skipping stream migration for stream '{StreamId}' with status '{StreamStatus}'.",
+                            stream.Id,
+                            stream.Status);
+                        continue;
+                    }
+
+                    var tableName = CacheTableHelper.GetCacheTableName(stream.Id);
+                    _logger.LogInformation("Begin migrating export table '{tableName}' for stream '{StreamId}' for soft delete migration.",
+                        tableName,
+                        stream.Id);
+                    try
+                    {
+                        var alterTableSql = $"ALTER TABLE [{tableName}] ADD [{DataLakeConstants.ChangeTypeKey}] [nvarchar](MAX) NULL";
+                        var command = new SqlCommand(alterTableSql, connection)
+                        {
+                            CommandType = CommandType.Text
+                        };
+
+                        _ = await command.ExecuteNonQueryAsync();
+                    }
+                    catch (SqlException writeDataException) when (writeDataException.IsCannotFindTableException())
+                    {
+                        _logger.LogWarning(writeDataException, "Cache table '{TableName}' is not found for stream '{StreamId}'. It is possible that the stream cache table has not been created yet. Skipping this stream for soft delete migration.",
+                            tableName,
+                            stream.Id);
+                    }
+                    catch (SqlException writeDataException) when (writeDataException.IsColumnAlreadyExistsException())
+                    {
+                        _logger.LogWarning(writeDataException, "Column '{ColumnName}' already exists in cache table '{TableName}' for stream '{StreamId}'. It is possible that this stream has already been migrated for soft delete. Skipping this stream for soft delete migration.",
+                            DataLakeConstants.ChangeTypeKey,
+                            tableName,
+                            stream.Id);
+                    }
+                    _logger.LogInformation("End migrating export table '{tableName}' for stream '{StreamId}' for soft delete migration.",
+                        tableName,
+                        stream.Id);
+                }
                 _logger.LogInformation("End provider definition migration: '{MigrationName}' for organization '{OrganizationId}' and ProviderDefinition '{ProviderDefinitionId}'.",
                     componentMigrationName,
                     organizationId,
                     definition.Id);
             }
         }
+    }
+    protected bool IsStreamCacheEnabled(IDictionary<string, object> configuration)
+    {
+        if (configuration.TryGetValue(DataLakeConstants.IsStreamCacheEnabled, out var value))
+        {
+            var casted = value as bool?;
+            return casted is true;
+        }
+
+        return false;
     }
 }

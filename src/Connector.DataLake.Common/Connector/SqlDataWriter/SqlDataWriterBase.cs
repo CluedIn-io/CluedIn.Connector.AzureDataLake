@@ -68,11 +68,16 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
             return isInitialExport && IsRowRemoved(reader);
         }
 
+        if (!configuration.IsSoftDelete)
+        {
+            return false;
+        }
+
         return IsRowRemoved(reader);
 
         static bool IsRowRemoved(SqlDataReader reader)
         {
-            return GetValueInternal(DataLakeConstants.ChangeTypeKey, reader).Equals(VersionChangeType.Removed.ToString());
+            return nameof(VersionChangeType.Removed).Equals(GetValueInternal(DataLakeConstants.ChangeTypeKey, reader));
         }
     }
 }

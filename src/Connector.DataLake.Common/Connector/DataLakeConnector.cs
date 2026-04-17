@@ -425,8 +425,9 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             {
                 // Prevent updates to removed records
                 // But allow recreation of removed records (e.g: Unmerge Deduplication)
+                // We have to cater for DataLakeConstants.ChangeTypeKey being NULL because of migration. Migrated tables have that field set to NULL
                 var changeTypeConstraint = syncItem.ChangeType == VersionChangeType.Changed
-                    ? $"AND [{DataLakeConstants.ChangeTypeKey}] != '{VersionChangeType.Removed.ToString()}'"
+                    ? $"AND ([{DataLakeConstants.ChangeTypeKey}] != '{nameof(VersionChangeType.Removed)}' OR [{DataLakeConstants.ChangeTypeKey}] IS NULL)"
                     : string.Empty;
 
                 var insertOrUpdateSql = $"""
@@ -442,7 +443,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                                              WHERE
                                                  [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
                                                  [{DataLakeConstants.PersistVersionKey}] < @EntityPersionVersion
-                                               {changeTypeConstraint};
+                                                {changeTypeConstraint};
                                          END
                                          ELSE
                                          BEGIN
