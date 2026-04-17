@@ -49,7 +49,7 @@ public abstract class DataLakeJobDataFactoryBase
         var authenticationDetails = await GetAuthenticationDetails(executionContext, providerDefinitionId);
         var authenticationDetailsDict = authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value);
 
-        if (streamModel.ConnectorProperties == null)
+        if (streamModel.ConnectorProperties != null)
         {
             foreach (var property in streamModel.ConnectorProperties!)
             {

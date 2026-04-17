@@ -145,7 +145,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
 
             var useSoftDelete = GetUseSoftDelete(jobData);
-            if (!data.ContainsKey(DataLakeConstants.ChangeTypeKey))
+            if (useSoftDelete && !data.ContainsKey(DataLakeConstants.ChangeTypeKey))
             {
                 AddToData(DataLakeConstants.ChangeTypeKey, connectorEntityData.ChangeType.ToString());
             }
