@@ -144,7 +144,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 AddToData(DataLakeConstants.EpochKey, now.ToUnixTimeMilliseconds());
             }
 
-            var useSoftDelete = GetUseSoftDelete(jobData);
+            var useSoftDelete = GetUseSoftDelete(streamModel, jobData);
             if (useSoftDelete && !data.ContainsKey(DataLakeConstants.ChangeTypeKey))
             {
                 AddToData(DataLakeConstants.ChangeTypeKey, connectorEntityData.ChangeType.ToString());
@@ -178,8 +178,15 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
         }
 
-        private static bool GetUseSoftDelete(IDataLakeJobData jobData)
+        private static bool GetUseSoftDelete(
+            IReadOnlyStreamModel streamModel,
+            IDataLakeJobData jobData)
         {
+            if (streamModel.Mode != StreamMode.Sync || !jobData.IsStreamCacheEnabled)
+            {
+                return false;
+            }
+
             return jobData.IsDeltaMode || jobData.IsSoftDelete;
         }
 
@@ -250,7 +257,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
                 dataValueTypes);
             var tableName = GetCacheTableName(syncItem.StreamId);
 
-            var useSoftDelete = GetUseSoftDelete(configurations);
+            var useSoftDelete = GetUseSoftDelete(streamModel, configurations);
             try
             {
                 using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
