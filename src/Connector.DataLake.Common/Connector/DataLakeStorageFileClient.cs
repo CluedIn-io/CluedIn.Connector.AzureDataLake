@@ -39,7 +39,7 @@ internal class DataLakeStorageFileClient : IStorageFileClient
 
     public async Task<Stream> OpenWriteAsync(bool overwrite)
     {
-        await using var outputStream = await _fileClient.OpenWriteAsync(overwrite);
+        var outputStream = await _fileClient.OpenWriteAsync(overwrite);
         return new FileStorageBufferedWriteStream(outputStream, BufferSize);
     }
 

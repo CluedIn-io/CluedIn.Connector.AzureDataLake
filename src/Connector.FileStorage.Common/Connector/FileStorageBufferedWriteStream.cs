@@ -7,6 +7,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector;
 
 internal class FileStorageBufferedWriteStream : Stream
 {
+    private bool _disposed;
     private readonly BufferedStream _bufferedStream;
     public FileStorageBufferedWriteStream(Stream backingStream, int bufferSize)
     {
@@ -63,5 +64,27 @@ internal class FileStorageBufferedWriteStream : Stream
     public override void Write(byte[] buffer, int offset, int count)
     {
         _bufferedStream.Write(buffer, offset, count);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (!_disposed && disposing)
+        {
+            _disposed = true;
+            _bufferedStream?.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+            await _bufferedStream.DisposeAsync();
+        }
+
+        await base.DisposeAsync();
     }
 }
