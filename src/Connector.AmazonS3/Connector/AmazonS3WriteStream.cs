@@ -6,8 +6,6 @@ using System.Threading.Tasks;
 using Amazon.S3;
 using Amazon.S3.Model;
 
-using Nest;
-
 namespace CluedIn.Connector.AmazonS3.Connector;
 
 /// <summary>
@@ -128,6 +126,7 @@ internal class AmazonS3WriteStream : Stream
         };
 
         await _s3Client.PutObjectAsync(putRequest);
+        await sendStream.DisposeAsync();
     }
 
     public override int Read(byte[] buffer, int offset, int count)

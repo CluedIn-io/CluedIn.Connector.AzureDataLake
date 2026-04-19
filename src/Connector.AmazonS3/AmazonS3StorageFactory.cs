@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -21,8 +22,18 @@ public class AmazonS3StorageFactory : StorageFactoryBase, IStorageFactory
 
     public override Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration configuration)
     {
+        if (configuration == null)
+        {
+            throw new ArgumentNullException(nameof(configuration));
+        }
+
+        if (configuration is not AmazonS3ConnectorConfiguration amazonS3Configuration)
+        {
+            throw new ArgumentException($"Configuration must be of type {nameof(AmazonS3ConnectorConfiguration)}.", nameof(configuration));
+        }
+
         var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<AmazonS3StorageClient>>();
-        var client = new AmazonS3StorageClient(logger, configuration as AmazonS3ConnectorConfiguration);
+        var client = new AmazonS3StorageClient(logger, amazonS3Configuration);
         return Task.FromResult<IStorageClient>(client);
     }
 }

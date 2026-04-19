@@ -9,10 +9,10 @@ internal class SynapseDataEngineeringExportEntitiesJob : StorageExportEntitiesJo
     public SynapseDataEngineeringExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        ISynapseDataEngineeringConfigurationConstants dataLakeConstants,
-        SynapseDataEngineeringStorageFactory dataLakeJobDataStorageFactory,
+        ISynapseDataEngineeringConfigurationConstants configurationConstants,
+        SynapseDataEngineeringStorageFactory storageStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeConstants, dataLakeJobDataStorageFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageStorageFactory, dateTimeOffsetProvider)
     {
     }
 }

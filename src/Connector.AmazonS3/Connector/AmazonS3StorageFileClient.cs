@@ -15,7 +15,7 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
     private readonly FilePath _filePath;
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
-    private static int BufferSize => 4 * 1024 * 1024; // 8 MB buffer for streaming
+    private static int BufferSize => 4 * 1024 * 1024; // 4 MB buffer for streaming
 
     public AmazonS3StorageFileClient(IAmazonS3 s3Client, string bucketName, FilePath filePath)
     {
@@ -58,6 +58,11 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
 
     public async Task<Stream> OpenWriteAsync(bool overwrite)
     {
+        if (!overwrite && await ExistsAsync())
+        {
+            throw new IOException($"The object '{_filePath.GetKey()}' already exists and overwrite is disabled.");
+        }
+
         return new BufferedStream(new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey()), BufferSize);
     }
 
@@ -83,12 +88,6 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
         try
         {
             var key = _filePath.GetKey();
-            var getRequest = new GetObjectMetadataRequest
-            {
-                BucketName = _bucketName,
-                Key = key,
-            };
-            var existingMetadata = await _s3Client.GetObjectMetadataAsync(getRequest);
 
             var copyRequest = new CopyObjectRequest
             {

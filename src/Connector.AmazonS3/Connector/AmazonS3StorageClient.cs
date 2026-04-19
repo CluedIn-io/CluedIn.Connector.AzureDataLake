@@ -19,17 +19,19 @@ internal class AmazonS3StorageClient : IStorageClient
     private readonly ILogger<AmazonS3StorageClient> _logger;
     private readonly AmazonS3ConnectorConfiguration _configuration;
 
-    public AmazonS3StorageClient(ILogger<AmazonS3StorageClient> logger, AmazonS3ConnectorConfiguration configuration)
+    public AmazonS3StorageClient(
+        ILogger<AmazonS3StorageClient> logger,
+        AmazonS3ConnectorConfiguration configuration)
     {
-        _logger = logger;
-        _configuration = configuration;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
     public async Task CreateDirectoryIfNotExists(DirectoryPath directoryPath)
     {
         // S3 doesn't require directory creation - directories are virtual.
         // We just verify the bucket is accessible.
-        var s3Client = GetS3Client();
+        using var s3Client = GetS3Client();
 
         // Verify bucket accessibility by listing zero objects
         try
@@ -48,7 +50,7 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task DeleteDirectory(DirectoryPath directoryPath)
     {
-        var s3Client = GetS3Client();
+        using var s3Client = GetS3Client();
         var prefix = directoryPath.GetPrefix();
 
         if (string.IsNullOrEmpty(prefix))
@@ -84,7 +86,7 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task DeleteFile(FilePath filePath)
     {
-        var s3Client = GetS3Client();
+        using var s3Client = GetS3Client();
         var key = filePath.GetKey();
 
         var response = await s3Client.DeleteObjectAsync(_configuration.BucketName, key);
@@ -97,7 +99,7 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task<bool> DirectoryExists(DirectoryPath directory)
     {
-        var s3Client = GetS3Client();
+        using var s3Client = GetS3Client();
         var prefix = directory.GetPrefix();
 
         var listRequest = new ListObjectsV2Request
@@ -120,7 +122,7 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task<bool> FileExists(FilePath filePath)
     {
-        var s3Client = GetS3Client();
+        using var s3Client = GetS3Client();
         var key = filePath.GetKey();
 
         try
@@ -147,7 +149,7 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task<FileMetadata> GetFileMetadata(FilePath filePath)
     {
-        var s3Client = GetS3Client();
+        using var s3Client = GetS3Client();
         var key = filePath.GetKey();
 
         try
@@ -169,7 +171,7 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectory(DirectoryPath directoryPath)
     {
-        var s3Client = GetS3Client();
+        using var s3Client = GetS3Client();
         var prefix = directoryPath.GetPrefix();
 
         var listRequest = new ListObjectsV2Request
@@ -202,9 +204,9 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task SaveData(FilePath filePath, string content, string contentType)
     {
-        var s3Client = GetS3Client();
+        using var s3Client = GetS3Client();
 
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+        await using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
         var putRequest = new PutObjectRequest
         {
             BucketName = _configuration.BucketName,
@@ -223,7 +225,12 @@ internal class AmazonS3StorageClient : IStorageClient
 
     private IAmazonS3 GetS3Client()
     {
-        var region = RegionEndpoint.GetBySystemName(_configuration.Region);
-        return new Amazon.S3.AmazonS3Client(_configuration.AccessKey, _configuration.SecretKey, region);
+        return GetS3Client(_configuration);
+    }
+
+    internal static IAmazonS3 GetS3Client(AmazonS3ConnectorConfiguration configuration)
+    {
+        var region = RegionEndpoint.GetBySystemName(configuration.Region);
+        return new AmazonS3Client(configuration.AccessKey, configuration.SecretKey, region);
     }
 }

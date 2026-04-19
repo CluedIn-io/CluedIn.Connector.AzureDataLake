@@ -10,9 +10,9 @@ internal class AzureDatabricksExportEntitiesJob : StorageExportEntitiesJobBase
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IAzureDatabricksConfigurationConstants configurationConstants,
-        AzureDatabricksStorageFactory storageFactory,
+        AzureDatabricksStorageFactory storageStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageStorageFactory, dateTimeOffsetProvider)
     {
     }
 }

@@ -16,10 +16,10 @@ internal class OneLakeExportEntitiesJob : StorageExportEntitiesJobBase
     public OneLakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        IOneLakeConfigurationConstants dataLakeConstants,
+        IOneLakeConfigurationConstants configurationConstants,
         OneLakeStorageFactory storageStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeConstants, storageStorageFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageStorageFactory, dateTimeOffsetProvider)
     {
         _storageStorageFactory = storageStorageFactory ?? throw new ArgumentNullException(nameof(storageStorageFactory));
     }

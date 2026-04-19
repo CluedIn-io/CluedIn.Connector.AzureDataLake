@@ -10,9 +10,9 @@ internal class AzureAIStudioExportEntitiesJob : StorageExportEntitiesJobBase
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IAzureAIStudioConfigurationConstants configurationConstants,
-        AzureAIStudioStorageFactory storageFactory,
+        AzureAIStudioStorageFactory storageStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageStorageFactory, dateTimeOffsetProvider)
     {
     }
 }

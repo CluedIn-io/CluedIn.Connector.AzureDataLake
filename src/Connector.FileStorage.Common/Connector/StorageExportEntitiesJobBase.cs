@@ -33,13 +33,13 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     protected StorageExportEntitiesJobBase(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        IStorageConfigurationConstants dataLakeConstants,
-        IStorageFactory dataLakeJobDataStorageFactory,
+        IStorageConfigurationConstants configurationConstants,
+        IStorageFactory storageStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext, dateTimeOffsetProvider)
     {
         _streamRepository = streamRepository ?? throw new ArgumentNullException(nameof(streamRepository));
-        _dataLakeConstants = dataLakeConstants ?? throw new ArgumentNullException(nameof(dataLakeConstants));
-        _storageFactory = dataLakeJobDataStorageFactory ?? throw new ArgumentNullException(nameof(dataLakeJobDataStorageFactory));
+        _dataLakeConstants = configurationConstants ?? throw new ArgumentNullException(nameof(configurationConstants));
+        _storageFactory = storageStorageFactory ?? throw new ArgumentNullException(nameof(storageStorageFactory));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
