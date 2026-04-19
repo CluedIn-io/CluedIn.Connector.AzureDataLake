@@ -65,6 +65,10 @@ internal class DataLakeStorageClient : IStorageClient
     public async Task<IStorageFileClient> GetFileClient(FilePath filePath)
     {
         var directoryClient = await GetDirectoryClientAsync(filePath.DirectoryPath, createIfNotExists: false);
+        if (directoryClient == null)
+        {
+            throw new InvalidOperationException("Directory client cannot be null when trying to get file client.");
+        }
         return new DataLakeStorageFileClient(filePath,directoryClient.GetFileClient(filePath.Name));
     }
 
