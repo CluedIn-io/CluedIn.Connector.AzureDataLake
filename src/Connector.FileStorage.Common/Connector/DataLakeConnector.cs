@@ -449,7 +449,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                                                  {string.Join(",\n        ", propertyKeys.Select((key, index) => $"[{key}] = @p{index}"))}
                                              WHERE
                                                  [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
-                                                 [{DataLakeConstants.PersistVersionKey}] < @EntityPersionVersion
+                                                 [{DataLakeConstants.PersistVersionKey}] < @EntityPersistVersion
                                                 {changeTypeConstraint};
                                          END
                                          ELSE
@@ -464,7 +464,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 {
                     CommandType = CommandType.Text
                 };
-                command.Parameters.Add(new SqlParameter($"@EntityPersionVersion", syncItem.PersistVersion));
+                command.Parameters.Add(new SqlParameter($"@EntityPersistVersion", syncItem.PersistVersion));
                 command.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", syncItem.EntityId));
 
                 for (var i = 0; i < propertyKeys.Count; i++)
