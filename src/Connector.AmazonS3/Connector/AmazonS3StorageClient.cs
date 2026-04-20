@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 
 using Amazon;
@@ -18,6 +19,7 @@ internal class AmazonS3StorageClient : IStorageClient
 {
     private readonly ILogger<AmazonS3StorageClient> _logger;
     private readonly AmazonS3ConnectorConfiguration _configuration;
+    private readonly IAmazonS3 _s3Client;
 
     public AmazonS3StorageClient(
         ILogger<AmazonS3StorageClient> logger,
@@ -25,32 +27,31 @@ internal class AmazonS3StorageClient : IStorageClient
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _s3Client = GetS3Client(_configuration);
     }
 
     public async Task CreateDirectoryIfNotExists(DirectoryPath directoryPath)
     {
         // S3 doesn't require directory creation - directories are virtual.
         // We just verify the bucket is accessible.
-        using var s3Client = GetS3Client();
-
         // Verify bucket accessibility by listing zero objects
         try
         {
-            await s3Client.ListObjectsV2Async(new ListObjectsV2Request
+            await _s3Client.ListObjectsV2Async(new ListObjectsV2Request
             {
                 BucketName = _configuration.BucketName,
                 MaxKeys = 0,
             });
         }
-        catch (AmazonS3Exception)
+        catch (AmazonS3Exception ex)
         {
+            _logger.LogError(ex, "An error occurred whiel trying to get directory information.");
             throw;
         }
     }
 
     public async Task DeleteDirectory(DirectoryPath directoryPath)
     {
-        using var s3Client = GetS3Client();
         var prefix = directoryPath.GetPrefix();
 
         if (string.IsNullOrEmpty(prefix))
@@ -67,17 +68,19 @@ internal class AmazonS3StorageClient : IStorageClient
         ListObjectsV2Response response;
         do
         {
-            response = await s3Client.ListObjectsV2Async(listRequest);
+            response = await _s3Client.ListObjectsV2Async(listRequest);
 
             if (response.S3Objects.Any())
             {
                 var deleteRequest = new DeleteObjectsRequest
                 {
                     BucketName = _configuration.BucketName,
-                    Objects = response.S3Objects.Select(o => new KeyVersion { Key = o.Key }).ToList(),
+                    Objects = response.S3Objects
+                        .Select(o => new KeyVersion { Key = o.Key })
+                        .ToList(),
                 };
 
-                await s3Client.DeleteObjectsAsync(deleteRequest);
+                await _s3Client.DeleteObjectsAsync(deleteRequest);
             }
 
             listRequest.ContinuationToken = response.NextContinuationToken;
@@ -86,12 +89,12 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task DeleteFile(FilePath filePath)
     {
-        using var s3Client = GetS3Client();
         var key = filePath.GetKey();
 
-        var response = await s3Client.DeleteObjectAsync(_configuration.BucketName, key);
+        var response = await _s3Client.DeleteObjectAsync(_configuration.BucketName, key);
 
-        if ((int)response.HttpStatusCode < 200 || (int)response.HttpStatusCode >= 300)
+        if ((int)response.HttpStatusCode < (int)HttpStatusCode.OK || // 200
+            (int)response.HttpStatusCode >= (int)HttpStatusCode.MultipleChoices) // 300
         {
             throw new Exception($"S3 DeleteObject returned {response.HttpStatusCode}");
         }
@@ -99,7 +102,6 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task<bool> DirectoryExists(DirectoryPath directory)
     {
-        using var s3Client = GetS3Client();
         var prefix = directory.GetPrefix();
 
         var listRequest = new ListObjectsV2Request
@@ -111,10 +113,10 @@ internal class AmazonS3StorageClient : IStorageClient
 
         try
         {
-            var response = await s3Client.ListObjectsV2Async(listRequest);
+            var response = await _s3Client.ListObjectsV2Async(listRequest);
             return response.S3Objects.Any();
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             return false;
         }
@@ -122,15 +124,14 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task<bool> FileExists(FilePath filePath)
     {
-        using var s3Client = GetS3Client();
         var key = filePath.GetKey();
 
         try
         {
-            await s3Client.GetObjectMetadataAsync(_configuration.BucketName, key);
+            await _s3Client.GetObjectMetadataAsync(_configuration.BucketName, key);
             return true;
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             return false;
         }
@@ -143,18 +144,16 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public Task<IStorageFileClient> GetFileClient(FilePath filePath)
     {
-        var s3Client = GetS3Client();
-        return Task.FromResult<IStorageFileClient>(new AmazonS3StorageFileClient(s3Client, _configuration.BucketName, filePath));
+        return Task.FromResult<IStorageFileClient>(new AmazonS3StorageFileClient(_s3Client, _configuration.BucketName, filePath));
     }
 
     public async Task<FileMetadata> GetFileMetadata(FilePath filePath)
     {
-        using var s3Client = GetS3Client();
         var key = filePath.GetKey();
 
         try
         {
-            var metadata = await s3Client.GetObjectMetadataAsync(_configuration.BucketName, key);
+            var metadata = await _s3Client.GetObjectMetadataAsync(_configuration.BucketName, key);
             var metadataDict = new Dictionary<string, string>();
             foreach (var metaKey in metadata.Metadata.Keys)
             {
@@ -163,7 +162,7 @@ internal class AmazonS3StorageClient : IStorageClient
 
             return new FileMetadata(metadataDict);
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
         }
@@ -171,7 +170,6 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectory(DirectoryPath directoryPath)
     {
-        using var s3Client = GetS3Client();
         var prefix = directoryPath.GetPrefix();
 
         var listRequest = new ListObjectsV2Request
@@ -184,7 +182,7 @@ internal class AmazonS3StorageClient : IStorageClient
         ListObjectsV2Response response;
         do
         {
-            response = await s3Client.ListObjectsV2Async(listRequest);
+            response = await _s3Client.ListObjectsV2Async(listRequest);
 
             foreach (var s3Object in response.S3Objects)
             {
@@ -204,8 +202,6 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public async Task SaveData(FilePath filePath, string content, string contentType)
     {
-        using var s3Client = GetS3Client();
-
         await using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
         var putRequest = new PutObjectRequest
         {
@@ -215,7 +211,7 @@ internal class AmazonS3StorageClient : IStorageClient
             ContentType = contentType,
         };
 
-        await s3Client.PutObjectAsync(putRequest);
+        await _s3Client.PutObjectAsync(putRequest);
     }
 
     public async Task VerifyConnection()
@@ -223,12 +219,7 @@ internal class AmazonS3StorageClient : IStorageClient
         await CreateDirectoryIfNotExists(await GetBaseDirectoryPath());
     }
 
-    private IAmazonS3 GetS3Client()
-    {
-        return GetS3Client(_configuration);
-    }
-
-    internal static IAmazonS3 GetS3Client(AmazonS3ConnectorConfiguration configuration)
+    private static IAmazonS3 GetS3Client(AmazonS3ConnectorConfiguration configuration)
     {
         var region = RegionEndpoint.GetBySystemName(configuration.Region);
         return new AmazonS3Client(configuration.AccessKey, configuration.SecretKey, region);
