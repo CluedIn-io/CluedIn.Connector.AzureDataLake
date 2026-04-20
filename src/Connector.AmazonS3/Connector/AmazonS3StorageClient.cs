@@ -46,7 +46,7 @@ internal class AmazonS3StorageClient : IStorageClient
         }
         catch (AmazonS3Exception ex)
         {
-            _logger.LogError(ex, "An error occurred whiel trying to get directory information.");
+            _logger.LogError(ex, "An error occurred while trying to get directory information.");
             throw;
         }
     }
