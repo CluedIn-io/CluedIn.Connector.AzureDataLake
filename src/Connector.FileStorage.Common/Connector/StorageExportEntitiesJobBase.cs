@@ -91,9 +91,9 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return;
         }
         var storageClient = await CreateStorageClient(context, configuration);
-        await storageClient.CreateDirectoryIfNotExists(outputDirectoryPath);
+        await storageClient.CreateDirectoryIfNotExistsAsync(outputDirectoryPath);
 
-        var fileMetadata = await storageClient.GetFileMetadata(baseDirectoryPath.GetFilePath(outputFileName));
+        var fileMetadata = await storageClient.GetFileMetadataAsync(baseDirectoryPath.GetFilePath(outputFileName));
         if (fileMetadata != null)
         {
             if (args.IsTriggeredFromJobServer)
@@ -173,7 +173,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         var temporaryFilePath = outputDirectoryPath.GetFilePath(temporaryOutputFileName);
         try
         {
-            temporaryFileClient = await storageClient.GetFileClient(temporaryFilePath);
+            temporaryFileClient = await storageClient.GetFileClientAsync(temporaryFilePath);
         }
         catch
         {
@@ -281,7 +281,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                 filePath.FullPath,
                 streamId,
                 asOfTime);
-            var targetFileClient = await storageClient.GetFileClient(filePath);
+            var targetFileClient = await storageClient.GetFileClientAsync(filePath);
             await targetFileClient.DeleteIfExistsAsync();
         }
     }
@@ -425,7 +425,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             asOfTime,
             OutputFormat: outputFormat);
         var storageClient = await CreateStorageClient(context, configuration);
-        var baseDirectoryPath = await storageClient.GetBaseDirectoryPath();
+        var baseDirectoryPath = await storageClient.GetBaseDirectoryPathAsync();
         var outputDirectoryName = await GetOutputDirectoryNameAsync(context, configuration, exportJobDataBase);
         var outputDirectoryPath = string.IsNullOrWhiteSpace(outputDirectoryName) ? baseDirectoryPath : baseDirectoryPath.GetSubDirectoryPath(outputDirectoryName);
         var lastExport = await GetLastExport(context, connection, configuration, exportJobDataBase, outputDirectoryPath);

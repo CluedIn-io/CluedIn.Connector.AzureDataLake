@@ -4,25 +4,25 @@ using System.Threading.Tasks;
 namespace CluedIn.Connector.FileStorage.Common;
 public interface IStorageClient
 {
-    Task<DirectoryPath> GetBaseDirectoryPath();
+    Task<DirectoryPath> GetBaseDirectoryPathAsync();
 
-    Task SaveData(FilePath filePath, string content, string contentType);
+    Task SaveDataAsync(FilePath filePath, string content, string contentType);
 
-    Task DeleteDirectory(DirectoryPath directoryPath);
+    Task DeleteDirectoryAsync(DirectoryPath directoryPath);
 
-    Task DeleteFile(FilePath filePath);
+    Task DeleteFileAsync(FilePath filePath);
 
-    Task<bool> FileExists(FilePath filePath);
+    Task<bool> FileExistsAsync(FilePath filePath);
 
-    Task<FileMetadata> GetFileMetadata(FilePath filePath);
+    Task<FileMetadata> GetFileMetadataAsync(FilePath filePath);
 
-    Task<bool> DirectoryExists(DirectoryPath directory);
+    Task<bool> DirectoryExistsAsync(DirectoryPath directory);
 
-    Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectory(DirectoryPath directoryPath);
+    Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectoryAsync(DirectoryPath directoryPath);
 
-    Task<IStorageFileClient> GetFileClient(FilePath filePath);
+    Task<IStorageFileClient> GetFileClientAsync(FilePath filePath);
 
-    Task VerifyConnection();
+    Task VerifyConnectionAsync();
 
-    Task CreateDirectoryIfNotExists(DirectoryPath directoryPath);
+    Task CreateDirectoryIfNotExistsAsync(DirectoryPath directoryPath);
 }
