@@ -75,12 +75,13 @@ public class OpenMirroringConnector : StorageConnectorBase
 
         try
         {
-            if (await client.DirectoryExistsAsync(new DirectoryPath(casted.RootDirectoryPath)))
+            var basePath = await client.GetBaseDirectoryPathAsync();
+            if (await client.DirectoryExistsAsync(basePath))
             {
                 return SuccessfulConnectionVerification;
             }
 
-            return CreateFailedConnectionVerification($"Directory '{configuration.RootDirectoryPath}' is not found");
+            return CreateFailedConnectionVerification($"Directory '{basePath.Path}' is not found");
         }
         catch (AuthenticationFailedException ex)
         {
@@ -113,7 +114,8 @@ public class OpenMirroringConnector : StorageConnectorBase
         var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
         var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, configuration, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), configuration.OutputFormat);
         var client = await StorageFactory.CreateStorageClient(executionContext, configuration);
-        await client.DeleteDirectoryAsync(new DirectoryPath(configuration.RootDirectoryPath).GetSubDirectoryPath(subDirectory));
+        var basePath = await client.GetBaseDirectoryPathAsync();
+        await client.DeleteDirectoryAsync(basePath.GetSubDirectoryPath(subDirectory));
         await base.ArchiveContainer(executionContext, streamModel);
     }
 
