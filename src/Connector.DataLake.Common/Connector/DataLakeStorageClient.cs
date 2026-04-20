@@ -36,6 +36,11 @@ internal class DataLakeStorageClient : IStorageClient
     {
         var fileClient = await GetFileClientAsync(filePath, createDirectoryIfNotExists: false);
 
+        if (fileClient == null)
+        {
+            return;
+        }
+
         await fileClient.DeleteIfExistsAsync();
     }
 
@@ -75,6 +80,11 @@ internal class DataLakeStorageClient : IStorageClient
     public async Task<FileMetadata> GetFileMetadataAsync(FilePath filePath)
     {
         var fileClient = await GetFileClientAsync(filePath, createDirectoryIfNotExists: false);
+
+        if (fileClient == null)
+        {
+            return null;
+        }
 
         if (!await fileClient.ExistsAsync())
         {
@@ -283,6 +293,4 @@ internal class DataLakeStorageClient : IStorageClient
 
         return castedJobData;
     }
-
-
 }
