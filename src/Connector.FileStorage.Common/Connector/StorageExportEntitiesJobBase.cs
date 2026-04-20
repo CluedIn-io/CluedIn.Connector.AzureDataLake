@@ -92,7 +92,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return;
         }
 
-        using var storageClient = await _storageFactory.CreateStorageClient(context, configuration);
+        using var storageClient = await CreateStorageClient(context, configuration);
         await storageClient.CreateDirectoryIfNotExistsAsync(outputDirectoryPath);
 
         var fileMetadata = await storageClient.GetFileMetadataAsync(baseDirectoryPath.GetFilePath(outputFileName));
@@ -287,6 +287,10 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             await targetFileClient.DeleteIfExistsAsync();
         }
     }
+    protected async Task<IStorageClient> CreateStorageClient(ExecutionContext context, IStorageConfiguration configuration)
+    {
+        return await _storageFactory.CreateStorageClient(context, configuration);
+    }
     private protected virtual bool ShouldSkipExport(ExportJobData exportJobData)
     {
         return false;
@@ -420,7 +424,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             configuration,
             asOfTime,
             OutputFormat: outputFormat);
-        using var storageClient = await _storageFactory.CreateStorageClient(context, configuration);
+        using var storageClient = await CreateStorageClient(context, configuration);
         var baseDirectoryPath = await storageClient.GetBaseDirectoryPathAsync();
         var outputDirectoryName = await GetOutputDirectoryNameAsync(context, configuration, exportJobDataBase);
         var outputDirectoryPath = string.IsNullOrWhiteSpace(outputDirectoryName) ? baseDirectoryPath : baseDirectoryPath.GetSubDirectoryPath(outputDirectoryName);
