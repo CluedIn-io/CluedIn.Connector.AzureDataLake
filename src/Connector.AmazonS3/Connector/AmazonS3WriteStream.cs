@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,18 +10,25 @@ using Amazon.S3.Model;
 namespace CluedIn.Connector.AmazonS3.Connector;
 
 /// <summary>
-/// A write-only stream that buffers all writes in memory and uploads
-/// the complete content to S3 on flush/close/dispose.
+/// A write-only stream that uses S3 multipart upload for large files
+/// and falls back to a simple PutObject for small files (single part).
+/// Each part is uploaded when the internal buffer reaches <see cref="PartSize"/> bytes.
+/// The upload is completed (or aborted) on flush/close/dispose.
 /// </summary>
 internal class AmazonS3WriteStream : Stream
 {
-    private const int MaxBufferSize = 4 * 1024 * 1024;
+    private const int PartSize = 5 * 1024 * 1024; // 5 MB – S3 minimum part size
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
     private readonly string _key;
     private MemoryStream _buffer;
     private bool _disposed;
     private readonly object _bufferLock = new();
+
+    private string _uploadId;
+    private int _partNumber;
+    private readonly List<PartETag> _partETags = new();
+    private bool _completed;
 
     public AmazonS3WriteStream(IAmazonS3 s3Client, string bucketName, string key)
     {
@@ -42,10 +50,10 @@ internal class AmazonS3WriteStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        bool shouldFlush = WriteInternal(buffer, offset, count);
+        var shouldFlush = WriteInternal(buffer, offset, count);
         if (shouldFlush)
         {
-            UploadAsync().GetAwaiter().GetResult();
+            UploadPartAsync().GetAwaiter().GetResult();
         }
     }
 
@@ -54,17 +62,17 @@ internal class AmazonS3WriteStream : Stream
         var shouldFlush = WriteInternal(buffer, offset, count);
         if (shouldFlush)
         {
-            await UploadAsync();
+            await UploadPartAsync();
         }
     }
 
     private bool WriteInternal(byte[] buffer, int offset, int count)
     {
-        bool shouldFlush = false;
+        var shouldFlush = false;
         lock (_bufferLock)
         {
             _buffer.Write(buffer, offset, count);
-            if (_buffer.Length >= MaxBufferSize) // flush if buffer exceeds 4MB
+            if (_buffer.Length >= PartSize)
             {
                 shouldFlush = true;
             }
@@ -80,17 +88,20 @@ internal class AmazonS3WriteStream : Stream
 
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
-        await UploadAsync();
+        await CompleteUploadAsync();
     }
 
     protected override void Dispose(bool disposing)
     {
         if (!_disposed && disposing)
         {
-            if (_buffer != null)
+            try
             {
-                _buffer.Flush();
-                _buffer.Dispose();
+                CompleteUploadAsync().GetAwaiter().GetResult();
+            }
+            finally
+            {
+                _buffer?.Dispose();
                 _buffer = null;
             }
         }
@@ -106,11 +117,14 @@ internal class AmazonS3WriteStream : Stream
             return;
         }
 
-        if (!_disposed)
+        try
+        {
+            await CompleteUploadAsync();
+        }
+        finally
         {
             if (_buffer != null)
             {
-                await _buffer.FlushAsync();
                 await _buffer.DisposeAsync();
                 _buffer = null;
             }
@@ -120,33 +134,131 @@ internal class AmazonS3WriteStream : Stream
         _disposed = true;
     }
 
-    private async Task UploadAsync()
+    private async Task InitiateMultipartUploadAsync()
     {
-        if (_buffer == null)
+        if (_uploadId != null)
         {
             return;
         }
 
-        if (_buffer.Length == 0)
-        {
-            return; // nothing to upload
-        }
-
-        var sendStream = _buffer;
-        lock (_bufferLock)
-        {
-            _buffer = new MemoryStream();
-        }
-
-        var putRequest = new PutObjectRequest
+        var request = new InitiateMultipartUploadRequest
         {
             BucketName = _bucketName,
             Key = _key,
+        };
+
+        var response = await _s3Client.InitiateMultipartUploadAsync(request);
+        _uploadId = response.UploadId;
+    }
+
+    private async Task UploadPartAsync()
+    {
+        MemoryStream sendStream;
+        lock (_bufferLock)
+        {
+            if (_buffer == null || _buffer.Length == 0)
+            {
+                return;
+            }
+
+            sendStream = _buffer;
+            _buffer = new MemoryStream();
+        }
+
+        await InitiateMultipartUploadAsync();
+
+        sendStream.Position = 0;
+        _partNumber++;
+
+        var request = new UploadPartRequest
+        {
+            BucketName = _bucketName,
+            Key = _key,
+            UploadId = _uploadId,
+            PartNumber = _partNumber,
             InputStream = sendStream,
         };
 
-        await _s3Client.PutObjectAsync(putRequest);
+        var response = await _s3Client.UploadPartAsync(request);
+        _partETags.Add(new PartETag(_partNumber, response.ETag));
+
         await sendStream.DisposeAsync();
+    }
+
+    private async Task CompleteUploadAsync()
+    {
+        if (_completed)
+        {
+            return;
+        }
+
+        _completed = true;
+
+        if (_buffer == null || (_buffer.Length == 0 && _uploadId == null))
+        {
+            return;
+        }
+
+        // No multipart upload was started – use simple PutObject for small files.
+        if (_uploadId == null)
+        {
+            _buffer.Position = 0;
+            var putRequest = new PutObjectRequest
+            {
+                BucketName = _bucketName,
+                Key = _key,
+                InputStream = _buffer,
+            };
+
+            await _s3Client.PutObjectAsync(putRequest);
+            return;
+        }
+
+        // Upload remaining buffered data as the final part.
+        if (_buffer.Length > 0)
+        {
+            await UploadPartAsync();
+        }
+
+        try
+        {
+            var completeRequest = new CompleteMultipartUploadRequest
+            {
+                BucketName = _bucketName,
+                Key = _key,
+                UploadId = _uploadId,
+                PartETags = _partETags,
+            };
+
+            await _s3Client.CompleteMultipartUploadAsync(completeRequest);
+        }
+        catch
+        {
+            await AbortMultipartUploadAsync();
+            throw;
+        }
+    }
+
+    private async Task AbortMultipartUploadAsync()
+    {
+        if (_uploadId == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _s3Client.AbortMultipartUploadAsync(new AbortMultipartUploadRequest
+            {
+                BucketName = _bucketName,
+                Key = _key,
+                UploadId = _uploadId,
+            });
+        }
+        catch
+        {
+            // Best-effort abort; do not mask the original exception.
+        }
     }
 
     public override int Read(byte[] buffer, int offset, int count)

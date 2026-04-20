@@ -16,7 +16,9 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
     private readonly FilePath _filePath;
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
-    private static int BufferSize => 4 * 1024 * 1024; // 4 MB buffer for streaming
+    // Initially set to 5 MB buffer
+    // When we tested further, we can increase size of this because S3 supports up to 5GB chunks
+    private static int BufferSize => 5 * 1024 * 1024;
 
     public AmazonS3StorageFileClient(IAmazonS3 s3Client, string bucketName, FilePath filePath)
     {
