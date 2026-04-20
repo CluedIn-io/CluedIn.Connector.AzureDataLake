@@ -68,23 +68,36 @@ internal class FileStorageBufferedWriteStream : Stream
 
     protected override void Dispose(bool disposing)
     {
-        if (!_disposed && disposing)
+        if (_disposed)
         {
-            _disposed = true;
+            return;
+        }
+
+        if (disposing)
+        {
             _bufferedStream?.Dispose();
         }
 
         base.Dispose(disposing);
+        _disposed = true;
     }
 
     public override async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         if (!_disposed)
         {
-            _disposed = true;
-            await _bufferedStream.DisposeAsync();
+            if (_bufferedStream != null)
+            {
+                await _bufferedStream.DisposeAsync();
+            }
         }
 
         await base.DisposeAsync();
+        _disposed = true;
     }
 }
