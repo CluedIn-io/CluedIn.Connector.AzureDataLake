@@ -6,11 +6,11 @@ internal static class AmazonPathExtensions
 {
     public static string GetKey(this FilePath filePath)
     {
-        return filePath.FullPath;
+        return filePath.FullPath.TrimStart('/');
     }
     public static string GetPrefix(this DirectoryPath directoryPath)
     {
-        return directoryPath.Path;
+        return directoryPath.Path.TrimStart('/');
     }
 
     public static string GetS3Url(this FilePath filePath, string bucketName)
