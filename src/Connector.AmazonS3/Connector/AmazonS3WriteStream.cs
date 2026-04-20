@@ -87,26 +87,46 @@ internal class AmazonS3WriteStream : Stream
     {
         if (!_disposed && disposing)
         {
-            _disposed = true;
-            _buffer.Dispose();
+            if (_buffer != null)
+            {
+                _buffer.Flush();
+                _buffer.Dispose();
+                _buffer = null;
+            }
         }
 
         base.Dispose(disposing);
+        _disposed = true;
     }
 
     public override async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         if (!_disposed)
         {
-            _disposed = true;
-            await _buffer.DisposeAsync();
+            if (_buffer != null)
+            {
+                await _buffer.FlushAsync();
+                await _buffer.DisposeAsync();
+                _buffer = null;
+            }
         }
 
         await base.DisposeAsync();
+        _disposed = true;
     }
 
     private async Task UploadAsync()
     {
+        if (_buffer == null)
+        {
+            return;
+        }
+
         if (_buffer.Length == 0)
         {
             return; // nothing to upload
