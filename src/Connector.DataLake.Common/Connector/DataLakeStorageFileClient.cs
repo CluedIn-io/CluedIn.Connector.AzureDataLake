@@ -29,7 +29,7 @@ internal class DataLakeStorageFileClient : IStorageFileClient
 
     public async Task DeleteIfExistsAsync()
     {
-        await _fileClient?.DeleteIfExistsAsync();
+        await _fileClient.DeleteIfExistsAsync();
     }
 
     public async Task<bool> ExistsAsync()
