@@ -62,7 +62,7 @@ public class OpenMirroringConnector : StorageConnectorBase
         var isHealthCheckVerification = IsHealthCheckVerification(casted);
         var shouldTolerateMissingDirectory = !isHealthCheckVerification && casted.ShouldCreateMirroredDatabase;
 
-        var client = await _storageStorageFactory.CreateStorageClient(executionContext, casted) as OpenMirroringStorageClient;
+        using var client = await _storageStorageFactory.CreateStorageClient(executionContext, casted) as OpenMirroringStorageClient;
         if (shouldTolerateMissingDirectory)
         {
             if (await client.HasValidWorkspaceAsync())
@@ -112,7 +112,7 @@ public class OpenMirroringConnector : StorageConnectorBase
 
         var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
         var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, configuration, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), configuration.OutputFormat);
-        var client = await StorageFactory.CreateStorageClient(executionContext, configuration);
+        using var client = await StorageFactory.CreateStorageClient(executionContext, configuration);
         await client.DeleteDirectoryAsync(new DirectoryPath(configuration.RootDirectoryPath).GetSubDirectoryPath(subDirectory));
         await base.ArchiveContainer(executionContext, streamModel);
     }

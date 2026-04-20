@@ -85,12 +85,14 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             TransactionScopeAsyncFlowOption.Enabled);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
+
         if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"{typeName}_{streamModel.Id}", ExportEntitiesLockInMilliseconds))
         {
             context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamModel.Id);
             return;
         }
-        var storageClient = await CreateStorageClient(context, configuration);
+
+        using var storageClient = await _storageFactory.CreateStorageClient(context, configuration);
         await storageClient.CreateDirectoryIfNotExistsAsync(outputDirectoryPath);
 
         var fileMetadata = await storageClient.GetFileMetadataAsync(baseDirectoryPath.GetFilePath(outputFileName));
@@ -285,12 +287,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             await targetFileClient.DeleteIfExistsAsync();
         }
     }
-
-    protected async Task<IStorageClient> CreateStorageClient(ExecutionContext context, IStorageConfiguration configuration)
-    {
-        return await _storageFactory.CreateStorageClient(context, configuration);
-    }
-
     private protected virtual bool ShouldSkipExport(ExportJobData exportJobData)
     {
         return false;
@@ -424,7 +420,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             configuration,
             asOfTime,
             OutputFormat: outputFormat);
-        var storageClient = await CreateStorageClient(context, configuration);
+        using var storageClient = await _storageFactory.CreateStorageClient(context, configuration);
         var baseDirectoryPath = await storageClient.GetBaseDirectoryPathAsync();
         var outputDirectoryName = await GetOutputDirectoryNameAsync(context, configuration, exportJobDataBase);
         var outputDirectoryPath = string.IsNullOrWhiteSpace(outputDirectoryName) ? baseDirectoryPath : baseDirectoryPath.GetSubDirectoryPath(outputDirectoryName);

@@ -1,8 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace CluedIn.Connector.FileStorage.Common;
-public interface IStorageClient
+public interface IStorageClient : IDisposable
 {
     Task<DirectoryPath> GetBaseDirectoryPathAsync();
 
