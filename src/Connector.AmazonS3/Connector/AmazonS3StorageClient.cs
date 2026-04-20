@@ -30,7 +30,7 @@ internal class AmazonS3StorageClient : IStorageClient
         _s3Client = GetS3Client(_configuration);
     }
 
-    public async Task CreateDirectoryIfNotExists(DirectoryPath directoryPath)
+    public async Task CreateDirectoryIfNotExistsAsync(DirectoryPath directoryPath)
     {
         // S3 doesn't require directory creation - directories are virtual.
         // We just verify the bucket is accessible.
@@ -50,7 +50,7 @@ internal class AmazonS3StorageClient : IStorageClient
         }
     }
 
-    public async Task DeleteDirectory(DirectoryPath directoryPath)
+    public async Task DeleteDirectoryAsync(DirectoryPath directoryPath)
     {
         var prefix = directoryPath.GetPrefix();
 
@@ -87,7 +87,7 @@ internal class AmazonS3StorageClient : IStorageClient
         } while (response?.IsTruncated == true);
     }
 
-    public async Task DeleteFile(FilePath filePath)
+    public async Task DeleteFileAsync(FilePath filePath)
     {
         var key = filePath.GetKey();
 
@@ -100,7 +100,7 @@ internal class AmazonS3StorageClient : IStorageClient
         }
     }
 
-    public async Task<bool> DirectoryExists(DirectoryPath directory)
+    public async Task<bool> DirectoryExistsAsync(DirectoryPath directory)
     {
         var prefix = directory.GetPrefix();
 
@@ -122,7 +122,7 @@ internal class AmazonS3StorageClient : IStorageClient
         }
     }
 
-    public async Task<bool> FileExists(FilePath filePath)
+    public async Task<bool> FileExistsAsync(FilePath filePath)
     {
         var key = filePath.GetKey();
 
@@ -137,17 +137,17 @@ internal class AmazonS3StorageClient : IStorageClient
         }
     }
 
-    public Task<DirectoryPath> GetBaseDirectoryPath()
+    public Task<DirectoryPath> GetBaseDirectoryPathAsync()
     {
         return Task.FromResult(new DirectoryPath(_configuration.RootDirectoryPath));
     }
 
-    public Task<IStorageFileClient> GetFileClient(FilePath filePath)
+    public Task<IStorageFileClient> GetFileClientAsync(FilePath filePath)
     {
         return Task.FromResult<IStorageFileClient>(new AmazonS3StorageFileClient(_s3Client, _configuration.BucketName, filePath));
     }
 
-    public async Task<FileMetadata> GetFileMetadata(FilePath filePath)
+    public async Task<FileMetadata> GetFileMetadataAsync(FilePath filePath)
     {
         var key = filePath.GetKey();
 
@@ -168,7 +168,7 @@ internal class AmazonS3StorageClient : IStorageClient
         }
     }
 
-    public async Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectory(DirectoryPath directoryPath)
+    public async Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectoryAsync(DirectoryPath directoryPath)
     {
         var prefix = directoryPath.GetPrefix();
 
@@ -200,7 +200,7 @@ internal class AmazonS3StorageClient : IStorageClient
         return result;
     }
 
-    public async Task SaveData(FilePath filePath, string content, string contentType)
+    public async Task SaveDataAsync(FilePath filePath, string content, string contentType)
     {
         await using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
         var putRequest = new PutObjectRequest
@@ -214,9 +214,9 @@ internal class AmazonS3StorageClient : IStorageClient
         await _s3Client.PutObjectAsync(putRequest);
     }
 
-    public async Task VerifyConnection()
+    public async Task VerifyConnectionAsync()
     {
-        await CreateDirectoryIfNotExists(await GetBaseDirectoryPath());
+        await CreateDirectoryIfNotExistsAsync(await GetBaseDirectoryPathAsync());
     }
 
     private static IAmazonS3 GetS3Client(AmazonS3ConnectorConfiguration configuration)
