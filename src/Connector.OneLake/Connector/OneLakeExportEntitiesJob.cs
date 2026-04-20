@@ -17,11 +17,11 @@ internal class OneLakeExportEntitiesJob : StorageExportEntitiesJobBase
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IOneLakeConfigurationConstants configurationConstants,
-        OneLakeStorageFactory storageStorageFactory,
+        OneLakeStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, configurationConstants, storageStorageFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
     {
-        _storageStorageFactory = storageStorageFactory ?? throw new ArgumentNullException(nameof(storageStorageFactory));
+        _storageStorageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
     }
 
     private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)

@@ -34,12 +34,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IStorageConfigurationConstants configurationConstants,
-        IStorageFactory storageStorageFactory,
+        IStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext, dateTimeOffsetProvider)
     {
         _streamRepository = streamRepository ?? throw new ArgumentNullException(nameof(streamRepository));
         _dataLakeConstants = configurationConstants ?? throw new ArgumentNullException(nameof(configurationConstants));
-        _storageFactory = storageStorageFactory ?? throw new ArgumentNullException(nameof(storageStorageFactory));
+        _storageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
