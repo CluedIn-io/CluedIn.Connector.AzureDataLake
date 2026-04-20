@@ -4,7 +4,10 @@ namespace CluedIn.Connector.FileStorage.Common;
 
 public record DirectoryPath(string Path)
 {
-    public FilePath GetFilePath(string fileName) => new FilePath(fileName, this);
+    internal string Path { get; init; } = Path.TrimEnd('/');
+
+    public FilePath GetFilePath(string fileName) => new (fileName, this);
+
     public DirectoryPath GetSubDirectoryPath(string directoryName)
     {
         if (string.IsNullOrWhiteSpace(directoryName))
@@ -12,6 +15,6 @@ public record DirectoryPath(string Path)
             throw new ArgumentException($"{nameof(directoryName)} cannot be null or empty.");
         }
 
-        return new DirectoryPath(this.Path + "/" + directoryName); //TODO: Path combine?
+        return new DirectoryPath($"{Path}/{directoryName}"); //TODO: Path combine?
     }
 }
