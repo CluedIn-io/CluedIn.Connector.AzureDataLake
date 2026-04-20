@@ -222,9 +222,9 @@ internal class DataLakeStorageClient : IStorageClient
         bool createIfNotExists)
     {
         var targetPath = directoryPath.Path;
-        var rootDirectoryPath = _storageConfiguration.RootDirectoryPath;
+        var rootDirectoryPath = await GetBaseDirectoryPathAsync();
 
-        if (!targetPath.StartsWith(rootDirectoryPath))
+        if (!targetPath.StartsWith(rootDirectoryPath.Path))
         {
             throw new ApplicationException("Unable to access files in the directory because the provided directory path is not under the root directory path specified in the job data.");
         }
