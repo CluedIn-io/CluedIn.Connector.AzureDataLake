@@ -10,9 +10,9 @@ internal class AzureDataLakeExportEntitiesJob : StorageExportEntitiesJobBase
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IAzureDataLakeConfigurationConstants configurationConstants,
-        AzureDataLakeStorageFactory storageStorageFactory,
+        AzureDataLakeStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, configurationConstants, storageStorageFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
     {
     }
 
