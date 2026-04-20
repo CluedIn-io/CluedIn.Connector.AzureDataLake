@@ -581,16 +581,16 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
 
                 var client = await _storageFactory.CreateStorageClient(executionContext, configurations);
-                var baseDirectory = await client.GetBaseDirectoryPath();
+                var baseDirectory = await client.GetBaseDirectoryPathAsync();
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
-                    await client.DeleteFile(new (filePathAndName, baseDirectory));
+                    await client.DeleteFileAsync(new (filePathAndName, baseDirectory));
                 }
                 else
                 {
                     var json = JsonConvert.SerializeObject(data, _immediateOutputSerializerSettings);
 
-                    await client.SaveData(new(filePathAndName, baseDirectory), json, JsonMimeType);
+                    await client.SaveDataAsync(new(filePathAndName, baseDirectory), json, JsonMimeType);
 
                 }
             }
@@ -698,7 +698,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration)
         {
             var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
-            await client.VerifyConnection();
+            await client.VerifyConnectionAsync();
             return SuccessfulConnectionVerification;
         }
 
@@ -805,8 +805,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
             await using var executionContext = _applicationContext.CreateExecutionContext(organizationId);
             var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
-            var baseDirectory = await client.GetBaseDirectoryPath();
-            await client.SaveData(new FilePath(fileName, baseDirectory), content, JsonMimeType);
+            var baseDirectory = await client.GetBaseDirectoryPathAsync();
+            await client.SaveDataAsync(new FilePath(fileName, baseDirectory), content, JsonMimeType);
         }
 
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)
@@ -827,8 +827,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
             var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId);
             var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
-            var baseDirectory = await client.GetBaseDirectoryPath();
-            var files = await client.GetFilesInDirectory(baseDirectory);
+            var baseDirectory = await client.GetBaseDirectoryPathAsync();
+            var files = await client.GetFilesInDirectoryAsync(baseDirectory);
             return files.Select(file => new StorageContainer()
             {
                 Name = file.Name,

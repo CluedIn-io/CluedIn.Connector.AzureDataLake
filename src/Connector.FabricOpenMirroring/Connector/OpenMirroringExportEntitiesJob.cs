@@ -80,8 +80,8 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
                 return;
             }
 
-            await client.CreateDirectoryIfNotExists(baseDirectoryPath);
-            var fileClient = await client.GetFileClient(baseDirectoryPath.GetFilePath("_partnerEvents.json"));
+            await client.CreateDirectoryIfNotExistsAsync(baseDirectoryPath);
+            var fileClient = await client.GetFileClientAsync(baseDirectoryPath.GetFilePath("_partnerEvents.json"));
 
             if (!await fileClient.ExistsAsync())
             {
@@ -116,7 +116,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         IStorageClient client,
         DirectoryPath outputDirectoryPath)
     {
-        await client.CreateDirectoryIfNotExists(outputDirectoryPath);
+        await client.CreateDirectoryIfNotExistsAsync(outputDirectoryPath);
         await EnsureMetadataJsonExists();
 
         async Task EnsureMetadataJsonExists()
@@ -133,7 +133,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
 
         async Task EnsureCsvMetadataJsonExists()
         {
-            var fileClient = await client.GetFileClient(outputDirectoryPath.GetFilePath("_metadata.json"));
+            var fileClient = await client.GetFileClientAsync(outputDirectoryPath.GetFilePath("_metadata.json"));
 
             if (IsInitialExport || !await fileClient.ExistsAsync())
             {
@@ -161,7 +161,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
 
         async Task EnsureGenericMetadataJsonExists()
         {
-            var fileClient = await client.GetFileClient(outputDirectoryPath.GetFilePath("_metadata.json"));
+            var fileClient = await client.GetFileClientAsync(outputDirectoryPath.GetFilePath("_metadata.json"));
 
             if (IsInitialExport || !await fileClient.ExistsAsync())
             {
@@ -207,7 +207,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         DirectoryPath outputDirectoryPath)
     {
         var client = await CreateStorageClient(context, configuration);
-        if (!await client.FileExists(outputDirectoryPath.GetFilePath("_metadata.json")))
+        if (!await client.FileExistsAsync(outputDirectoryPath.GetFilePath("_metadata.json")))
         {
             return null;
         }

@@ -25,28 +25,28 @@ internal class DataLakeStorageClient : IStorageClient
         _storageConfiguration = storageConfiguration;
     }
 
-    public async Task DeleteDirectory(DirectoryPath directoryPath)
+    public async Task DeleteDirectoryAsync(DirectoryPath directoryPath)
     {
         var directoryClient = await GetDirectoryClientAsync(directoryPath, createIfNotExists: false);
 
         await directoryClient?.DeleteIfExistsAsync();
     }
 
-    public async Task DeleteFile(FilePath filePath)
+    public async Task DeleteFileAsync(FilePath filePath)
     {
         var fileClient = await GetFileClientAsync(filePath, createDirectoryIfNotExists: false);
 
         await fileClient.DeleteIfExistsAsync();
     }
 
-    public async Task<bool> DirectoryExists(DirectoryPath directoryPath)
+    public async Task<bool> DirectoryExistsAsync(DirectoryPath directoryPath)
     {
         var directoryClient = await GetDirectoryClientAsync(directoryPath, createIfNotExists: false);
 
         return directoryClient != null;
     }
 
-    public async Task<bool> FileExists(FilePath filePath)
+    public async Task<bool> FileExistsAsync(FilePath filePath)
     {
         var fileClient = await GetFileClientAsync(filePath, createDirectoryIfNotExists: false);
         if (fileClient == null)
@@ -57,12 +57,12 @@ internal class DataLakeStorageClient : IStorageClient
         return await fileClient.ExistsAsync();
     }
 
-    public Task<DirectoryPath> GetBaseDirectoryPath()
+    public Task<DirectoryPath> GetBaseDirectoryPathAsync()
     {
         return Task.FromResult(new DirectoryPath(_storageConfiguration.RootDirectoryPath));
     }
 
-    public async Task<IStorageFileClient> GetFileClient(FilePath filePath)
+    public async Task<IStorageFileClient> GetFileClientAsync(FilePath filePath)
     {
         var directoryClient = await GetDirectoryClientAsync(filePath.DirectoryPath, createIfNotExists: false);
         if (directoryClient == null)
@@ -72,7 +72,7 @@ internal class DataLakeStorageClient : IStorageClient
         return new DataLakeStorageFileClient(filePath,directoryClient.GetFileClient(filePath.Name));
     }
 
-    public async Task<FileMetadata> GetFileMetadata(FilePath filePath)
+    public async Task<FileMetadata> GetFileMetadataAsync(FilePath filePath)
     {
         var fileClient = await GetFileClientAsync(filePath, createDirectoryIfNotExists: false);
 
@@ -91,7 +91,7 @@ internal class DataLakeStorageClient : IStorageClient
         return new FileMetadata(properties.Value.Metadata);
     }
 
-    public async Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectory(DirectoryPath directoryPath)
+    public async Task<IEnumerable<FullyQualifiedFilePath>> GetFilesInDirectoryAsync(DirectoryPath directoryPath)
     {
         var directoryClient = await GetDirectoryClientAsync(directoryPath, createIfNotExists: false);
 
@@ -127,7 +127,7 @@ internal class DataLakeStorageClient : IStorageClient
         return result;
     }
 
-    public async Task SaveData(FilePath filePath, string content, string contentType)
+    public async Task SaveDataAsync(FilePath filePath, string content, string contentType)
     {
         await using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
 
@@ -145,12 +145,12 @@ internal class DataLakeStorageClient : IStorageClient
         }
     }
 
-    public async Task VerifyConnection()
+    public async Task VerifyConnectionAsync()
     {
-        await EnsureDataLakeDirectoryExist(await GetBaseDirectoryPath());
+        await EnsureDataLakeDirectoryExist(await GetBaseDirectoryPathAsync());
     }
 
-    public async Task CreateDirectoryIfNotExists(DirectoryPath directoryPath)
+    public async Task CreateDirectoryIfNotExistsAsync(DirectoryPath directoryPath)
     {
         await EnsureDataLakeDirectoryExist(directoryPath);
     }
