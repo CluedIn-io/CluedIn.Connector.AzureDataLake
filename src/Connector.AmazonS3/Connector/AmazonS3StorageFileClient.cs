@@ -7,6 +7,7 @@ using Amazon.S3;
 using Amazon.S3.Model;
 
 using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 
 namespace CluedIn.Connector.AmazonS3.Connector;
 
@@ -63,7 +64,7 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
             throw new IOException($"The object '{_filePath.GetKey()}' already exists and overwrite is disabled.");
         }
 
-        return new BufferedStream(new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey()), BufferSize);
+        return new FileStorageBufferedWriteStream(new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey()), BufferSize);
     }
 
     public async Task RenameAsync(FilePath targetPath)

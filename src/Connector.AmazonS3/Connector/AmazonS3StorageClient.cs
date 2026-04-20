@@ -20,6 +20,7 @@ internal class AmazonS3StorageClient : IStorageClient
     private readonly ILogger<AmazonS3StorageClient> _logger;
     private readonly AmazonS3ConnectorConfiguration _configuration;
     private readonly IAmazonS3 _s3Client;
+    private bool _disposed;
 
     public AmazonS3StorageClient(
         ILogger<AmazonS3StorageClient> logger,
@@ -223,5 +224,24 @@ internal class AmazonS3StorageClient : IStorageClient
     {
         var region = RegionEndpoint.GetBySystemName(configuration.Region);
         return new AmazonS3Client(configuration.AccessKey, configuration.SecretKey, region);
+    }
+    public void Dispose()
+    {
+        Dispose(true);
+        // Prevent the GC from calling the finalizer
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            _s3Client?.Dispose();
+        }
+
+        _disposed = true;
     }
 }
