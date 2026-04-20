@@ -512,10 +512,24 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         return storageFactory;
     }
 
+    private static readonly object S3ClientLock = new();
+    private static readonly Dictionary<string, IAmazonS3> S3Clients = new();
+
     private protected virtual IAmazonS3 CreateS3Client(SetupContainerResult setupContainerResult)
     {
         var config = setupContainerResult.StorageConfiguration as AmazonS3ConnectorConfiguration;
-        return new AmazonS3Client(config.AccessKey, config.SecretKey, RegionEndpoint.GetBySystemName(config.Region));
+        var clientKey = $"{config.AccessKey}|{config.SecretKey}|{config.Region}";
+
+        lock (S3ClientLock)
+        {
+            if (!S3Clients.TryGetValue(clientKey, out var client))
+            {
+                client = new AmazonS3Client(config.AccessKey, config.SecretKey, RegionEndpoint.GetBySystemName(config.Region));
+                S3Clients[clientKey] = client;
+            }
+
+            return client;
+        }
     }
 
     private protected virtual string GetBucketName(SetupContainerResult setupContainerResult)
