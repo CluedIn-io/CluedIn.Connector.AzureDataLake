@@ -75,7 +75,7 @@ steps:
         ./build/integration-test.ps1 -Action SetUp
         ./build/integration-test.ps1 -Action TearDown
   - task: PublishPipelineArtifact@0
-    displayName: 'Create Pipeline Artifact 22'
+    displayName: 'Create Pipeline Debug Artifact'
     inputs:
-      artifactName: 'debugTest'
+      artifactName: 'debug'
       targetPath: $(System.DefaultWorkingDirectory)/test/integration/Connector.AmazonS3.Tests.Integration/TestResults
