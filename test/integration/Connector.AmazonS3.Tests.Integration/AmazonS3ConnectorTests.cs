@@ -503,6 +503,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     }
 
     protected override Mock<AmazonS3StorageFactory> CreateStorageFactoryMock(
+        ApplicationContext applicationContext,
         WindsorContainer container,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {

@@ -506,6 +506,19 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             });
     }
 
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithWorkspaceLevelPrivateLinkCanWrite()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultEscaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(OneLakeConfigurationConstants.UseWorkspaceLevelPrivateLink), true);
+            });
+    }
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
         var logger = new Mock<ILogger<OneLakeStorageClient>>();
@@ -584,13 +597,15 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     }
 
     protected override Mock<OneLakeStorageFactory> CreateStorageFactoryMock(
+        ApplicationContext applicationContext,
         WindsorContainer container,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
         //container.Register(Component.For<OneLakeFactory>().ImplementedBy<OneLakeFactory>().LifestyleSingleton());
         var storageFactory = new Mock<OneLakeStorageFactory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(
+                new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, applicationContext, mockDateTimeOffsetProvider.Object, data as OneLakeConnectorConfiguration)));
         return storageFactory;
     }
 

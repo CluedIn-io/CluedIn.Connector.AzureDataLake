@@ -34,6 +34,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
     public string AccountName => "onelake";
 
     public string StorageUri => $"https://{AccountName}.dfs.fabric.microsoft.com";
+    public virtual bool UseWorkspaceLevelPrivateLink => GetConfigurationValue(OneLakeConfigurationConstants.UseWorkspaceLevelPrivateLink) as bool? ?? false;
 
     protected override void AddToHashCode(HashCode hash)
     {
@@ -46,6 +47,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
         hash.Add(TenantId);
         hash.Add(ShouldLoadToTable);
         hash.Add(TableName);
+        hash.Add(UseWorkspaceLevelPrivateLink);
 
         base.AddToHashCode(hash);
     }
@@ -67,6 +69,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
             TenantId == other.TenantId &&
             ShouldLoadToTable == other.ShouldLoadToTable &&
             TableName == other.TableName &&
+            UseWorkspaceLevelPrivateLink == other.UseWorkspaceLevelPrivateLink &&
             base.Equals(other);
     }
 

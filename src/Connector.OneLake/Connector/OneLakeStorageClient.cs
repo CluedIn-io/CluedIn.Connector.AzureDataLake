@@ -8,21 +8,30 @@ using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
 
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
-
+using CluedIn.Core;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
 internal class OneLakeStorageClient : DataLakeStorageClient
 {
+    private readonly ApplicationContext _applicationContext;
+    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     private readonly OneLakeConnectorConfiguration _configuration;
 
     public ILogger<OneLakeStorageClient> Logger { get; }
 
-    public OneLakeStorageClient(ILogger<OneLakeStorageClient> logger, OneLakeConnectorConfiguration configuration): base(logger, configuration)
+    public OneLakeStorageClient(
+        ILogger<OneLakeStorageClient> logger,
+        ApplicationContext applicationContext,
+        IDateTimeOffsetProvider dateTimeOffsetProvider,
+        OneLakeConnectorConfiguration configuration): base(logger, configuration)
     {
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
+        _dateTimeOffsetProvider = dateTimeOffsetProvider;
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
@@ -33,13 +42,7 @@ internal class OneLakeStorageClient : DataLakeStorageClient
             return;
         }
 
-        var sharedKeyCredential = new ClientSecretCredential(_configuration.TenantId, _configuration.ClientId, _configuration.ClientSecret);
-        var tokenResult = await sharedKeyCredential.GetTokenAsync(
-        new TokenRequestContext(
-        [
-            "https://api.fabric.microsoft.com/.default"
-        ]));
-        var token = tokenResult.Token;
+        var token = await GetToken();
 
         var httpClient = new HttpClient();
 
@@ -57,6 +60,54 @@ internal class OneLakeStorageClient : DataLakeStorageClient
 
         var filePath = $"{_configuration.ItemFolder}/{sourceFileName}";
         await LoadTableAsync(httpClient, token, workspace.Id, lakehouse.Id.Value, targetTableName, filePath);
+    }
+
+    protected override async Task<Uri> GetDataLakeServiceUriAsync(IDataLakeStorageConfiguration sharedKeyCredential)
+    {
+        if (_configuration.UseWorkspaceLevelPrivateLink)
+        {
+            var workspaceId = await GetWorkspaceIdAsync();
+            if (workspaceId == null)
+            {
+                throw new InvalidOperationException($"Failed to obtain workspace id from workspace name {_configuration.WorkspaceName}");
+            }
+
+            var workspaceIdString = workspaceId.Value.ToString("N");
+            var url = $"https://{workspaceIdString}.z{workspaceIdString[..2]}.dfs.fabric.microsoft.com";
+            Logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, _configuration.WorkspaceName);
+            return new Uri(url);
+        }
+        return await base.GetDataLakeServiceUriAsync(sharedKeyCredential);
+    }
+
+    internal async Task<Guid?> GetWorkspaceIdAsync()
+    {
+        return await _applicationContext.System.Cache.GetItemAsync(
+            $"OneLakeWorkspaceId_{_configuration.TenantId}_{_configuration.ClientId}_{_configuration.WorkspaceName}",
+            GetWorkspaceIdFromServiceAsync,
+            cachePolicy: policy => policy.WithAbsoluteExpiration(_dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(30))
+        );
+
+        async Task<Guid?> GetWorkspaceIdFromServiceAsync()
+        {
+            var token = await GetToken();
+            var httpClient = new HttpClient();
+            var workspace = await GetWorkspaceAsync(httpClient, token, _configuration.WorkspaceName);
+            return workspace?.Id;
+        }
+
+    }
+
+    private async Task<string> GetToken()
+    {
+        var sharedKeyCredential = new ClientSecretCredential(_configuration.TenantId, _configuration.ClientId, _configuration.ClientSecret);
+        var tokenResult = await sharedKeyCredential.GetTokenAsync(
+            new TokenRequestContext(
+            [
+                "https://api.fabric.microsoft.com/.default"
+            ]));
+        var token = tokenResult.Token;
+        return token;
     }
 
     private async Task LoadTableAsync(HttpClient httpClient, string token, Guid workspaceId, Guid lakehouseId, string tableName, string filePath)

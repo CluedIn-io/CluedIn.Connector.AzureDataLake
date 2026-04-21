@@ -19,6 +19,7 @@ public class OneLakeConfigurationConstants : StorageConfigurationConstants, IOne
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
     public const string ShouldLoadToTable = nameof(ShouldLoadToTable);
+    public const string UseWorkspaceLevelPrivateLink = nameof(UseWorkspaceLevelPrivateLink);
     public const string TableName = nameof(TableName);
 
     public OneLakeConfigurationConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,

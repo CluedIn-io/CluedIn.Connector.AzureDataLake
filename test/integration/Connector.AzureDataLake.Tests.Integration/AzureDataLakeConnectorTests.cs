@@ -632,6 +632,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     }
 
     protected override Mock<AzureDataLakeStorageFactory> CreateStorageFactoryMock(
+        ApplicationContext applicationContext,
         WindsorContainer container,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {

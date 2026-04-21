@@ -523,6 +523,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     }
 
     protected override Mock<OpenMirroringStorageFactory> CreateStorageFactoryMock(
+        ApplicationContext applicationContext,
         WindsorContainer container,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
