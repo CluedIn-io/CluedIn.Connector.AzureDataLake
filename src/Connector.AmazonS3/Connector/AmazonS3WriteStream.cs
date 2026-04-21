@@ -88,6 +88,7 @@ internal class AmazonS3WriteStream : Stream
 
     public override void Close()
     {
+        base.Close();
         CompleteUploadAsync().GetAwaiter().GetResult();
     }
 
