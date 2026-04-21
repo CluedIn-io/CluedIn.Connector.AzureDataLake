@@ -68,14 +68,3 @@ steps:
       publishCodeCoverage: true
       useGitVersionDotNetTool: true
       publishToDevFeed: true
-  - task: PowerShell@2
-    inputs:
-      targetType: 'inline'
-      script: |
-        ./build/integration-test.ps1 -Action SetUp
-        ./build/integration-test.ps1 -Action TearDown
-  - task: PublishPipelineArtifact@0
-    displayName: 'Create Pipeline Debug Artifact'
-    inputs:
-      artifactName: 'debug'
-      targetPath: $(System.DefaultWorkingDirectory)/test/integration/Connector.AmazonS3.Tests.Integration/TestResults
