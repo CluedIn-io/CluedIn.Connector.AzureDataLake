@@ -86,9 +86,17 @@ internal class AmazonS3WriteStream : Stream
         FlushAsync().GetAwaiter().GetResult();
     }
 
+    public override void Close()
+    {
+        CompleteUploadAsync().GetAwaiter().GetResult();
+    }
+
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
-        await CompleteUploadAsync();
+        if (_buffer.Length > 0)
+        {
+            await UploadPartAsync();
+        }
     }
 
     protected override void Dispose(bool disposing)
@@ -101,8 +109,11 @@ internal class AmazonS3WriteStream : Stream
             }
             finally
             {
-                _buffer?.Dispose();
-                _buffer = null;
+                if (_buffer != null)
+                {
+                    _buffer?.Dispose();
+                    _buffer = null;
+                }
             }
         }
 
@@ -202,15 +213,7 @@ internal class AmazonS3WriteStream : Stream
         // No multipart upload was started – use simple PutObject for small files.
         if (_uploadId == null)
         {
-            _buffer.Position = 0;
-            var putRequest = new PutObjectRequest
-            {
-                BucketName = _bucketName,
-                Key = _key,
-                InputStream = _buffer,
-            };
-
-            await _s3Client.PutObjectAsync(putRequest);
+            await UploadSinglePartFileAsync();
             return;
         }
 
@@ -222,21 +225,39 @@ internal class AmazonS3WriteStream : Stream
 
         try
         {
-            var completeRequest = new CompleteMultipartUploadRequest
-            {
-                BucketName = _bucketName,
-                Key = _key,
-                UploadId = _uploadId,
-                PartETags = _partETags,
-            };
-
-            await _s3Client.CompleteMultipartUploadAsync(completeRequest);
+            await CompleteMultiPartUploadAsync();
         }
         catch
         {
             await AbortMultipartUploadAsync();
             throw;
         }
+    }
+
+    private async Task CompleteMultiPartUploadAsync()
+    {
+        var completeRequest = new CompleteMultipartUploadRequest
+        {
+            BucketName = _bucketName,
+            Key = _key,
+            UploadId = _uploadId,
+            PartETags = _partETags,
+        };
+
+        await _s3Client.CompleteMultipartUploadAsync(completeRequest);
+    }
+
+    private async Task UploadSinglePartFileAsync()
+    {
+        _buffer.Position = 0;
+        var putRequest = new PutObjectRequest
+        {
+            BucketName = _bucketName,
+            Key = _key,
+            InputStream = _buffer,
+        };
+
+        await _s3Client.PutObjectAsync(putRequest);
     }
 
     private async Task AbortMultipartUploadAsync()
