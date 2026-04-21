@@ -69,7 +69,6 @@ function Run-Setup() {
 	Get-Location
 	dotnet test --blame-hang-timeout 2m --blame --blame-hang-dump-type full --diag diagnosticlog.txt ./test/integration/Connector.AmazonS3.Tests.Integration/Connector.AmazonS3.Tests.Integration.csproj --configuration Release --no-restore --no-build
 	Get-Content "diagnosticlog.txt" | Write-Host
-	throw
 }
 
 function Run-TearDown() {
