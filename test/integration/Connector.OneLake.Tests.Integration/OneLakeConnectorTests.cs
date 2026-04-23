@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -139,6 +138,23 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         Assert.NotNull(result);
         Assert.False(result.Success);
         Assert.Equal(OneLakeConnector.WorkspaceNotFoundErrorMessageFormat.FormatWith("1"), result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenItemNotFound_ReturnItemNotFoundErrorMessage()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConstants.ItemName)] = "NonExistent";
+        var jobData = new OneLakeConnectorJobData(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OneLakeConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(jobData.ItemName, jobData.ItemType), result.ErrorMessage);
     }
 
     [Theory]
