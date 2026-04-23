@@ -33,14 +33,14 @@ public class OneLakeClient : DataLakeClient
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
+    protected override async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IDataLakeJobData configuration)
     {
         var casted = CastJobData<OneLakeConnectorJobData>(configuration);
 
         var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
 
         var dataLakeServiceClient = new DataLakeServiceClient(
-            GetDataLakeServiceUriAsync(casted).GetAwaiter().GetResult(),
+            await GetDataLakeServiceUriAsync(casted),
             sharedKeyCredential);
         return dataLakeServiceClient;
     }
