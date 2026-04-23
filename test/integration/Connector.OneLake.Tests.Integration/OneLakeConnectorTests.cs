@@ -538,7 +538,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             executeExport);
     }
 
-    [Fact(Skip = "Seems to hang in build server")]
+    [Fact]
     public async Task VerifyStoreData_Sync_WithWorkspaceLevelPrivateLinkCanWrite()
     {
         await VerifyStoreData_Sync_WithStreamCache(

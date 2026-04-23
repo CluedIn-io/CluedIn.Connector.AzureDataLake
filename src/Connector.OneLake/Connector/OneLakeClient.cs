@@ -40,7 +40,11 @@ public class OneLakeClient : DataLakeClient
         var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
 
         var dataLakeServiceClient = new DataLakeServiceClient(
-            GetDataLakeServiceUriAsync(casted).GetAwaiter().GetResult(),
+            // Task.Run is used to avoid deadlocks when blocking on an async method from a synchronous context.
+            // Without it, .GetAwaiter().GetResult() can deadlock if a synchronization context is present,
+            // because the async continuations inside GetDataLakeServiceUriAsync would try to resume on the
+            // same thread that is already blocked waiting for the result.
+            Task.Run(() => GetDataLakeServiceUriAsync(casted)).GetAwaiter().GetResult(),
             sharedKeyCredential);
         return dataLakeServiceClient;
     }
