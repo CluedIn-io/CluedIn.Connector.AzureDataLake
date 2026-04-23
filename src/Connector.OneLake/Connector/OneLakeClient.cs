@@ -76,7 +76,7 @@ public class OneLakeClient : DataLakeClient
         async Task<Guid?> GetWorkspaceIdFromServiceAsync()
         {
             var token = await GetToken(configuration);
-            var httpClient = new HttpClient();
+            using var httpClient = new HttpClient();
             var workspace = await GetWorkspaceAsync(httpClient, token, configuration.WorkspaceName);
             return workspace?.Id;
         }
