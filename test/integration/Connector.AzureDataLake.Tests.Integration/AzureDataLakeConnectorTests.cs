@@ -640,6 +640,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     }
 
     protected override Mock<AzureDataLakeConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<IAzureDataLakeConstants> constantsMock,
         Mock<AzureDataLakeJobDataFactory> jobDataFactory)
