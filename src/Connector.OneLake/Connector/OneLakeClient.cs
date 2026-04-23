@@ -36,7 +36,6 @@ public class OneLakeClient : DataLakeClient
     protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
     {
         var casted = CastJobData<OneLakeConnectorJobData>(configuration);
-        var accountName = "onelake";
 
         var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
 
