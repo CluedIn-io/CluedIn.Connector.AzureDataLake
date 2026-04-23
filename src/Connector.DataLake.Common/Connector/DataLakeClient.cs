@@ -152,12 +152,11 @@ namespace CluedIn.Connector.DataLake.Common.Connector
         {
             var directory = configuration.RootDirectoryPath;
             var directoryClient = fileSystemClient.GetDirectoryClient(directory);
-            if (string.IsNullOrWhiteSpace(subDirectory))
+            if (!string.IsNullOrWhiteSpace(subDirectory))
             {
-                return directoryClient;
+                directoryClient = directoryClient.GetSubDirectoryClient(subDirectory);
             }
 
-            directoryClient = directoryClient.GetSubDirectoryClient(subDirectory);
 
             if (ensureExists && !await directoryClient.ExistsAsync())
             {
