@@ -50,7 +50,7 @@ public class OpenMirroringClient : DataLakeClient
         return await fileSystemClient.ExistsAsync();
     }
 
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
+    protected override async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IDataLakeJobData configuration)
     {
         var casted = CastJobData<OpenMirroringConnectorJobData>(configuration);
         var accountName = "onelake";

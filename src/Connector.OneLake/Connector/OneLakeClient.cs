@@ -14,31 +14,84 @@ using System.Net.Http.Json;
 using System.Collections.Generic;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging;
+using CluedIn.Core;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
 public class OneLakeClient : DataLakeClient
 {
+    private readonly ApplicationContext _applicationContext;
+    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     public ILogger<OneLakeClient> Logger { get; }
 
-    public OneLakeClient(ILogger<OneLakeClient> logger)
+    public OneLakeClient(ILogger<OneLakeClient> logger,
+        ApplicationContext applicationContext,
+        IDateTimeOffsetProvider dateTimeOffsetProvider)
     {
+        _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
+        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
+    protected override async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IDataLakeJobData configuration)
     {
         var casted = CastJobData<OneLakeConnectorJobData>(configuration);
-        var accountName = "onelake";
 
         var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
 
-        var dfsUri = $"https://{accountName}.dfs.fabric.microsoft.com";
-
         var dataLakeServiceClient = new DataLakeServiceClient(
-            new Uri(dfsUri),
+            await GetDataLakeServiceUriAsync(casted),
             sharedKeyCredential);
         return dataLakeServiceClient;
+    }
+
+    private async Task<Uri> GetDataLakeServiceUriAsync(OneLakeConnectorJobData configuration)
+    {
+        if (configuration.UseWorkspaceLevelPrivateLink)
+        {
+            var workspaceId = await GetWorkspaceIdAsync(configuration);
+            if (workspaceId == null)
+            {
+                throw new InvalidOperationException($"Failed to obtain workspace id from workspace name {configuration.WorkspaceName}");
+            }
+
+            var workspaceIdString = workspaceId.Value.ToString("N");
+            var url = $"https://{workspaceIdString}.z{workspaceIdString[..2]}.dfs.fabric.microsoft.com";
+            Logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            return new Uri(url);
+        }
+
+        var accountName = "onelake";
+        return new Uri($"https://{accountName}.dfs.fabric.microsoft.com");
+    }
+
+    internal async Task<Guid?> GetWorkspaceIdAsync(OneLakeConnectorJobData configuration)
+    {
+        return await _applicationContext.System.Cache.GetItemAsync(
+            $"OneLakeWorkspaceId_{configuration.TenantId}_{configuration.ClientId}_{configuration.WorkspaceName}",
+            GetWorkspaceIdFromServiceAsync,
+            cachePolicy: policy => policy.WithAbsoluteExpiration(_dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(30))
+        );
+
+        async Task<Guid?> GetWorkspaceIdFromServiceAsync()
+        {
+            var token = await GetToken(configuration);
+            using var httpClient = new HttpClient();
+            var workspace = await GetWorkspaceAsync(httpClient, token, configuration.WorkspaceName);
+            return workspace?.Id;
+        }
+
+    }
+    private async Task<string> GetToken(OneLakeConnectorJobData configuration)
+    {
+        var sharedKeyCredential = new ClientSecretCredential(configuration.TenantId, configuration.ClientId, configuration.ClientSecret);
+        var tokenResult = await sharedKeyCredential.GetTokenAsync(
+            new TokenRequestContext(
+            [
+                "https://api.fabric.microsoft.com/.default"
+            ]));
+        var token = tokenResult.Token;
+        return token;
     }
 
     internal async Task LoadToTableAsync(string sourceFileName, string targetTableName, IDataLakeJobData configuration)
@@ -49,13 +102,7 @@ public class OneLakeClient : DataLakeClient
             return;
         }
 
-        var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
-        var tokenResult = await sharedKeyCredential.GetTokenAsync(
-        new TokenRequestContext(new string[]
-        {
-            "https://api.fabric.microsoft.com/.default"
-        }));
-        var token = tokenResult.Token;
+        var token = await GetToken(casted);
 
         var httpClient = new HttpClient();
 
