@@ -550,6 +550,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     }
 
     protected override Mock<OpenMirroringConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<IOpenMirroringConstants> constantsMock,
         Mock<OpenMirroringJobDataFactory> jobDataFactory)
