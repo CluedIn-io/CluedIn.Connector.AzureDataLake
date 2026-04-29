@@ -18,8 +18,6 @@ using CluedIn.Core;
 
 using Microsoft.Extensions.Logging;
 
-using Serilog.Core;
-
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
 public class OpenMirroringClient : DataLakeClient
@@ -184,7 +182,7 @@ public class OpenMirroringClient : DataLakeClient
     private async Task StopMirroringAsync(OpenMirroringConnectorJobData configuration, HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
         _logger.LogDebug("Begin stop mirroring of Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseId, workspaceId);
-        var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/startMirroring";
+        var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/stopMirroring";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri(url);

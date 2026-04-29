@@ -42,6 +42,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
         hash.Add(TenantId);
         hash.Add(ShouldCreateMirroredDatabase);
         hash.Add(TableName);
+        hash.Add(UseWorkspaceLevelPrivateLink);
 
         base.AddToHashCode(hash);
     }
@@ -61,6 +62,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
             TenantId == other.TenantId &&
             ShouldCreateMirroredDatabase == other.ShouldCreateMirroredDatabase &&
             TableName == other.TableName &&
+            UseWorkspaceLevelPrivateLink == other.UseWorkspaceLevelPrivateLink &&
             base.Equals(other);
     }
 
