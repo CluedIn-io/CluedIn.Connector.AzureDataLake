@@ -72,12 +72,37 @@ internal class OneLakeStorageClient : DataLakeStorageClient
                 throw new InvalidOperationException($"Failed to obtain workspace id from workspace name {_configuration.WorkspaceName}");
             }
 
-            var workspaceIdString = workspaceId.Value.ToString("N");
-            var url = $"https://{workspaceIdString}.z{workspaceIdString[..2]}.dfs.fabric.microsoft.com";
+            var url = GetStorageUrl(workspaceId.Value);
             Logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, _configuration.WorkspaceName);
             return new Uri(url);
         }
         return await base.GetDataLakeServiceUriAsync(sharedKeyCredential);
+    }
+
+    private string GetStorageUrl(Guid workspaceId)
+    {
+        if (_configuration.UseWorkspaceLevelPrivateLink)
+        {
+            return $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.dfs.fabric.microsoft.com";
+        }
+
+        return "https://onelake.dfs.fabric.microsoft.com";
+    }
+
+    private string GetWorkspaceSpecificPrefix(Guid workspaceId)
+    {
+        var workspaceIdString = workspaceId.ToString("N");
+        return $"{workspaceIdString}.z{workspaceIdString[..2]}";
+    }
+
+    private string GetApiUrl(Guid workspaceId)
+    {
+        if (_configuration.UseWorkspaceLevelPrivateLink)
+        {
+            return $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.w.api.fabric.microsoft.com";
+        }
+
+        return "https://api.fabric.microsoft.com";
     }
 
     internal async Task<Guid?> GetWorkspaceIdAsync()
@@ -115,7 +140,7 @@ internal class OneLakeStorageClient : DataLakeStorageClient
         Logger.LogDebug("Begin loading data from file {File} to table {TableName}.", filePath, tableName);
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
-        request.RequestUri = new Uri($"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables/{tableName}/load");
+        request.RequestUri = new Uri($"{GetApiUrl(workspaceId)}/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables/{tableName}/load");
         request.Headers.Add("Authorization", $"Bearer {token}");
         request.Content = new StringContent($$"""
             {
@@ -153,7 +178,7 @@ internal class OneLakeStorageClient : DataLakeStorageClient
 
         async IAsyncEnumerable<Lakehouse> ListLakehousesAsync(Guid workspaceId)
         {
-            var url = $"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses";
+            var url = $"{GetApiUrl(workspaceId)}/v1/workspaces/{workspaceId}/lakehouses";
             do
             {
                 var request = new HttpRequestMessage();
