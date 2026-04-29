@@ -1,20 +1,20 @@
 using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Security.Policy;
 using System.Threading.Tasks;
 
+using Azure.Core;
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
-
-
-using Azure.Core;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Collections.Generic;
-using System.Net.Http.Headers;
-using Microsoft.Extensions.Logging;
 using CluedIn.Core;
+
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
@@ -56,7 +56,6 @@ public class OneLakeClient : DataLakeClient
             }
 
             var url = GetStorageUrl(configuration, workspaceId.Value);
-            Logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
             return new Uri(url);
         }
 
@@ -67,7 +66,9 @@ public class OneLakeClient : DataLakeClient
     {
         if (configuration.UseWorkspaceLevelPrivateLink)
         {
-            return $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.dfs.fabric.microsoft.com";
+            var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.dfs.fabric.microsoft.com";
+            Logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            return url;
         }
 
         return "https://onelake.dfs.fabric.microsoft.com";
@@ -83,7 +84,9 @@ public class OneLakeClient : DataLakeClient
     {
         if (configuration.UseWorkspaceLevelPrivateLink)
         {
-            return $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.w.api.fabric.microsoft.com";
+            var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.w.api.fabric.microsoft.com";
+            Logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            return url;
         }
 
         return "https://api.fabric.microsoft.com";

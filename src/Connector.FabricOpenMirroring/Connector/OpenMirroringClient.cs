@@ -85,12 +85,13 @@ public class OpenMirroringClient : DataLakeClient
         var accountName = "onelake";
         return new Uri($"https://{accountName}.dfs.fabric.microsoft.com");
     }
-
     private string GetStorageUrl(OpenMirroringConnectorJobData configuration, Guid workspaceId)
     {
         if (configuration.UseWorkspaceLevelPrivateLink)
         {
-            return $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.dfs.fabric.microsoft.com";
+            var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.dfs.fabric.microsoft.com";
+            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            return url;
         }
 
         return "https://onelake.dfs.fabric.microsoft.com";
@@ -106,7 +107,9 @@ public class OpenMirroringClient : DataLakeClient
     {
         if (configuration.UseWorkspaceLevelPrivateLink)
         {
-            return $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.w.api.fabric.microsoft.com";
+            var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.w.api.fabric.microsoft.com";
+            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            return url;
         }
 
         return "https://api.fabric.microsoft.com";
