@@ -55,14 +55,38 @@ public class OneLakeClient : DataLakeClient
                 throw new InvalidOperationException($"Failed to obtain workspace id from workspace name {configuration.WorkspaceName}");
             }
 
-            var workspaceIdString = workspaceId.Value.ToString("N");
-            var url = $"https://{workspaceIdString}.z{workspaceIdString[..2]}.dfs.fabric.microsoft.com";
+            var url = GetStorageUrl(configuration, workspaceId.Value);
             Logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
             return new Uri(url);
         }
 
         var accountName = "onelake";
         return new Uri($"https://{accountName}.dfs.fabric.microsoft.com");
+    }
+    private string GetStorageUrl(OneLakeConnectorJobData configuration, Guid workspaceId)
+    {
+        if (configuration.UseWorkspaceLevelPrivateLink)
+        {
+            return $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.dfs.fabric.microsoft.com";
+        }
+
+        return "https://onelake.dfs.fabric.microsoft.com";
+    }
+
+    private string GetWorkspaceSpecificPrefix(Guid workspaceId)
+    {
+        var workspaceIdString = workspaceId.ToString("N");
+        return $"{workspaceIdString}.z{workspaceIdString[..2]}";
+    }
+
+    private string GetApiUrl(OneLakeConnectorJobData configuration, Guid workspaceId)
+    {
+        if (configuration.UseWorkspaceLevelPrivateLink)
+        {
+            return $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.w.api.fabric.microsoft.com";
+        }
+
+        return "https://api.fabric.microsoft.com";
     }
 
     internal async Task<Guid?> GetWorkspaceIdAsync(OneLakeConnectorJobData configuration)
@@ -112,22 +136,22 @@ public class OneLakeClient : DataLakeClient
             throw new ApplicationException($"Workspace {casted.WorkspaceName}is not found.");
         }
 
-        var lakehouse = await GetLakehouseAsync(httpClient, token, workspace.Id, casted.ItemName);
+        var lakehouse = await GetLakehouseAsync(casted, httpClient, token, workspace.Id, casted.ItemName);
         if (lakehouse == null)
         {
             throw new ApplicationException($"Lakehouse {casted.ItemName} is not found in workspace {workspace.Id}.");
         }
 
         var filePath = $"{casted.ItemFolder}/{sourceFileName}";
-        await LoadTableAsync(httpClient, token, workspace.Id, lakehouse.Id.Value, targetTableName, filePath);
+        await LoadTableAsync(casted, httpClient, token, workspace.Id, lakehouse.Id.Value, targetTableName, filePath);
     }
 
-    private async Task LoadTableAsync(HttpClient httpClient, string token, Guid workspaceId, Guid lakehouseId, string tableName, string filePath)
+    private async Task LoadTableAsync(OneLakeConnectorJobData configuration, HttpClient httpClient, string token, Guid workspaceId, Guid lakehouseId, string tableName, string filePath)
     {
         Logger.LogDebug("Begin loading data from file {File} to table {TableName}.", filePath, tableName);
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
-        request.RequestUri = new Uri($"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables/{tableName}/load");
+        request.RequestUri = new Uri($"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables/{tableName}/load");
         request.Headers.Add("Authorization", $"Bearer {token}");
         request.Content = new StringContent($$"""
             {
@@ -148,7 +172,7 @@ public class OneLakeClient : DataLakeClient
         Logger.LogDebug("End loading data from file {File} to table {TableName}.", filePath, tableName);
     }
 
-    private async Task<Lakehouse?> GetLakehouseAsync(HttpClient httpClient, string token, Guid workspaceId, string lakehouseName)
+    private async Task<Lakehouse?> GetLakehouseAsync(OneLakeConnectorJobData configuration, HttpClient httpClient, string token, Guid workspaceId, string lakehouseName)
     {
         Logger.LogDebug("Begin getting lakehouse from name {LakehouseName}.", lakehouseName);
         await foreach (var lakehouse in ListLakehousesAsync(workspaceId))
@@ -165,7 +189,7 @@ public class OneLakeClient : DataLakeClient
 
         async IAsyncEnumerable<Lakehouse> ListLakehousesAsync(Guid workspaceId)
         {
-            var url = $"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses";
+            var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/lakehouses";
             do
             {
                 var request = new HttpRequestMessage();

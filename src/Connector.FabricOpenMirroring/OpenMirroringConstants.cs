@@ -18,6 +18,7 @@ public class OpenMirroringConstants : DataLakeConstants, IOpenMirroringConstants
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
     public const string ShouldCreateMirroredDatabase = nameof(ShouldCreateMirroredDatabase);
+    public const string UseWorkspaceLevelPrivateLink = nameof(UseWorkspaceLevelPrivateLink);
     public const string TableName = nameof(TableName);
 
     public OpenMirroringConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
