@@ -118,7 +118,7 @@ public class OpenMirroringClient : DataLakeClient
     internal async Task<Guid?> GetWorkspaceIdAsync(OpenMirroringConnectorJobData configuration)
     {
         return await _applicationContext.System.Cache.GetItemAsync(
-            $"OneLakeWorkspaceId_{configuration.TenantId}_{configuration.ClientId}_{configuration.WorkspaceName}",
+            $"OpenMirroringWorkspaceId_{configuration.TenantId}_{configuration.ClientId}_{configuration.WorkspaceName}",
             GetWorkspaceIdFromServiceAsync,
             cachePolicy: policy => policy.WithAbsoluteExpiration(_dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(30))
         );
