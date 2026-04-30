@@ -153,7 +153,7 @@ public class OpenMirroringClient : DataLakeClient
 
         var token = await GetToken(jobData);
 
-        var httpClient = new HttpClient();
+        using var httpClient = new HttpClient();
 
         var workspace = await GetWorkspaceAsync(httpClient, token, jobData.WorkspaceName);
         if (workspace == null)
