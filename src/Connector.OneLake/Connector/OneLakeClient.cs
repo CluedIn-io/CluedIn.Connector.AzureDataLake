@@ -135,7 +135,7 @@ public class OneLakeClient : DataLakeClient
         var workspace = await GetWorkspaceAsync(httpClient, token, casted.WorkspaceName);
         if (workspace == null)
         {
-            throw new ApplicationException($"Workspace {casted.WorkspaceName}is not found.");
+            throw new ApplicationException($"Workspace {casted.WorkspaceName} is not found.");
         }
 
         var lakehouse = await GetLakehouseAsync(casted, httpClient, token, workspace.Id, casted.ItemName);
