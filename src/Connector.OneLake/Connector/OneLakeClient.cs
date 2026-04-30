@@ -130,7 +130,7 @@ public class OneLakeClient : DataLakeClient
 
         var token = await GetToken(casted);
 
-        var httpClient = new HttpClient();
+        using var httpClient = new HttpClient();
 
         var workspace = await GetWorkspaceAsync(httpClient, token, casted.WorkspaceName);
         if (workspace == null)
