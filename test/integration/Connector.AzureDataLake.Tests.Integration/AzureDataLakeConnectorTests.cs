@@ -23,7 +23,6 @@ using Microsoft.Extensions.Logging;
 using Moq;
 
 using Xunit;
-using Xunit.Abstractions;
 
 using Encoding = System.Text.Encoding;
 
@@ -271,7 +270,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     }
 
     [Fact]
-    public async void VerifyStoreData_Sync_WithoutStreamCache()
+    public async Task VerifyStoreData_Sync_WithoutStreamCache()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
         var jobData = new AzureDataLakeConnectorJobData(configuration);
