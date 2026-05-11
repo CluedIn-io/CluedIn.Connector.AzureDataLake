@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 
 using Microsoft.Data.SqlClient;
 

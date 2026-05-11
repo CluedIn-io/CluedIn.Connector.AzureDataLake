@@ -9,8 +9,8 @@ using Azure.Core;
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
 using Microsoft.Extensions.Logging;

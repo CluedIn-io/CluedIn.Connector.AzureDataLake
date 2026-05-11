@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31912.275
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11612.150
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake", "src\Connector.AzureDataLake\Connector.AzureDataLake.csproj", "{98AD320B-8415-4605-98A0-3F479F05CA95}"
 EndProject
@@ -69,6 +69,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.DataLake.Common.T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FabricOpenMirroring.Tests.Integration", "test\integration\Connector.FabricOpenMirroring.Tests.Integration\Connector.FabricOpenMirroring.Tests.Integration.csproj", "{8660C31C-9ACD-2C90-8A6C-4E244D469A8E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FileStorage.Common", "src\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj", "{6667221D-5BAA-4071-1684-1425D6C83070}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.DataLake.Common.Tests.Unit", "test\unit\Connector.DataLake.Common.Tests.Unit\Connector.DataLake.Common.Tests.Unit.csproj", "{B49584E9-C4FD-B5B9-9388-B19E425635CA}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
@@ -129,6 +131,10 @@ Global
 		{8660C31C-9ACD-2C90-8A6C-4E244D469A8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8660C31C-9ACD-2C90-8A6C-4E244D469A8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8660C31C-9ACD-2C90-8A6C-4E244D469A8E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6667221D-5BAA-4071-1684-1425D6C83070}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6667221D-5BAA-4071-1684-1425D6C83070}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6667221D-5BAA-4071-1684-1425D6C83070}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6667221D-5BAA-4071-1684-1425D6C83070}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B49584E9-C4FD-B5B9-9388-B19E425635CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B49584E9-C4FD-B5B9-9388-B19E425635CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B49584E9-C4FD-B5B9-9388-B19E425635CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -160,6 +166,7 @@ Global
 		{73DB768F-CE2C-3FFE-FBC7-40B241C81F25} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
 		{703D64FE-DEEC-4909-A001-D9298C900E8B} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
 		{8660C31C-9ACD-2C90-8A6C-4E244D469A8E} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
+		{6667221D-5BAA-4071-1684-1425D6C83070} = {5256D9B9-8A1D-480D-A8F0-1A69AFA59B31}
 		{B49584E9-C4FD-B5B9-9388-B19E425635CA} = {F5373611-431E-459B-B775-5A31DDEC5B21}
 		{759D8051-4293-9703-51A2-68EC4EC62FC1} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection

@@ -1,4 +1,4 @@
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Connector.FabricOpenMirroring.EventHandlers;
 using CluedIn.Core;

@@ -1,8 +1,8 @@
 using System;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;

@@ -1,4 +1,4 @@
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 using CluedIn.Core.Crawling;
 using CluedIn.Core.Providers;

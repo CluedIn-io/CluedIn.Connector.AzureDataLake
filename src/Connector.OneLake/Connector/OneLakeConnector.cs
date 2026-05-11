@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using Azure;
 using Azure.Identity;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 

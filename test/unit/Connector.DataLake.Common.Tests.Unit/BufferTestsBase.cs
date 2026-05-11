@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 using Xunit;
 
-namespace CluedIn.Connector.DataLake.Common.Tests.Unit;
+namespace CluedIn.Connector.FileStorage.Common.Tests.Unit;
 
 public abstract class BufferTestsBase
 {

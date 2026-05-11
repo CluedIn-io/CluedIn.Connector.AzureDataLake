@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 

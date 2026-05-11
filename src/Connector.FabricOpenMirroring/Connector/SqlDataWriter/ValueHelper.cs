@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core.Data.Parts;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;

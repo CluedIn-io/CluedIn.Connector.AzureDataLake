@@ -1,14 +1,14 @@
 using System;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Events;
 using CluedIn.Core.Events.Types;
 
 using Microsoft.Extensions.Logging;
-using CluedIn.Connector.DataLake.Common.EventHandlers;
+using CluedIn.Connector.FileStorage.Common.EventHandlers;
 using CluedIn.Connector.FabricOpenMirroring.Connector;
 
 namespace CluedIn.Connector.FabricOpenMirroring.EventHandlers;

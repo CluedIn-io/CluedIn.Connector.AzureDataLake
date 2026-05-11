@@ -4,7 +4,7 @@ using System;
 using System.Text.Json.Serialization;
 using System.Linq;
 
-namespace CluedIn.Connector.DataLake.Common.Tests.Integration;
+namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 
 public class AlphabeticJsonNodeConverter : JsonConverter<JsonNode>
 {

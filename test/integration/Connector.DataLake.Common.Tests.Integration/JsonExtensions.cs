@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using System.Text.Json;
 
-namespace CluedIn.Connector.DataLake.Common.Tests.Integration;
+namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 
 public static partial class JsonExtensions
 {

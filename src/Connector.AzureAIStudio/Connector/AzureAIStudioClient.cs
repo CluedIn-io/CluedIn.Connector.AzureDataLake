@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 
 namespace CluedIn.Connector.AzureAIStudio.Connector;
 
