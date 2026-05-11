@@ -14,7 +14,6 @@ using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 
 using Microsoft.Extensions.Logging;
-using CluedIn.Connector.FileStorage.Common;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
@@ -37,9 +36,9 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
 
     public OpenMirroringStorageClient(
         ILogger<OpenMirroringStorageClient> logger,
+        OpenMirroringConnectorConfiguration configuration,
         ApplicationContext applicationContext,
-        IDateTimeOffsetProvider dateTimeOffsetProvider,
-        [NotNull] OpenMirroringConnectorConfiguration configuration):
+        IDateTimeOffsetProvider dateTimeOffsetProvider):
         base(logger, configuration)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -55,35 +54,23 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
     }
 
 
-    private async Task<Uri> GetDataLakeServiceUriAsync()
+    protected override async Task<string> GetStorageUrlAsync()
     {
-        if (configuration.UseWorkspaceLevelPrivateLink)
+        if (_configuration.UseWorkspaceLevelPrivateLink)
         {
-            var workspaceId = await GetWorkspaceIdAsync(configuration);
+            var workspaceId = await GetWorkspaceIdAsync();
             if (workspaceId == null)
             {
-                throw new InvalidOperationException($"Failed to obtain workspace id from workspace name {configuration.WorkspaceName}");
+                throw new InvalidOperationException($"Failed to obtain workspace id from workspace name {_configuration.WorkspaceName}");
             }
 
-            var url = GetStorageUrl(configuration, workspaceId.Value);
-            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
-            return new Uri(url);
-        }
-
-        var accountName = "onelake";
-        return new Uri($"https://{accountName}.dfs.fabric.microsoft.com");
-    }
-
-    private string GetStorageUrl(Guid workspaceId)
-    {
-        if (configuration.UseWorkspaceLevelPrivateLink)
-        {
-            var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.dfs.fabric.microsoft.com";
-            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId.Value)}.dfs.fabric.microsoft.com";
+            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, _configuration.WorkspaceName);
             return url;
         }
 
-        return "https://onelake.dfs.fabric.microsoft.com";
+        var accountName = "onelake";
+        return $"https://{accountName}.dfs.fabric.microsoft.com";
     }
 
     private string GetWorkspaceSpecificPrefix(Guid workspaceId)
@@ -94,10 +81,10 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
 
     private string GetApiUrl(Guid workspaceId)
     {
-        if (configuration.UseWorkspaceLevelPrivateLink)
+        if (_configuration.UseWorkspaceLevelPrivateLink)
         {
             var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.w.api.fabric.microsoft.com";
-            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, _configuration.WorkspaceName);
             return url;
         }
 
@@ -107,16 +94,16 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
     internal async Task<Guid?> GetWorkspaceIdAsync()
     {
         return await _applicationContext.System.Cache.GetItemAsync(
-            $"OpenMirroringWorkspaceId_{configuration.TenantId}_{configuration.ClientId}_{configuration.WorkspaceName}",
+            $"OpenMirroringWorkspaceId_{_configuration.TenantId}_{_configuration.ClientId}_{_configuration.WorkspaceName}",
             GetWorkspaceIdFromServiceAsync,
             cachePolicy: policy => policy.WithAbsoluteExpiration(_dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(30))
         );
 
         async Task<Guid?> GetWorkspaceIdFromServiceAsync()
         {
-            var token = await GetToken(configuration);
+            var token = await GetToken();
             using var httpClient = new HttpClient();
-            var workspace = await GetWorkspaceAsync(httpClient, token, configuration.WorkspaceName);
+            var workspace = await GetWorkspaceAsync(httpClient, token);
             return workspace?.Id;
         }
 
@@ -124,7 +111,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
 
     private async Task<string> GetToken()
     {
-        var sharedKeyCredential = new ClientSecretCredential(configuration.TenantId, configuration.ClientId, configuration.ClientSecret);
+        var sharedKeyCredential = new ClientSecretCredential(_configuration.TenantId, _configuration.ClientId, _configuration.ClientSecret);
         var tokenResult = await sharedKeyCredential.GetTokenAsync(
             new TokenRequestContext(
             [
@@ -136,28 +123,27 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
 
     public virtual async Task UpdateOrCreateMirroredDatabaseAsync(bool isEnabled)
     {
-        if (!configuration.ShouldCreateMirroredDatabase)
+        if (!_configuration.ShouldCreateMirroredDatabase)
         {
-            _logger.LogDebug("Skipping creation of mirrored database because {Setting} is disabled.", nameof(configuration.ShouldCreateMirroredDatabase));
+            _logger.LogDebug("Skipping creation of mirrored database because {Setting} is disabled.", nameof(_configuration.ShouldCreateMirroredDatabase));
             return;
         }
 
-        var sharedKeyCredential = new ClientSecretCredential(configuration.TenantId, configuration.ClientId, configuration.ClientSecret);
-        var token = await GetToken(jobData);
+        var sharedKeyCredential = new ClientSecretCredential(_configuration.TenantId, _configuration.ClientId, _configuration.ClientSecret);
+        var token = await GetToken();
 
         using var httpClient = new HttpClient();
 
-        var workspace = await GetWorkspaceAsync(httpClient, token, configuration.WorkspaceName);
+        var workspace = await GetWorkspaceAsync(httpClient, token);
         if (workspace == null)
         {
-            throw new ApplicationException($"Failed to find workspace using {configuration.WorkspaceName}.");
+            throw new ApplicationException($"Failed to find workspace using {_configuration.WorkspaceName}.");
         }
 
-        var mirrorDatabaseName = configuration.MirroredDatabaseName;
         var mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
         if (mirroredDatabase == null)
         {
-            await CreateMirroredDatabase(httpClient, token, configuration, workspace, mirrorDatabaseName);
+            await CreateMirroredDatabase(httpClient, token, workspace);
             mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
         }
 
@@ -167,14 +153,14 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
         }
         else
         {
-            await StopMirroringAsync(jhttpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
+            await StopMirroringAsync(httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
         }
     }
 
     private async Task StopMirroringAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
         _logger.LogDebug("Begin stop mirroring of Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseId, workspaceId);
-        var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/stopMirroring";
+        var url = $"{GetApiUrl(workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/stopMirroring";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri(url);
@@ -189,7 +175,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
     private async Task StartMirroringAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
         _logger.LogDebug("Begin start mirroring of Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseId, workspaceId);
-        var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/startMirroring";
+        var url = $"{GetApiUrl(workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/startMirroring";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri(url);
@@ -204,16 +190,16 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
     private async Task CreateMirroredDatabase(
         HttpClient httpClient,
         string token,
-        Workspace workspace,
-        string mirroredDatabaseName)
+        Workspace workspace)
     {
-        if (!configuration.ShouldCreateMirroredDatabase)
+        if (!_configuration.ShouldCreateMirroredDatabase)
         {
-            throw new ApplicationException($"Mirrored database is not found using workspace {configuration.WorkspaceName} and mirrored database name {configuration.MirroredDatabaseName}.");
+            throw new ApplicationException($"Mirrored database is not found using workspace {_configuration.WorkspaceName} and mirrored database name {_configuration.MirroredDatabaseName}.");
         }
 
+        var mirroredDatabaseName = _configuration.MirroredDatabaseName;
         _logger.LogDebug("Begin creating Mirrored Database {MirroredDatabaseName} in Workspace {WorkspaceId}.", mirroredDatabaseName, workspace.Id);
-        var url = $"{GetApiUrl(jobData, workspace.Id)}/v1/workspaces/{workspace.Id}/mirroredDatabases";
+        var url = $"{GetApiUrl(workspace.Id)}/v1/workspaces/{workspace.Id}/mirroredDatabases";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri(url);
@@ -266,7 +252,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
         var status = await PollForCompletionAsync(httpClient, token, workspace.Id, result.Id.Value);
         if (status != SqlEndpointProvisioningStatus.Success)
         {
-            throw new ApplicationException($"Failed to provision sql endpoint using workspace {configuration.WorkspaceName} and mirrored database name {configuration.MirroredDatabaseName}.");
+            throw new ApplicationException($"Failed to provision sql endpoint using workspace {_configuration.WorkspaceName} and mirrored database name {_configuration.MirroredDatabaseName}.");
         }
         _logger.LogDebug("End polling completion status for  Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseName, workspace.Id);
     }
@@ -296,7 +282,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
 
     private async Task<MirroredDatabase> GetMirroredDatabaseAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
-        var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}";
+        var url = $"{GetApiUrl(workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Get;
         request.RequestUri = new Uri(url);
@@ -307,8 +293,9 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
         return content;
     }
 
-    private async Task<MirroredDatabase?> GetMirroredDatabaseAsync(HttpClient httpClient, string token, Guid workspaceId, string mirroredDatabaseName)
+    private async Task<MirroredDatabase?> GetMirroredDatabaseAsync(HttpClient httpClient, string token, Guid workspaceId)
     {
+        var mirroredDatabaseName = _configuration.MirroredDatabaseName;
         await foreach (var mirroredDatabase in ListMirroredDatabasesAsync())
         {
             if (mirroredDatabase.DisplayName.Equals(mirroredDatabaseName, StringComparison.OrdinalIgnoreCase))
@@ -320,7 +307,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
         return null;
         async IAsyncEnumerable<MirroredDatabase> ListMirroredDatabasesAsync()
         {
-            var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases";
+            var url = $"{GetApiUrl(workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases";
             do
             {
                 var request = new HttpRequestMessage();
@@ -352,8 +339,9 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
         }
     }
 
-    private async Task<Workspace?> GetWorkspaceAsync(HttpClient httpClient, string token, string workspaceName)
+    private async Task<Workspace?> GetWorkspaceAsync(HttpClient httpClient, string token)
     {
+        var workspaceName = _configuration.WorkspaceName;
         _logger.LogDebug("Begin getting workspace from name {WorkspaceName}.", workspaceName);
         await foreach (var workspace in ListWorkspacesAsync())
         {

@@ -145,13 +145,13 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     public async Task VerifyConnection_WhenItemNotFound_ReturnItemNotFoundErrorMessage()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.ItemName)] = "NonExistent";
-        var jobData = new OneLakeConnectorJobData(configuration);
+        configuration[nameof(OneLakeConfigurationConstants.ItemName)] = "NonExistent";
+        var jobData = new OneLakeConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -529,9 +529,9 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             AssertCsvResultEscaped,
             configureAuthentication: (values) =>
             {
-                values.Add(nameof(OneLakeConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(OneLakeConstants.ShouldWriteGuidAsString), true);
-                values.Add(nameof(OneLakeConstants.UseWorkspaceLevelPrivateLink), true);
+                values.Add(nameof(OneLakeConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(OneLakeConfigurationConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(OneLakeConfigurationConstants.UseWorkspaceLevelPrivateLink), true);
             });
     }
 
@@ -614,12 +614,14 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
 
     protected override Mock<OneLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
         //container.Register(Component.For<OneLakeFactory>().ImplementedBy<OneLakeFactory>().LifestyleSingleton());
         var storageFactory = new Mock<OneLakeStorageFactory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>(
+            (_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration, applicationContext, mockDateTimeOffsetProvider.Object)));
         return storageFactory;
     }
 

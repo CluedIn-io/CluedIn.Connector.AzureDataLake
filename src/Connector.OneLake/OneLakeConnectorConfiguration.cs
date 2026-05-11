@@ -30,7 +30,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
     public virtual string FileSystemName => WorkspaceName;
 
     public override string RootDirectoryPath => $"{ItemName}.{ItemType}/{ItemFolder}";
-    public virtual bool UseWorkspaceLevelPrivateLink => GetConfigurationValue(OneLakeConstants.UseWorkspaceLevelPrivateLink) as bool? ?? false;
+    public virtual bool UseWorkspaceLevelPrivateLink => GetConfigurationValue(OneLakeConfigurationConstants.UseWorkspaceLevelPrivateLink) as bool? ?? false;
 
     public string AccountName => "onelake";
 

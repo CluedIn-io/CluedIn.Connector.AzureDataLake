@@ -29,7 +29,7 @@ internal abstract class InstallComponentsBase : IWindsorInstaller
         {
             if (!_isExtendedConfigurationRegistered)
             {
-                container.Register(Component.For<IExtendedConfigurationProvider>().ImplementedBy<DataLakeExtendedConfigurationProvider>().LifestyleSingleton());
+                container.Register(Component.For<IExtendedConfigurationProvider>().ImplementedBy<FileStorageExtendedConfigurationProvider>().LifestyleSingleton());
                 _isExtendedConfigurationRegistered = true;
             }
         }

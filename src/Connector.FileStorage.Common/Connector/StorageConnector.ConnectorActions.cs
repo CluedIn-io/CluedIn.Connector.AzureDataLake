@@ -40,9 +40,9 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
     private async Task ProcessBufferStatusRequestedEventAsync(BufferStatusRequestedEvent eventData)
     {
         await using var executionContext = _applicationContext.CreateExecutionContext(eventData.OrganizationId);
-        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, eventData.ProviderDefinitionId);
+        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, eventData.ProviderDefinitionId);
 
-        if (_buffer.TryGet(configuration, out var buffer))
+        if (_buffer.TryGet(new(eventData.OrganizationId, configuration), out var buffer))
         {
             await _applicationContext.System.Events.PublishAsync(new BufferStatusRetrievedEvent
             {
@@ -138,7 +138,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
                 new ExtendedOperationResultEntry(
                     "CommonVersion",
                     ExtendedOperationResultEntryType.String,
-                    typeof(DataLakeConnector).Assembly.FullName,
+                    typeof(StorageConnectorBase).Assembly.FullName,
                     "Connector",
                     string.Empty)
             ]);

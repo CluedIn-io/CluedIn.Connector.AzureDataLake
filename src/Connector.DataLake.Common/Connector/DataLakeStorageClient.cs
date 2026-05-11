@@ -242,7 +242,7 @@ internal class DataLakeStorageClient : IStorageClient
 
     protected async Task<DataLakeFileSystemClient> GetFileSystemClientAsync(bool createIfNotExists)
     {
-        var dataLakeServiceClient = GetDataLakeServiceClient();
+        var dataLakeServiceClient = await GetDataLakeServiceClientAsync();
         var fileSystemName = _storageConfiguration.FileSystemName;
         var fileSystemClient = dataLakeServiceClient.GetFileSystemClient(fileSystemName);
 
@@ -265,18 +265,18 @@ internal class DataLakeStorageClient : IStorageClient
         return await GetDirectoryClientAsync(directoryPath, createIfNotExists: true);
     }
 
-    protected virtual DataLakeServiceClient GetDataLakeServiceClient()
+    protected virtual async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync()
     {
         switch (_storageConfiguration)
         {
             case IAzureSharedKeyCredentialConfiguration sharedKeyCredential:
                 return new DataLakeServiceClient(
-                            new Uri(sharedKeyCredential.StorageUri),
+                            new Uri(await GetStorageUrlAsync()),
                             new StorageSharedKeyCredential(sharedKeyCredential.AccountName, sharedKeyCredential.AccountKey));
             case IAzureServicePrincipalCredentialConfiguration servicePrincipalCredential:
                 {
                     var dataLakeServiceClient = new DataLakeServiceClient(
-                        new Uri(servicePrincipalCredential.StorageUri),
+                        new Uri(await GetStorageUrlAsync()),
                         new ClientSecretCredential(servicePrincipalCredential.TenantId, servicePrincipalCredential.ClientId, servicePrincipalCredential.ClientSecret));
                     return dataLakeServiceClient;
                 }
@@ -284,6 +284,12 @@ internal class DataLakeStorageClient : IStorageClient
                 throw new NotSupportedException($"Unable to create datalake service client from type {_storageConfiguration.GetType()}");
         }
     }
+
+    protected virtual Task<string> GetStorageUrlAsync()
+    {
+        return Task.FromResult(_storageConfiguration.StorageUri);
+    }
+
     protected static TStorageConfiguration CastConfiguration<TStorageConfiguration>(IStorageConfiguration configuration) where TStorageConfiguration : class, IStorageConfiguration
     {
         if (configuration is not TStorageConfiguration castedJobData)
