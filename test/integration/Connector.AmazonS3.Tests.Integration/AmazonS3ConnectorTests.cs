@@ -26,7 +26,6 @@ using Moq;
 using Newtonsoft.Json;
 
 using Xunit;
-using Xunit.Abstractions;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -504,6 +503,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
 
     protected override Mock<AmazonS3StorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
         var storageFactory = new Mock<AmazonS3StorageFactory>();
