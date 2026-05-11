@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
@@ -11,11 +11,12 @@ public class SynapseDataEngineeringConnector : DataLakeConnector
 {
     public SynapseDataEngineeringConnector(
         ILogger<SynapseDataEngineeringConnector> logger,
+        ApplicationContext applicationContext,
         SynapseDataEngineeringClient client,
         ISynapseDataEngineeringConstants constants,
         SynapseDataEngineeringJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common.Connector;
@@ -48,13 +48,13 @@ internal abstract class UpdateStreamScheduleBase
         }
 
         var streamRepository = ApplicationContext.Container.Resolve<IStreamRepository>();
-        var stream = await streamRepository.GetStream(streamId);
+        var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
+        var stream = await streamRepository.GetStream(executionContext, streamId);
         if (stream == null)
         {
             return;
         }
 
-        var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
         await UpdateStreamSchedule(executionContext, stream);
     }
 

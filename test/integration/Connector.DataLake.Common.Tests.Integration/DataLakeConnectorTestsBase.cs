@@ -23,6 +23,7 @@ using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Data.Vocabularies;
 using CluedIn.Core.DataStore;
+using CluedIn.Core.Events;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
@@ -40,7 +41,6 @@ using Newtonsoft.Json.Linq;
 using Parquet;
 
 using Xunit;
-using Xunit.Abstractions;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -70,6 +70,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
 
         var container = new WindsorContainer();
+        var systemEventsMock = new Mock<ISystemEvents>();
+        container.Register(Component.For<ISystemEvents>().Instance(systemEventsMock.Object));
         var applicationContext = new ApplicationContext(container);
 
         var mockDateTimeOffsetProvider = SetupDateTimeOffsetProvider(configureTimeProvider);
@@ -82,12 +84,12 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
         var constantsMock = CreateConstantsMock();
         var jobDataFactoryMock = CreateJobDataFactoryMock(container);
-        var connectorMock = GetConnectorMock(mockDateTimeOffsetProvider, constantsMock, jobDataFactoryMock);
+        var connectorMock = GetConnectorMock(applicationContext, mockDateTimeOffsetProvider, constantsMock, jobDataFactoryMock);
         jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
             .ReturnsAsync(jobData);
         connectorMock.CallBase = true;
 
-        var (streamModel, streamRepositoryMock) = SetupStreamModel(streamMode, providerDefinitionId, container);
+        var (streamModel, streamRepositoryMock) = SetupStreamModel(organization, streamMode, providerDefinitionId, container);
         return Task.FromResult(
             new SetupContainerResult(
                 context,
@@ -103,11 +105,15 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                 providerDefinition));
     }
 
-    private (StreamModel StreamModel, Mock<IStreamRepository> StreamRepositoryMock) SetupStreamModel(StreamMode streamMode, Guid providerDefinitionId, WindsorContainer container)
+    private (StreamModel StreamModel, Mock<IStreamRepository> StreamRepositoryMock) SetupStreamModel(
+        Organization organization,
+        StreamMode streamMode,
+        Guid providerDefinitionId,
+        WindsorContainer container)
     {
         var streamRepository = new Mock<IStreamRepository>();
-        var streamModel = CreateStreamModel(providerDefinitionId, streamMode);
-        streamRepository.Setup(x => x.GetStream(streamModel.Id)).ReturnsAsync(streamModel);
+        var streamModel = CreateStreamModel(organization, providerDefinitionId, streamMode);
+        streamRepository.Setup(x => x.GetStream(It.IsAny<ExecutionContext>(), streamModel.Id)).ReturnsAsync(streamModel);
         container.Register(Component.For<IStreamRepository>().Instance(streamRepository.Object));
         return (streamModel, streamRepository);
     }
@@ -197,6 +203,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     }
 
     protected abstract Mock<TConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<TConstants> constantsMock,
         Mock<TJobDataFactory> jobDataFactory);
@@ -208,7 +215,10 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         return dataFactoryMock;
     }
 
-    protected virtual StreamModel CreateStreamModel(Guid providerDefinitionId, StreamMode streamMode)
+    protected virtual StreamModel CreateStreamModel(
+        Organization organization,
+        Guid providerDefinitionId,
+        StreamMode streamMode)
     {
         var streamModel = new StreamModel
         {
@@ -219,7 +229,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             ExportIncomingEdges = true,
             ExportOutgoingEdges = true,
             Status = StreamStatus.Started,
-            OrganizationId = Guid.NewGuid(),    // can't be Guid.Empty
+            OrganizationId = organization.Id,
         };
         return streamModel;
     }

@@ -9,6 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		Packages.props = Packages.props
 		README.md = README.md
+		Server.Host.csproj.devonly.xml = Server.Host.csproj.devonly.xml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{F7C0EE1B-7F6C-4B2E-99AB-3345DA66E5D0}"

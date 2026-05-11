@@ -19,6 +19,7 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
     public const string ShouldLoadToTable = nameof(ShouldLoadToTable);
+    public const string UseWorkspaceLevelPrivateLink = nameof(UseWorkspaceLevelPrivateLink);
     public const string TableName = nameof(TableName);
 
     public OneLakeConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
@@ -42,21 +43,14 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
             new ()
             {
                 Name = WorkspaceName,
-                DisplayName = WorkspaceName,
+                DisplayName = "Workspace Name",
                 Type = "input",
                 IsRequired = true,
-                ValidationRules = new List<Dictionary<string, string>>()
-                {
-                    new() {
-                        { "regex", "\\s" },
-                        { "message", "Spaces are not allowed" }
-                    }
-                },
             },
             new ()
             {
                 Name = ItemName,
-                DisplayName = ItemName,
+                DisplayName = "Item Name",
                 Type = "input",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -70,7 +64,7 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
             new ()
             {
                 Name = ItemType,
-                DisplayName = ItemType,
+                DisplayName = "Item Type",
                 Type = "input",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -84,7 +78,7 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
             new ()
             {
                 Name = ItemFolder,
-                DisplayName = ItemFolder,
+                DisplayName = "Item Folder",
                 Type = "input",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -98,7 +92,7 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
             new ()
             {
                 Name = ClientId,
-                DisplayName = ClientId,
+                DisplayName = "Client Id",
                 Type = "input",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -112,7 +106,7 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
             new ()
             {
                 Name = ClientSecret,
-                DisplayName = ClientSecret,
+                DisplayName = "Client Secret",
                 Type = "password",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -126,7 +120,7 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
             new ()
             {
                 Name = TenantId,
-                DisplayName = TenantId,
+                DisplayName = "Tenant Id",
                 Type = "input",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -208,6 +202,18 @@ public class OneLakeConstants : DataLakeConstants, IOneLakeConstants
                         UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
                     },
                 },
+            });
+        controls.Add(
+            new()
+            {
+                Name = UseWorkspaceLevelPrivateLink,
+                DisplayName = "Use workspace level private link",
+                Type = "checkbox",
+                Help = """
+                       When enabled, connection to fabric will use workspace level URLs.
+                       Private links should be setup according to https://learn.microsoft.com/en-us/fabric/security/security-workspace-level-private-links-set-up?tabs=fabric-portal
+                       """,
+                IsRequired = false,
             });
         return new AuthMethods
         {

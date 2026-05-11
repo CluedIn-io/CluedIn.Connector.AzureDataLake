@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,17 +19,16 @@ internal class StreamsHelper
         Func<ExecutionContext, ProviderDefinition, StreamModel, Task> streamTask)
     {
         var streamRepository = applicationContext.Container.Resolve<IStreamRepository>();
-        var streams = streamRepository.GetAllStreams().ToList();
-
-        var organizationIds = streams.Select(s => s.OrganizationId).Distinct().ToArray();
-        foreach (var orgId in organizationIds)
+        var orgDataStore = applicationContext.System.Organization.DataStores.GetDataStore<OrganizationProfile>();
+        var organizationProfiles = await orgDataStore.SelectAsync(applicationContext.System.CreateExecutionContext(), _ => true);
+        foreach (var organizationProfile in organizationProfiles)
         {
-            var org = new Organization(applicationContext, orgId);
-            var executionContext = applicationContext.CreateExecutionContext(orgId);
+            var executionContext = applicationContext.CreateExecutionContext(organizationProfile.Id);
 
-            foreach (var provider in org.Providers.AllProviderDefinitions.Where(x =>
-                         x.ProviderId == dataLakeConstants.ProviderId))
+            foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>
+                             x.ProviderId == dataLakeConstants.ProviderId))
             {
+                var streams = await streamRepository.GetAllStreams(executionContext);
                 foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))
                 {
                     await streamTask(executionContext, provider, stream);

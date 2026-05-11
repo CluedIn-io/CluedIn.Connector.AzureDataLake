@@ -177,6 +177,28 @@ namespace CluedIn.Connector.DataLake.Common.Buffers
             }
         }
 
+        Task<BufferStatus> IBuffer<T>.GetStatus()
+        {
+            var additionalInformation = new Dictionary<string, string>()
+            {
+                [nameof(_idleFlushHistory)] = string.Join(";", _idleFlushHistory.Select(h => $"Count:{h.itemCount},FlushedAt:{h.flushedAt},FlushDuration:{h.flushDuration.TotalSeconds}s")),
+                [nameof(_autoMaxSizeSetAt)] = _autoMaxSizeSetAt.ToString("o"),
+                [nameof(_addingCompleteSemaphore)] = _addingCompleteSemaphore.CurrentCount.ToString(),
+                [nameof(_addingSemaphore)] = _addingSemaphore.CurrentCount.ToString(),
+                [nameof(_flushSemaphore)] = _flushSemaphore.CurrentCount.ToString(),
+            };
+
+            for (var i = 0; i <_addingTaskSemaphores.Length; i++)
+            {
+                additionalInformation[$"{nameof(_addingTaskSemaphores)}[{i}]"] = _addingTaskSemaphores[i].CurrentCount.ToString();
+            }
+            return Task.FromResult(new BufferStatus(
+                TotalPendingItems: _currentCount,
+                MaxPendingItems: _maxSize,
+                TimeOutMilliseconds: _timeout,
+                AdditionalInformation: additionalInformation));
+        }
+
         private async Task Flush(bool idle)
         {
             await _flushSemaphore.WaitAsync();

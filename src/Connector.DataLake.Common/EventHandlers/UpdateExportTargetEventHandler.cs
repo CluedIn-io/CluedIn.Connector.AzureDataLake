@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
@@ -48,14 +48,14 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
         }
 
         var streamRepository = ApplicationContext.Container.Resolve<IStreamRepository>();
-        var streamsCount = await streamRepository.GetOrganizationStreamsCount(organizationId);
+        var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
+        var streamsCount = await streamRepository.GetOrganizationStreamsCount(executionContext);
         var streamsPerPage = StreamsPerPage;
         var totalPages = (streamsCount + streamsPerPage - 1) / streamsPerPage;
 
-        var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
         for (var i = 0; i < totalPages; ++i)
         {
-            var streams = await streamRepository.GetOrganizationStreams(organizationId, i, streamsPerPage, filterConnectorProviderDefinitionId: providerDefinitionId);
+            var streams = await streamRepository.GetOrganizationStreams(executionContext, i, streamsPerPage, filterConnectorProviderDefinitionId: providerDefinitionId);
             foreach (var stream in streams)
             {
                 await UpdateStreamSchedule(executionContext, stream);

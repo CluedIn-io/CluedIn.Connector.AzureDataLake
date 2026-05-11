@@ -7,9 +7,9 @@
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureAIStudio\bin\Debug\net6.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureDatabricks\bin\Debug\net6.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.SynapseDataEngineering\bin\Debug\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.files.datalake\12.8.0\lib\netstandard2.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.common\12.9.0\lib\netstandard2.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.blobs\12.10.0\lib\netstandard2.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.files.datalake\12.22.0\lib\netstandard2.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.common\12.23.0\lib\netstandard2.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.blobs\12.24.0\lib\netstandard2.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\microsoft.io.recyclablememorystream\3.0.0\lib\net6.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\ironcompress\1.5.1\lib\net6.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\snappier\1.1.1\lib\net6.0\*.*" />

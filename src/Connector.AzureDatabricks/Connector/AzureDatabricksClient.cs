@@ -1,8 +1,10 @@
-﻿using System;
+using System;
+using System.Threading.Tasks;
 
 using Azure.Identity;
 using Azure.Storage;
 using Azure.Storage.Files.DataLake;
+
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 
@@ -10,7 +12,7 @@ namespace CluedIn.Connector.AzureDatabricks.Connector;
 
 public class AzureDatabricksClient : DataLakeClient
 {
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
+    protected override async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IDataLakeJobData configuration)
     {
         var casted = CastJobData<AzureDatabricksConnectorJobData>(configuration);
         var accountName = "onelake";

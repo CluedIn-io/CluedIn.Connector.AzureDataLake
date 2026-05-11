@@ -63,7 +63,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
         }
 
-        protected abstract DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration);
+        protected abstract Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IDataLakeJobData configuration);
 
         protected static TJobData CastJobData<TJobData>(IDataLakeJobData jobData) where TJobData : class, IDataLakeJobData
         {
@@ -170,7 +170,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             IDataLakeJobData configuration,
             bool ensureExists)
         {
-            var dataLakeServiceClient = GetDataLakeServiceClient(configuration);
+            var dataLakeServiceClient = await GetDataLakeServiceClientAsync(configuration);
             var fileSystemName = configuration.FileSystemName;
             var dataLakeFileSystemClient = dataLakeServiceClient.GetFileSystemClient(fileSystemName);
             if (ensureExists && !await dataLakeFileSystemClient.ExistsAsync())
@@ -183,7 +183,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
         public async Task<IEnumerable<IConnectorContainer>> GetFilesInDirectory(IDataLakeJobData configuration, string subDirectory = null)
         {
-            var serviceClient = GetDataLakeServiceClient(configuration);
+            var serviceClient = await GetDataLakeServiceClientAsync(configuration);
             var fileSystemName = configuration.FileSystemName;
             var fileSystemClient = serviceClient.GetFileSystemClient(fileSystemName);
 
