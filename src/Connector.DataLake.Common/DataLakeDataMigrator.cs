@@ -122,6 +122,7 @@ internal class DataLakeDataMigrator : DataMigrator
                 {
                     _logger.LogInformation("Stream cache is not enabled for ProviderDefinition '{ProviderDefinitionId}'. Skipping stream migration for soft delete.",
                         definition.Id);
+                    continue;
                 }
 
                 foreach (var stream in streams)
