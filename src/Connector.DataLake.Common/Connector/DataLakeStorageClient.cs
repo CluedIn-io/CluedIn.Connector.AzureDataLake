@@ -18,6 +18,7 @@ internal class DataLakeStorageClient : IStorageClient
 {
     private readonly ILogger<DataLakeStorageClient> _logger;
     private readonly IDataLakeStorageConfiguration _storageConfiguration;
+    private bool _disposed;
 
     public DataLakeStorageClient(ILogger<DataLakeStorageClient> logger, IDataLakeStorageConfiguration storageConfiguration)
     {
@@ -28,8 +29,12 @@ internal class DataLakeStorageClient : IStorageClient
     public async Task DeleteDirectoryAsync(DirectoryPath directoryPath)
     {
         var directoryClient = await GetDirectoryClientAsync(directoryPath, createIfNotExists: false);
+        if (directoryClient == null)
+        {
+            return;
+        }
 
-        await directoryClient?.DeleteIfExistsAsync();
+        await directoryClient.DeleteIfExistsAsync();
     }
 
     public async Task DeleteFileAsync(FilePath filePath)
@@ -298,5 +303,23 @@ internal class DataLakeStorageClient : IStorageClient
         }
 
         return castedJobData;
+    }
+    public void Dispose()
+    {
+        Dispose(true);
+        // Prevent the GC from calling the finalizer
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+        }
+
+        _disposed = true;
     }
 }

@@ -26,7 +26,7 @@ internal class OneLakeExportEntitiesJob : StorageExportEntitiesJobBase
 
     private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
-        var client = await _storageFactory.CreateStorageClient(context, exportJobData.StorageConfiguration) as OneLakeStorageClient;
+        using var client = await _storageFactory.CreateStorageClient(context, exportJobData.StorageConfiguration) as OneLakeStorageClient;
         var configuration = exportJobData.StorageConfiguration as OneLakeConnectorConfiguration;
         if (!configuration.ShouldLoadToTable)
         {

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CluedIn.Connector.DataLake.Common.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />

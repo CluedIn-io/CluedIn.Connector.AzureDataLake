@@ -601,7 +601,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             {
                 var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";
 
-                var client = await _storageFactory.CreateStorageClient(executionContext, configurations);
+                using var client = await _storageFactory.CreateStorageClient(executionContext, configurations);
                 var baseDirectory = await client.GetBaseDirectoryPathAsync();
                 if (connectorEntityData.ChangeType == VersionChangeType.Removed)
                 {
@@ -718,7 +718,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
         protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration)
         {
-            var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
+            using var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
             await client.VerifyConnectionAsync();
             return SuccessfulConnectionVerification;
         }
@@ -825,7 +825,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
             await using var executionContext = _applicationContext.CreateExecutionContext(organizationId);
-            var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
+            using var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
             var baseDirectory = await client.GetBaseDirectoryPathAsync();
             await client.SaveDataAsync(new FilePath(fileName, baseDirectory), content, JsonMimeType);
         }
@@ -847,7 +847,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _logger.LogInformation($"DataLakeConnector.GetContainers: entry");
 
             var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, providerDefinitionId);
-            var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
+            using var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
             var baseDirectory = await client.GetBaseDirectoryPathAsync();
             var files = await client.GetFilesInDirectoryAsync(baseDirectory);
             return files.Select(file => new StorageContainer()
