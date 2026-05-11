@@ -25,7 +25,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
-using Xunit.Abstractions;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
 
@@ -269,7 +268,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     }
 
     [Fact]
-    public async void VerifyStoreData_Sync_WithoutStreamCache()
+    public async Task VerifyStoreData_Sync_WithoutStreamCache()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
         var jobData = new AzureDataLakeConnectorConfiguration(configuration);
@@ -633,6 +632,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
 
     protected override Mock<AzureDataLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
         var dataFactoryMock = new Mock<AzureDataLakeStorageFactory>();

@@ -39,6 +39,14 @@ namespace CluedIn.Connector.FileStorage.Common
             _buffers = new Dictionary<TPartition, IBuffer<TItem>>();
         }
 
+        public bool TryGet(TPartition partition, out IBuffer<TItem>? item)
+        {
+            lock (_buffers)
+            {
+                return _buffers.TryGetValue(partition, out item);
+            }
+        }
+
         public async Task Add(TPartition partition, TItem item)
         {
             IBuffer<TItem> buffer;

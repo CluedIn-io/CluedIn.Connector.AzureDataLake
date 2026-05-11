@@ -21,6 +21,7 @@ using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Data.Vocabularies;
 using CluedIn.Core.DataStore;
+using CluedIn.Core.Events;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
@@ -38,7 +39,6 @@ using Newtonsoft.Json.Linq;
 using Parquet;
 
 using Xunit;
-using Xunit.Abstractions;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -114,6 +114,9 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         var container = new WindsorContainer();
         var applicationContext = new ApplicationContext(container);
 
+        var systemEventsMock = new Mock<ISystemEvents>();
+        container.Register(Component.For<ISystemEvents>().Instance(systemEventsMock.Object));
+
         var mockDateTimeOffsetProvider = SetupDateTimeOffsetProvider(configureTimeProvider);
         _ = SetupApplicationCache(container);
         var providerDefinition = SetupProviderDefinition(providerDefinitionId, container);
@@ -123,7 +126,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         SetupConfiguration(configuration);
 
         var constantsMock = CreateConstantsMock();
-        var storageFactoryMock = CreateStorageFactoryMock(container, mockDateTimeOffsetProvider);
+        var storageFactoryMock = CreateStorageFactoryMock(container, applicationContext, mockDateTimeOffsetProvider);
         var connectorMock = GetConnectorMock(applicationContext, mockDateTimeOffsetProvider, constantsMock, storageFactoryMock);
         storageFactoryMock.Setup(x => x.CreateStorageConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<IReadOnlyStreamModel>()))
             .ReturnsAsync(configuration);
@@ -153,7 +156,10 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         Mock<TConfigurationConstants> constantsMock,
         Mock<TClientFactory> jobDataFactory);
 
-    protected abstract Mock<TClientFactory> CreateStorageFactoryMock(WindsorContainer container, Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider);
+    protected abstract Mock<TClientFactory> CreateStorageFactoryMock(
+        WindsorContainer container,
+        ApplicationContext applicationContext,
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider);
 
     protected virtual StreamModel CreateStreamModel(
         Organization organization,

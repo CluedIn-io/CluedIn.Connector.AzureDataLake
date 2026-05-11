@@ -21,7 +21,6 @@ internal class ExportTargetEventHandler : IDisposable
     private readonly ApplicationContext _applicationContext;
     private readonly IStorageConfigurationConstants _configurationConstants;
     private readonly IStorageFactory _storageFactory;
-    private readonly OpenMirroringStorageClient _openMirroringStorageDataLakeClient;
     private bool _disposedValue;
 
     public ExportTargetEventHandler(
@@ -35,7 +34,6 @@ internal class ExportTargetEventHandler : IDisposable
         _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
         _configurationConstants = constants ?? throw new ArgumentNullException(nameof(constants));
         _storageFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
-        _openMirroringStorageDataLakeClient = openMirroringStorageDataLakeClient ?? throw new ArgumentNullException(nameof(openMirroringStorageDataLakeClient));
 
         _registerExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<RegisterExportTargetEvent>(ProcessEvent);
         _updateExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
@@ -106,6 +104,8 @@ internal class ExportTargetEventHandler : IDisposable
             throw new ApplicationException($"Failed to get job data for ProviderDefinitionId {providerDefinitionId}.");
         }
 
-        await _openMirroringStorageDataLakeClient.UpdateOrCreateMirroredDatabaseAsync(configuration, providerDefinition.IsEnabled);
+        var client = await _storageFactory.CreateStorageClient(executionContext, configuration) as OpenMirroringStorageClient;
+
+        await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinition.IsEnabled);
     }
 }

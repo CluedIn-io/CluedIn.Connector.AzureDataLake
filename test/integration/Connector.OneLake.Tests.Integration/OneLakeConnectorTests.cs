@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -23,7 +22,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
-using Xunit.Abstractions;
 
 using Encoding = System.Text.Encoding;
 
@@ -143,6 +141,23 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         Assert.Equal(OneLakeConnector.WorkspaceNotFoundErrorMessageFormat.FormatWith("1"), result.ErrorMessage);
     }
 
+    [Fact]
+    public async Task VerifyConnection_WhenItemNotFound_ReturnItemNotFoundErrorMessage()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(OneLakeConfigurationConstants.ItemName)] = "NonExistent";
+        var jobData = new OneLakeConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+        Assert.Equal(OneLakeConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(jobData.ItemName, jobData.ItemType), result.ErrorMessage);
+    }
+
     [Theory]
     [InlineData("NotFiles/")]
     [InlineData("")]
@@ -207,7 +222,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     }
 
     [Fact]
-    public async void VerifyStoreData_Sync_WithoutStreamCache()
+    public async Task VerifyStoreData_Sync_WithoutStreamCache()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
         var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
@@ -506,6 +521,20 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             });
     }
 
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithWorkspaceLevelPrivateLinkCanWrite()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultEscaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(OneLakeConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(OneLakeConfigurationConstants.ShouldWriteGuidAsString), true);
+                values.Add(nameof(OneLakeConfigurationConstants.UseWorkspaceLevelPrivateLink), true);
+            });
+    }
+
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
         var logger = new Mock<ILogger<OneLakeStorageClient>>();
@@ -585,12 +614,14 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
 
     protected override Mock<OneLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
         //container.Register(Component.For<OneLakeFactory>().ImplementedBy<OneLakeFactory>().LifestyleSingleton());
         var storageFactory = new Mock<OneLakeStorageFactory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>(
+            (_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration, applicationContext, mockDateTimeOffsetProvider.Object)));
         return storageFactory;
     }
 

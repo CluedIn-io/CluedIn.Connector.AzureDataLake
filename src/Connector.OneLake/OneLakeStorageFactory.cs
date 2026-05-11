@@ -15,10 +15,12 @@ public class OneLakeStorageFactory : StorageFactoryBase, IStorageFactory
     {
         return await CreateDataLakeClient(executionContext, configuration as OneLakeConnectorConfiguration);
     }
+
     private Task<OneLakeStorageClient> CreateDataLakeClient(ExecutionContext executionContext, OneLakeConnectorConfiguration configuration)
     {
         var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<OneLakeStorageClient>>();
-        var client = new OneLakeStorageClient(logger, configuration);
+        var dateTimeProvider = executionContext.ApplicationContext.Container.Resolve<IDateTimeOffsetProvider>();
+        var client = new OneLakeStorageClient(logger, configuration, executionContext.ApplicationContext, dateTimeProvider);
         return Task.FromResult(client);
     }
 

@@ -18,6 +18,7 @@ public class OpenMirroringConfigurationConstants : StorageConfigurationConstants
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
     public const string ShouldCreateMirroredDatabase = nameof(ShouldCreateMirroredDatabase);
+    public const string UseWorkspaceLevelPrivateLink = nameof(UseWorkspaceLevelPrivateLink);
     public const string TableName = nameof(TableName);
 
     public OpenMirroringConfigurationConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
@@ -111,6 +112,18 @@ public class OpenMirroringConfigurationConstants : StorageConfigurationConstants
                 isArrayColumnOptionEnabled: false,
                 isForceStreamCache: true));
 
+        controls.Add(
+            new()
+            {
+                Name = UseWorkspaceLevelPrivateLink,
+                DisplayName = "Use workspace level private link",
+                Type = "checkbox",
+                Help = """
+                       When enabled, connection to fabric will use workspace level URLs.
+                       Private links should be setup according to https://learn.microsoft.com/en-us/fabric/security/security-workspace-level-private-links-set-up?tabs=fabric-portal
+                       """,
+                IsRequired = false,
+            });
         return new AuthMethods
         {
             Token = controls

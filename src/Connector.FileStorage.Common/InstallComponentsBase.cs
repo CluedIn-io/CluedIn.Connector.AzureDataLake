@@ -10,6 +10,9 @@ namespace CluedIn.Connector.FileStorage.Common;
 
 internal abstract class InstallComponentsBase : IWindsorInstaller
 {
+    private static readonly object _extendedConfigurationRegistrationLock = new();
+    private static bool _isExtendedConfigurationRegistered;
+
     public abstract void Install(IWindsorContainer container, IConfigurationStore store);
 
     protected static void DefaultInstall<TExportJob, TIConstants, TConstants, TClientFactory>(IWindsorContainer container, IConfigurationStore store)
@@ -22,6 +25,13 @@ internal abstract class InstallComponentsBase : IWindsorInstaller
         container.Register(Component.For<TIConstants>().ImplementedBy<TConstants>().LifestyleSingleton());
         container.Register(Component.For<TClientFactory>().ImplementedBy<TClientFactory>().LifestyleSingleton());
 
-        container.Register(Component.For<IExtendedConfigurationProvider>().ImplementedBy<FileStorageExtendedConfigurationProvider>().LifestyleSingleton().OnlyNewServices());
+        lock (_extendedConfigurationRegistrationLock)
+        {
+            if (!_isExtendedConfigurationRegistered)
+            {
+                container.Register(Component.For<IExtendedConfigurationProvider>().ImplementedBy<FileStorageExtendedConfigurationProvider>().LifestyleSingleton());
+                _isExtendedConfigurationRegistered = true;
+            }
+        }
     }
 }

@@ -38,7 +38,9 @@ public class OpenMirroringStorageFactory : StorageFactoryBase, IStorageFactory
     {
         var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<OpenMirroringStorageClient>>();
         var dateTimeOffsetProvider = executionContext.ApplicationContext.Container.Resolve<IDateTimeOffsetProvider>();
-        var client = new OpenMirroringStorageClient(logger, dateTimeOffsetProvider, configuration as OpenMirroringConnectorConfiguration);
+        var client = new OpenMirroringStorageClient(logger, configuration as OpenMirroringConnectorConfiguration,
+            executionContext.ApplicationContext,
+            dateTimeOffsetProvider);
         return client;
     }
 }

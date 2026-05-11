@@ -30,6 +30,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
     public virtual string FileSystemName => WorkspaceName;
 
     public override string RootDirectoryPath => $"{ItemName}.{ItemType}/{ItemFolder}";
+    public virtual bool UseWorkspaceLevelPrivateLink => GetConfigurationValue(OneLakeConfigurationConstants.UseWorkspaceLevelPrivateLink) as bool? ?? false;
 
     public string AccountName => "onelake";
 
@@ -46,6 +47,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
         hash.Add(TenantId);
         hash.Add(ShouldLoadToTable);
         hash.Add(TableName);
+        hash.Add(UseWorkspaceLevelPrivateLink);
 
         base.AddToHashCode(hash);
     }
@@ -67,6 +69,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
             TenantId == other.TenantId &&
             ShouldLoadToTable == other.ShouldLoadToTable &&
             TableName == other.TableName &&
+            UseWorkspaceLevelPrivateLink == other.UseWorkspaceLevelPrivateLink &&
             base.Equals(other);
     }
 

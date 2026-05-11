@@ -32,6 +32,7 @@ internal class OpenMirroringConnectorConfiguration : StorageConfigurationBase, I
     public virtual string FileSystemName => WorkspaceName;
 
     public override string RootDirectoryPath => $"{MirroredDatabaseName}.MountedRelationalDatabase/Files/LandingZone";
+    public virtual bool UseWorkspaceLevelPrivateLink => GetConfigurationValue(OpenMirroringConfigurationConstants.UseWorkspaceLevelPrivateLink) as bool? ?? false;
 
     public string AccountName => "onelake";
 
@@ -46,6 +47,7 @@ internal class OpenMirroringConnectorConfiguration : StorageConfigurationBase, I
         hash.Add(TenantId);
         hash.Add(ShouldCreateMirroredDatabase);
         hash.Add(TableName);
+        hash.Add(UseWorkspaceLevelPrivateLink);
 
         base.AddToHashCode(hash);
     }
@@ -65,6 +67,7 @@ internal class OpenMirroringConnectorConfiguration : StorageConfigurationBase, I
             TenantId == other.TenantId &&
             ShouldCreateMirroredDatabase == other.ShouldCreateMirroredDatabase &&
             TableName == other.TableName &&
+            UseWorkspaceLevelPrivateLink == other.UseWorkspaceLevelPrivateLink &&
             base.Equals(other);
     }
 
