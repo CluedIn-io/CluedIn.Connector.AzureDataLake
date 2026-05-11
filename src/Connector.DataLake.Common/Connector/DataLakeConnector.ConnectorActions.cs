@@ -40,7 +40,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
     private async Task ProcessBufferStatusRequestedEventAsync(BufferStatusRequestedEvent eventData)
     {
         await using var executionContext = _applicationContext.CreateExecutionContext(eventData.OrganizationId);
-        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, eventData.ProviderDefinitionId, eventData.ContainerName);
+        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, eventData.ProviderDefinitionId);
 
         if (_buffer.TryGet(configuration, out var buffer))
         {
