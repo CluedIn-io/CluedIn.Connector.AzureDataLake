@@ -55,6 +55,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             [typeof(Guid)] = "UNIQUEIDENTIFIER",
             [typeof(string)] = "NVARCHAR(MAX)"
         };
+        private bool _disposedValue;
 
         protected IStorageFactory StorageFactory => _storageFactory;
 
@@ -83,11 +84,33 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
             _buffer = new PartitionedBuffer<Partition, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush, dateTimeOffsetProvider, cacheBufferStrategy);
+            SetupBufferStatusSubscription();
         }
 
         ~StorageConnectorBase()
         {
-            _buffer.Dispose();
+            Dispose(disposing: false);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    _buffer.Dispose();
+                    _bufferStatusSubscription?.Dispose();
+                }
+
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
 
         public override Task VerifyExistingContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
@@ -162,8 +185,6 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             {
                 if (configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
                 {
-                    if (!data.ContainsKey(StorageConfigurationConstants.ChangeTypeKey))
-                        AddToData(StorageConfigurationConstants.ChangeTypeKey, connectorEntityData.ChangeType.ToString());
                     return await WriteToCacheTable(streamModel, connectorEntityData, configuration, data, dataValueTypes);
                 }
                 else

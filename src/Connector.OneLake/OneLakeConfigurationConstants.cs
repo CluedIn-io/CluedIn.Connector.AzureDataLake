@@ -19,6 +19,7 @@ public class OneLakeConfigurationConstants : StorageConfigurationConstants, IOne
     public const string ClientSecret = nameof(ClientSecret);
     public const string TenantId = nameof(TenantId);
     public const string ShouldLoadToTable = nameof(ShouldLoadToTable);
+    public const string UseWorkspaceLevelPrivateLink = nameof(UseWorkspaceLevelPrivateLink);
     public const string TableName = nameof(TableName);
 
     public OneLakeConfigurationConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
@@ -201,6 +202,18 @@ public class OneLakeConfigurationConstants : StorageConfigurationConstants, IOne
                         UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
                     },
                 },
+            });
+        controls.Add(
+            new()
+            {
+                Name = UseWorkspaceLevelPrivateLink,
+                DisplayName = "Use workspace level private link",
+                Type = "checkbox",
+                Help = """
+                       When enabled, connection to fabric will use workspace level URLs.
+                       Private links should be setup according to https://learn.microsoft.com/en-us/fabric/security/security-workspace-level-private-links-set-up?tabs=fabric-portal
+                       """,
+                IsRequired = false,
             });
         return new AuthMethods
         {
