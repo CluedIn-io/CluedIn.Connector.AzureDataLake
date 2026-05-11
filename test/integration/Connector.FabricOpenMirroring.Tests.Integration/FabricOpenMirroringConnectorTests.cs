@@ -473,7 +473,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     private protected override DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
         var logger = new Mock<ILogger<OpenMirroringClient>>();
-        var dataLakeClient = new OpenMirroringClient(logger.Object, setupResult.DateTimeOffsetProviderMock.Object);
+        var dataLakeClient = new OpenMirroringClient(logger.Object, setupResult.ApplicationContext, setupResult.DateTimeOffsetProviderMock.Object);
         var exportJob = new OpenMirroringExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
@@ -557,7 +557,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         var logger = new Mock<ILogger<OpenMirroringClient>>();
         var mockConnector = new Mock<OpenMirroringConnector>(
             new Mock<ILogger<OpenMirroringConnector>>().Object,
-            new OpenMirroringClient(logger.Object, mockDateTimeOffsetProvider.Object),
+            new OpenMirroringClient(logger.Object, applicationContext, mockDateTimeOffsetProvider.Object),
             constantsMock.Object,
             jobDataFactory.Object,
             mockDateTimeOffsetProvider.Object);
