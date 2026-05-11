@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
@@ -13,15 +13,15 @@ internal class UpdateStreamEventHandler : UpdateStreamScheduleBase, IDisposable
 
     public UpdateStreamEventHandler(
         ApplicationContext applicationContext,
-        IDataLakeConstants constants,
-        IDataLakeJobDataFactory jobDataFactory,
+        IStorageConfigurationConstants constants,
+        IStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider,
         Type exportEntitiesJobType,
         IScheduledJobQueue jobQueue)
         : base(
             applicationContext,
             constants,
-            jobDataFactory,
+            storageFactory,
             dateTimeOffsetProvider,
             exportEntitiesJobType,
             jobQueue)

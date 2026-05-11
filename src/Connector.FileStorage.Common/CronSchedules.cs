@@ -1,8 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-
-using CluedIn.Core;
 
 using NCrontab;
 

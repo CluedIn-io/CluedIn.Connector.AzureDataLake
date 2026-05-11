@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using CluedIn.Core;
@@ -10,7 +10,7 @@ internal interface ISqlDataWriter
 {
     Task<long> WriteAsync(
         ExecutionContext context,
-        IDataLakeJobData configuration,
+        IStorageConfiguration configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
         bool isInitialExport,

@@ -12,6 +12,8 @@
     <PackageReference Update="Azure.Identity" Version="1.21.0" />
     <PackageReference Update="Azure.Storage.Files.DataLake" Version="12.22.0" />
     <PackageReference Update="CluedIn.Core" Version="$(_CluedIn)" />
+    <PackageReference Update="NCrontab" Version="3.3.3" />
+    <PackageReference Update="Parquet.Net" Version="4.23.5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,8 +29,6 @@
     <PackageReference Update="xunit.v3" Version="3.2.2" />
     <PackageReference Update="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageReference Update="Moq" Version="4.13.1" />
-    <PackageReference Update="NCrontab" Version="3.3.3" />
-    <PackageReference Update="Parquet.Net" Version="4.23.5" />
     <PackageReference Update="ParquetSharp" Version="15.0.2.1" />
   </ItemGroup>
 </Project>

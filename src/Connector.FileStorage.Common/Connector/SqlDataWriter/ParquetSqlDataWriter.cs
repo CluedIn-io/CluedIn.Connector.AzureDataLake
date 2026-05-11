@@ -1,16 +1,19 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+
 using CluedIn.Core;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
 using Parquet;
 using Parquet.Schema;
 
@@ -31,7 +34,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
 
     public override async Task<long> WriteOutputAsync(
         ExecutionContext context,
-        IDataLakeJobData configuration,
+        IStorageConfiguration configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
         bool isInitialExport,
@@ -89,7 +92,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         return totalProcessed;
     }
 
-    protected virtual DataField GetParquetDataField(string fieldName, Type databaseFieldType, IDataLakeJobData configuration)
+    protected virtual DataField GetParquetDataField(string fieldName, Type databaseFieldType, IStorageConfiguration configuration)
     {
         var parquetFieldType = GetParquetDataFieldType(fieldName, databaseFieldType, configuration);
         var parquetFieldName = GetParquetDataFieldName(fieldName, databaseFieldType, configuration);
@@ -97,12 +100,12 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         return new DataField(parquetFieldNameToUse, parquetFieldType);
     }
 
-    protected virtual string GetParquetDataFieldName(string fieldName, Type type, IDataLakeJobData configuration)
+    protected virtual string GetParquetDataFieldName(string fieldName, Type type, IStorageConfiguration configuration)
     {
         return fieldName;
     }
 
-    protected virtual Type GetParquetDataFieldType(string fieldName, Type type, IDataLakeJobData configuration)
+    protected virtual Type GetParquetDataFieldType(string fieldName, Type type, IStorageConfiguration configuration)
     {
         if (type == typeof(string))
         {
@@ -141,7 +144,7 @@ internal class ParquetSqlDataWriter : SqlDataWriterBase
         return type;
     }
 
-    protected override object GetValue(string key, SqlDataReader reader, IDataLakeJobData configuration)
+    protected override object GetValue(string key, SqlDataReader reader, IStorageConfiguration configuration)
     {
         var value = base.GetValue(key, reader, configuration);
         if (value == null)

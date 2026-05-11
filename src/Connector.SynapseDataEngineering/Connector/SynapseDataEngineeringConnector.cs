@@ -7,16 +7,15 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.SynapseDataEngineering.Connector;
 
-public class SynapseDataEngineeringConnector : DataLakeConnector
+public class SynapseDataEngineeringConnector : StorageConnectorBase
 {
     public SynapseDataEngineeringConnector(
         ILogger<SynapseDataEngineeringConnector> logger,
         ApplicationContext applicationContext,
-        SynapseDataEngineeringClient client,
-        ISynapseDataEngineeringConstants constants,
-        SynapseDataEngineeringJobDataFactory dataLakeJobDataFactory,
+        ISynapseDataEngineeringConfigurationConstants constants,
+        SynapseDataEngineeringStorageFactory dataLakeJobDataStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeJobDataStorageFactory, dateTimeOffsetProvider)
     {
     }
 

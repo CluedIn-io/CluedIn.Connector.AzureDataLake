@@ -7,16 +7,15 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureAIStudio.Connector;
 
-public class AzureAIStudioConnector : DataLakeConnector
+public class AzureAIStudioConnector : StorageConnectorBase
 {
     public AzureAIStudioConnector(
         ILogger<AzureAIStudioConnector> logger,
         ApplicationContext applicationContext,
-        AzureAIStudioClient client,
-        IAzureAIStudioConstants constants,
-        AzureAIStudioJobDataFactory dataLakeJobDataFactory,
+        IAzureAIStudioConfigurationConstants constants,
+        AzureAIStudioStorageFactory dataLakeStorageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeStorageFactory, dateTimeOffsetProvider)
     {
     }
 

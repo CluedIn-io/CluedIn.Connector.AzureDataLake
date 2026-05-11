@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Azure.Identity;
 using Azure;
+using Azure.Identity;
 
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
-public class OpenMirroringConnector : DataLakeConnector
+public class OpenMirroringConnector : StorageConnectorBase
 {
     internal const string InvalidCredentialsErrorMessage = "Authentication failed due to invalid credentials.";
     internal const string InvalidWorkspaceErrorMessage = "Workspace name cannot be empty.";
@@ -24,24 +24,23 @@ public class OpenMirroringConnector : DataLakeConnector
     internal const string WorkspaceNotFoundErrorCode = "WorkspaceNotFound";
 
     private readonly ILogger<OpenMirroringConnector> _logger;
-    private readonly OpenMirroringClient _client;
+    private readonly OpenMirroringStorageFactory _storageStorageFactory;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
 
     public OpenMirroringConnector(
         ILogger<OpenMirroringConnector> logger,
         ApplicationContext applicationContext,
-        OpenMirroringClient client,
-        IOpenMirroringConstants constants,
-        OpenMirroringJobDataFactory dataLakeJobDataFactory,
+        IOpenMirroringConfigurationConstants constants,
+        OpenMirroringStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider;
+        _storageStorageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
+        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration)
     {
         // There are three places where verification can be called
         // 1. Health check
@@ -50,9 +49,9 @@ public class OpenMirroringConnector : DataLakeConnector
         // When ShouldCreateMirroredDatabase is set to true AND mirrored database is set, ideally we should NOT verify the connection during creation
         // because it certainly wouldn't have existed
         // But during update/edit, we should verify it. However, there is no way to distinguish these two cases
-        if (jobData is not OpenMirroringConnectorJobData casted)
+        if (configuration is not OpenMirroringConnectorConfiguration casted)
         {
-            throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(OpenMirroringConnectorJobData)}.");
+            throw new ArgumentException($"Invalid configuration type: {configuration.GetType().Name}. Expected: {nameof(OpenMirroringConnectorConfiguration)}.");
         }
 
         if (string.IsNullOrWhiteSpace(casted.WorkspaceName))
@@ -62,9 +61,11 @@ public class OpenMirroringConnector : DataLakeConnector
 
         var isHealthCheckVerification = IsHealthCheckVerification(casted);
         var shouldTolerateMissingDirectory = !isHealthCheckVerification && casted.ShouldCreateMirroredDatabase;
+
+        var client = await _storageStorageFactory.CreateStorageClient(executionContext, casted) as OpenMirroringStorageClient;
         if (shouldTolerateMissingDirectory)
         {
-            if (await _client.HasValidWorkspaceAsync(jobData))
+            if (await client.HasValidWorkspaceAsync())
             {
                 return SuccessfulConnectionVerification;
             }
@@ -74,12 +75,13 @@ public class OpenMirroringConnector : DataLakeConnector
 
         try
         {
-            if (await Client.DirectoryExists(jobData))
+            var basePath = await client.GetBaseDirectoryPathAsync();
+            if (await client.DirectoryExistsAsync(basePath))
             {
                 return SuccessfulConnectionVerification;
             }
 
-            return CreateFailedConnectionVerification($"Directory '{jobData.RootDirectoryPath}' is not found");
+            return CreateFailedConnectionVerification($"Directory '{basePath.Path}' is not found");
         }
         catch (AuthenticationFailedException ex)
         {
@@ -98,9 +100,9 @@ public class OpenMirroringConnector : DataLakeConnector
             return CreateFailedConnectionVerification(ex.Message);
         }
 
-        static bool IsHealthCheckVerification(OpenMirroringConnectorJobData castedJobData)
+        static bool IsHealthCheckVerification(OpenMirroringConnectorConfiguration castedJobData)
         {
-            return castedJobData.Configurations.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out _);
+            return castedJobData.Configurations.TryGetValue(StorageConfigurationConstants.ProviderDefinitionIdKey, out _);
         }
     }
 
@@ -109,9 +111,11 @@ public class OpenMirroringConnector : DataLakeConnector
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var containerName = streamModel.ContainerName;
 
-        var jobData = await DataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
-        var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, jobData, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), jobData.OutputFormat);
-        await Client.DeleteDirectory(jobData, subDirectory);
+        var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
+        var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, configuration, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), configuration.OutputFormat);
+        var client = await StorageFactory.CreateStorageClient(executionContext, configuration);
+        var basePath = await client.GetBaseDirectoryPathAsync();
+        await client.DeleteDirectoryAsync(basePath.GetSubDirectoryPath(subDirectory));
         await base.ArchiveContainer(executionContext, streamModel);
     }
 

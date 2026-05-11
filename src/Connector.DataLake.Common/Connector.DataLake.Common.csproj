@@ -19,11 +19,11 @@
     <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Azure.Storage.Files.DataLake" />
-    <PackageReference Include="CluedIn.Core" />
-    <PackageReference Include="CsvHelper" />
-    <PackageReference Include="NCrontab" />
-    <PackageReference Include="Parquet.Net" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />

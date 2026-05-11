@@ -16,7 +16,7 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
 {
     protected const int LoggingThreshold = 1000;
     private static readonly Regex NonAlphaNumericRegex = new("[^a-zA-Z0-9_]");
-    protected virtual object GetValue(string key, SqlDataReader reader, IDataLakeJobData configuration)
+    protected virtual object GetValue(string key, SqlDataReader reader, IStorageConfiguration configuration)
     {
         return GetValueInternal(key, reader);
     }
@@ -35,7 +35,7 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
 
     public async Task<long> WriteAsync(
         ExecutionContext context,
-        IDataLakeJobData configuration,
+        IStorageConfiguration configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
         bool isInitialExport,
@@ -50,7 +50,7 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
 
     public abstract Task<long> WriteOutputAsync(
         ExecutionContext context,
-        IDataLakeJobData configuration,
+        IStorageConfiguration configuration,
         Stream outputStream,
         ICollection<string> fieldNames,
         bool isInitialExport,
@@ -61,7 +61,7 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
         return NonAlphaNumericRegex.Replace(fieldName, "_");
     }
 
-    protected virtual bool ShouldSkip(IDataLakeJobData configuration, bool isInitialExport, SqlDataReader reader)
+    protected virtual bool ShouldSkip(IStorageConfiguration configuration, bool isInitialExport, SqlDataReader reader)
     {
         if (configuration.IsDeltaMode)
         {
@@ -77,7 +77,7 @@ internal abstract class SqlDataWriterBase : ISqlDataWriter
 
         static bool IsRowRemoved(SqlDataReader reader)
         {
-            return nameof(VersionChangeType.Removed).Equals(GetValueInternal(DataLakeConstants.ChangeTypeKey, reader));
+            return nameof(VersionChangeType.Removed).Equals(GetValueInternal(StorageConfigurationConstants.ChangeTypeKey, reader));
         }
     }
 }

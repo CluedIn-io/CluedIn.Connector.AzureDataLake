@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Azure;
@@ -14,7 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
-public class OneLakeConnector : DataLakeConnector
+public class OneLakeConnector : StorageConnectorBase
 {
     internal const string InvalidCredentialsErrorMessage = "Authentication failed due to invalid credentials.";
     internal const string InvalidWorkspaceErrorMessage = "Workspace name cannot be empty.";
@@ -29,20 +28,19 @@ public class OneLakeConnector : DataLakeConnector
     public OneLakeConnector(
         ILogger<OneLakeConnector> logger,
         ApplicationContext applicationContext,
-        OneLakeClient client,
-        IOneLakeConstants constants,
-        OneLakeJobDataFactory dataLakeJobDataFactory,
+        IOneLakeConfigurationConstants constants,
+        OneLakeStorageFactory dataLakeStorageJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeStorageJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration)
     {
-        if (jobData is not OneLakeConnectorJobData casted)
+        if (configuration is not OneLakeConnectorConfiguration casted)
         {
-            throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(OneLakeConnectorJobData)}.");
+            throw new ArgumentException($"Invalid job data type: {configuration.GetType().Name}. Expected: {nameof(OneLakeConnectorConfiguration)}.");
         }
 
         if (string.IsNullOrWhiteSpace(casted.WorkspaceName))
@@ -57,7 +55,7 @@ public class OneLakeConnector : DataLakeConnector
 
         try
         {
-            return await base.VerifyDataLakeConnection(jobData);
+            return await base.VerifyDataLakeConnection(executionContext, configuration);
         }
         catch (AuthenticationFailedException ex)
         {
@@ -85,25 +83,25 @@ public class OneLakeConnector : DataLakeConnector
 
     protected override Type ExportJobType => typeof(OneLakeExportEntitiesJob);
 
-    protected override async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData)
+    protected override async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration)
     {
-        var result = await base.VerifyConnectionInternal(executionContext, jobData);
+        var result = await base.VerifyConnectionInternal(executionContext, configuration);
 
-        if (result?.Success != true || !jobData.IsStreamCacheEnabled)
+        if (result?.Success != true || !configuration.IsStreamCacheEnabled)
         {
             return result;
         }
 
-        var casted = (OneLakeConnectorJobData)jobData;
+        var casted = (OneLakeConnectorConfiguration)configuration;
         if (!casted.ShouldLoadToTable)
         {
             return result;
         }
 
-        if (!DataLakeConstants.OutputFormats.IsValid(casted.OutputFormat, isReducedSupportedFormat: true))
+        if (!StorageConfigurationConstants.OutputFormats.IsValid(casted.OutputFormat, isReducedSupportedFormat: true))
         {
-            var supported = string.Join(',', DataLakeConstants.OutputFormats.ReducedSupportedFormats);
-            var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
+            var supported = string.Join(',', StorageConfigurationConstants.OutputFormats.ReducedSupportedFormats);
+            var errorMessage = $"Format '{configuration.OutputFormat}' is not supported. Supported formats are {supported}.";
             return new ConnectionVerificationResult(false, errorMessage);
         }
 

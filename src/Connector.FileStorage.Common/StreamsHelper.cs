@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
-using CluedIn.Core.Accounts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
@@ -15,7 +13,7 @@ internal class StreamsHelper
 {
     public static async Task ForEachStreamAsync(
         ApplicationContext applicationContext,
-        IDataLakeConstants dataLakeConstants,
+        IStorageConfigurationConstants configurationConstants,
         Func<ExecutionContext, ProviderDefinition, StreamModel, Task> streamTask)
     {
         var streamRepository = applicationContext.Container.Resolve<IStreamRepository>();
@@ -26,7 +24,7 @@ internal class StreamsHelper
             var executionContext = applicationContext.CreateExecutionContext(organizationProfile.Id);
 
             foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>
-                             x.ProviderId == dataLakeConstants.ProviderId))
+                             x.ProviderId == configurationConstants.ProviderId))
             {
                 var streams = await streamRepository.GetAllStreams(executionContext);
                 foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))

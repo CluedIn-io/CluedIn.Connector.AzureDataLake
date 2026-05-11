@@ -2,11 +2,8 @@ using System;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
-using CluedIn.Core.Events;
 using CluedIn.Core.Events.Types;
 using CluedIn.Core.Streams;
-
-using Newtonsoft.Json.Linq;
 
 namespace CluedIn.Connector.FileStorage.Common.EventHandlers;
 
@@ -18,15 +15,15 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
 
     public UpdateExportTargetEventHandler(
         ApplicationContext applicationContext,
-        IDataLakeConstants constants,
-        IDataLakeJobDataFactory jobDataFactory,
+        IStorageConfigurationConstants constants,
+        IStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider,
         Type exportEntitiesJobType,
         IScheduledJobQueue jobQueue)
         : base(
             applicationContext,
             constants,
-            jobDataFactory,
+            storageFactory,
             dateTimeOffsetProvider,
             exportEntitiesJobType,
             jobQueue)

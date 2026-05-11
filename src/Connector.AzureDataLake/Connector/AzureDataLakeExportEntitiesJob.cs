@@ -4,16 +4,15 @@ using CluedIn.Core.Streams;
 
 namespace CluedIn.Connector.AzureDataLake.Connector;
 
-internal class AzureDataLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
+internal class AzureDataLakeExportEntitiesJob : StorageExportEntitiesJobBase
 {
     public AzureDataLakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        AzureDataLakeClient dataLakeClient,
-        IAzureDataLakeConstants dataLakeConstants,
-        AzureDataLakeJobDataFactory dataLakeJobDataFactory,
+        IAzureDataLakeConfigurationConstants configurationConstants,
+        AzureDataLakeStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
     {
     }
 
