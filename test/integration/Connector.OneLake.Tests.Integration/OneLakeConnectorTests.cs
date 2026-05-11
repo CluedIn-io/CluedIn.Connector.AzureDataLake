@@ -643,6 +643,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         var logger = new Mock<ILogger<OneLakeClient>>();
         var mockConnector = new Mock<OneLakeConnector>(
             new Mock<ILogger<OneLakeConnector>>().Object,
+            applicationContext,
             new OneLakeClient(logger.Object, applicationContext, mockDateTimeOffsetProvider.Object),
             constantsMock.Object,
             jobDataFactory.Object,

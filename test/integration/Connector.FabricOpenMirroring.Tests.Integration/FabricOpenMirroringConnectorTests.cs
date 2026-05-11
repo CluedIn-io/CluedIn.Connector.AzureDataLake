@@ -557,6 +557,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         var logger = new Mock<ILogger<OpenMirroringClient>>();
         var mockConnector = new Mock<OpenMirroringConnector>(
             new Mock<ILogger<OpenMirroringConnector>>().Object,
+            applicationContext,
             new OpenMirroringClient(logger.Object, applicationContext, mockDateTimeOffsetProvider.Object),
             constantsMock.Object,
             jobDataFactory.Object,

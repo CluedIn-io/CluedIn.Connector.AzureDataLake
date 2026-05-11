@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -88,6 +89,15 @@ internal sealed class SafeBuffer<TItem, TResult> : IDisposable, IBuffer<TItem>
         {
             await ExecuteBatchCore(batchToFlush);
         }
+    }
+
+    Task<BufferStatus> IBuffer<TItem>.GetStatus()
+    {
+        return Task.FromResult(new BufferStatus(
+            TotalPendingItems: _currentBatch.Count,
+            MaxPendingItems: _maxSize,
+            TimeOutMilliseconds: _timeoutMs,
+            new Dictionary<string, string>()));
     }
 
     public async Task<TResult> Add(TItem item, CancellationToken ct = default)

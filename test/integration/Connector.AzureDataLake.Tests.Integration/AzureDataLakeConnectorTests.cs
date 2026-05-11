@@ -646,6 +646,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     {
         var mockConnector = new Mock<AzureDataLakeConnector>(
             new Mock<ILogger<AzureDataLakeConnector>>().Object,
+            applicationContext,
             new AzureDataLakeClient(),
             constantsMock.Object,
             jobDataFactory.Object,
