@@ -1,15 +1,20 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 
+using CluedIn.Core;
 using CluedIn.Core.Connectors.ExtendedOperations;
+using CluedIn.Core.Events;
 using CluedIn.Core.Jobs;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
@@ -22,6 +27,33 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
     private const string GetStreamCacheRowCountActionName = "GetStreamCacheRowCount";
     private const string GetEntityActionName = "GetEntity";
     private const string GetExportHistoryActionName = "GetExportHistory";
+    private const string GetBufferStatusActionName = "GetBufferStatus";
+    private const string GetConnectorVersionActionName = "GetConnectorVersion";
+    private const int MaximumGetBufferTimeOutInMilliseconds = 10_000;
+    private IDisposable _bufferStatusSubscription;
+
+    private void SetupBufferStatusSubscription()
+    {
+        _bufferStatusSubscription = _applicationContext.System.Events.SubscribeAsync<BufferStatusRequestedEvent>(ProcessBufferStatusRequestedEventAsync);
+    }
+
+    private async Task ProcessBufferStatusRequestedEventAsync(BufferStatusRequestedEvent eventData)
+    {
+        await using var executionContext = _applicationContext.CreateExecutionContext(eventData.OrganizationId);
+        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, eventData.ProviderDefinitionId, eventData.ContainerName);
+
+        if (_buffer.TryGet(configuration, out var buffer))
+        {
+            await _applicationContext.System.Events.PublishAsync(new BufferStatusRetrievedEvent
+            {
+                OrganizationId = eventData.OrganizationId,
+                StreamId = eventData.StreamId,
+                ContainerName = eventData.ContainerName,
+                ProviderDefinitionId = eventData.ProviderDefinitionId,
+                Status = await buffer.GetStatus(),
+            });
+        }
+    }
 
     public virtual async Task<GetConnectorActionsResult> GetActions(
         ExecutionContext executionContext,
@@ -29,6 +61,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
     {
         var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
         var action = new ConnectorAction(RunExportActionName, "Run Export", "Run export now", [], []);
+
         var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
 
         var stream = await streamRepository.GetStream(executionContext, streamModel.Id);
@@ -65,6 +98,16 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
                 return await GetExportHistory(executionContext, streamModel, request);
             }
 
+            if (request.ActionName == GetBufferStatusActionName)
+            {
+                return await GetBufferStatus(executionContext, streamModel, request);
+            }
+
+            if (request.ActionName == GetConnectorVersionActionName)
+            {
+                return GetConnectorVersion(executionContext, streamModel, request);
+            }
+
             var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
             var notFoundResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "Not Found", "Connector", string.Empty);
             return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, false, false, now, null, [notFoundResult]);
@@ -73,6 +116,88 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         {
             return GetFailedResult(streamModel, request, ex);
         }
+    }
+
+    private ExecuteConnectorActionResult GetConnectorVersion(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, ExecuteConnectorActionRequest request)
+    {
+        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        return new ExecuteConnectorActionResult(
+            streamModel.Id,
+            request.ActionName,
+            IsSuccessful: true,
+            IsCompleted: true,
+            StartedAt: start,
+            CompletedAt: start,
+            [
+                new ExtendedOperationResultEntry(
+                    "ConnectorVersion",
+                    ExtendedOperationResultEntryType.String,
+                    GetType().Assembly.FullName,
+                    "Connector",
+                    string.Empty),
+                new ExtendedOperationResultEntry(
+                    "CommonVersion",
+                    ExtendedOperationResultEntryType.String,
+                    typeof(DataLakeConnector).Assembly.FullName,
+                    "Connector",
+                    string.Empty)
+            ]);
+    }
+
+    private async Task<ExecuteConnectorActionResult> GetBufferStatus(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, ExecuteConnectorActionRequest request)
+    {
+        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var systemEvents = executionContext.ApplicationContext.System.Events;
+        var bufferStatus = new ConcurrentDictionary<string, BufferStatus>();
+        var timeOutInMilliseconds =
+            request?.Parameters?.TryGetValue("TimeOutInMilliseconds", out var timeOutObj) == true &&
+            int.TryParse(timeOutObj?.ToString(), out var parsedTimeOut) && parsedTimeOut > 0
+                ? Math.Min(parsedTimeOut, MaximumGetBufferTimeOutInMilliseconds)
+                : MaximumGetBufferTimeOutInMilliseconds;
+
+        await GetPeersBufferStatus();
+
+        async Task GetPeersBufferStatus()
+        {
+            using var subscription = systemEvents.SubscribeAsync<BufferStatusRetrievedEvent>(retrievedEvent =>
+            {
+                if (retrievedEvent.OrganizationId == executionContext.Organization.Id
+                && retrievedEvent.StreamId == streamModel.Id)
+                {
+                    _ = bufferStatus.AddOrUpdate(retrievedEvent.OriginHost.MachineName, retrievedEvent.Status, (host, oldValue) =>
+                    {
+                        return retrievedEvent.Status;
+                    });
+                }
+
+                return Task.CompletedTask;
+            });
+
+            await systemEvents.PublishAsync(new BufferStatusRequestedEvent
+            {
+                OrganizationId = executionContext.Organization.Id,
+                StreamId = streamModel.Id,
+                ContainerName = streamModel.ContainerName,
+                ProviderDefinitionId = streamModel.ConnectorProviderDefinitionId.Value,
+            });
+
+            await Task.Delay(timeOutInMilliseconds);
+        }
+
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var resultEntries = bufferStatus.Select(kvp => new ExtendedOperationResultEntry(
+            kvp.Key,
+            ExtendedOperationResultEntryType.Json,
+            JsonConvert.SerializeObject(kvp.Value),
+            "Connector",
+            string.Empty))
+            .ToList();
+        return new ExecuteConnectorActionResult(
+            streamModel.Id,
+            request.ActionName,
+            IsSuccessful: true, IsCompleted: true,
+            StartedAt: start,
+            CompletedAt: now, resultEntries);
     }
 
     private ExecuteConnectorActionResult GetFailedResult(
@@ -271,4 +396,30 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
     }
 
     protected abstract Type ExportJobType { get; }
+}
+
+public class BufferStatusRetrievedEvent : RemoteEvent
+{
+    public Guid OrganizationId { get; set; }
+
+    public Guid StreamId { get; set; }
+
+    public string ContainerName { get; set; }
+
+    public Guid ProviderDefinitionId { get; set; }
+
+    public BufferStatus Status { get; set; }
+
+
+}
+
+public class BufferStatusRequestedEvent : RemoteEvent
+{
+    public Guid OrganizationId { get; set; }
+
+    public Guid StreamId { get; set; }
+
+    public string ContainerName { get; set; }
+
+    public Guid ProviderDefinitionId { get; set; }
 }

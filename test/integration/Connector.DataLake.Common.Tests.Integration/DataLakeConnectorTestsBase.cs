@@ -22,6 +22,7 @@ using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Data.Vocabularies;
 using CluedIn.Core.DataStore;
+using CluedIn.Core.Events;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
@@ -39,7 +40,6 @@ using Newtonsoft.Json.Linq;
 using Parquet;
 
 using Xunit;
-using Xunit.Abstractions;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
@@ -170,6 +170,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
 
         var container = new WindsorContainer();
+        var systemEventsMock = new Mock<ISystemEvents>();
+        container.Register(Component.For<ISystemEvents>().Instance(systemEventsMock.Object));
         var applicationContext = new ApplicationContext(container);
 
         var mockDateTimeOffsetProvider = SetupDateTimeOffsetProvider(configureTimeProvider);
@@ -182,7 +184,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
         var constantsMock = CreateConstantsMock();
         var jobDataFactoryMock = CreateJobDataFactoryMock(container);
-        var connectorMock = GetConnectorMock(mockDateTimeOffsetProvider, constantsMock, jobDataFactoryMock);
+        var connectorMock = GetConnectorMock(applicationContext, mockDateTimeOffsetProvider, constantsMock, jobDataFactoryMock);
         jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<IReadOnlyStreamModel>()))
             .ReturnsAsync(jobData);
         jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<Guid>()))
@@ -303,6 +305,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     }
 
     protected abstract Mock<TConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<TConstants> constantsMock,
         Mock<TJobDataFactory> jobDataFactory);

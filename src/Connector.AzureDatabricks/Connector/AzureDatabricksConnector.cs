@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
@@ -11,11 +11,12 @@ public class AzureDatabricksConnector : DataLakeConnector
 {
     public AzureDatabricksConnector(
         ILogger<AzureDatabricksConnector> logger,
+        ApplicationContext applicationContext,
         AzureDatabricksClient client,
         IAzureDatabricksConstants constants,
         AzureDatabricksJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 

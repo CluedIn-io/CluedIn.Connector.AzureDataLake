@@ -12,6 +12,7 @@
     <EmbeddedResource Include="Resources\azureaistudio.svg" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
     <ProjectReference Include="..\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Threading.Tasks;
 
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
@@ -10,7 +11,7 @@ namespace CluedIn.Connector.AzureAIStudio.Connector;
 
 public class AzureAIStudioClient : DataLakeClient
 {
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
+    protected override async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IDataLakeJobData configuration)
     {
         var casted = CastJobData<AzureAIStudioConnectorJobData>(configuration);
         var accountName = "onelake";
