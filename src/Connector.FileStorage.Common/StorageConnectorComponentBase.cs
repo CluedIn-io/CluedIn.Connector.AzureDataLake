@@ -1,9 +1,6 @@
 using System;
 using System.Threading.Tasks;
-<<<<<<<< HEAD:src/Connector.FileStorage.Common/StorageConnectorComponentBase.cs
 
-========
->>>>>>>> develop:src/Connector.FileStorage.Common/DataLakeConnectorComponentBase.cs
 using CluedIn.Connector.FileStorage.Common.EventHandlers;
 using CluedIn.Core;
 using CluedIn.Core.Configuration;
