@@ -22,6 +22,8 @@ public class OneLakeConnector : DataLakeConnector
     internal const string InvalidFolderErrorMessage = "Invalid Folder. It has to start with Files.";
 
     internal const string WorkspaceNotFoundErrorCode = "WorkspaceNotFound";
+    internal const string ArtifactNotFoundErrorMessageFormat = "Item '{0}' with type '{1}' is not found.";
+    internal const string ArtifactNotFoundErrorCode = "ArtifactNotFound";
     private readonly ILogger<OneLakeConnector> _logger;
 
     public OneLakeConnector(
@@ -66,6 +68,12 @@ public class OneLakeConnector : DataLakeConnector
         {
             var errorMessage = WorkspaceNotFoundErrorMessageFormat.FormatWith(casted.WorkspaceName);
             _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted?.WorkspaceName);
+            return CreateFailedConnectionVerification(errorMessage);
+        }
+        catch (RequestFailedException ex) when (ArtifactNotFoundErrorCode.Equals(ex.ErrorCode))
+        {
+            var errorMessage = ArtifactNotFoundErrorMessageFormat.FormatWith(casted.ItemName, casted.ItemType);
+            _logger.LogWarning(ex, ArtifactNotFoundErrorMessageFormat, casted.ItemName, casted.ItemType);
             return CreateFailedConnectionVerification(errorMessage);
         }
         catch (Exception ex)

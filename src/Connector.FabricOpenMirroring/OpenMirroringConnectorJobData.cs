@@ -31,6 +31,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
     public override string FileSystemName => WorkspaceName;
 
     public override string RootDirectoryPath => $"{MirroredDatabaseName}.MountedRelationalDatabase/Files/LandingZone";
+    public virtual bool UseWorkspaceLevelPrivateLink => GetConfigurationValue(OpenMirroringConstants.UseWorkspaceLevelPrivateLink) as bool? ?? false;
 
     protected override void AddToHashCode(HashCode hash)
     {
@@ -41,6 +42,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
         hash.Add(TenantId);
         hash.Add(ShouldCreateMirroredDatabase);
         hash.Add(TableName);
+        hash.Add(UseWorkspaceLevelPrivateLink);
 
         base.AddToHashCode(hash);
     }
@@ -60,6 +62,7 @@ internal class OpenMirroringConnectorJobData : DataLakeJobData
             TenantId == other.TenantId &&
             ShouldCreateMirroredDatabase == other.ShouldCreateMirroredDatabase &&
             TableName == other.TableName &&
+            UseWorkspaceLevelPrivateLink == other.UseWorkspaceLevelPrivateLink &&
             base.Equals(other);
     }
 

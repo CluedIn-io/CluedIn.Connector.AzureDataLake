@@ -41,7 +41,6 @@ using Newtonsoft.Json.Linq;
 using Parquet;
 
 using Xunit;
-using Xunit.Abstractions;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
