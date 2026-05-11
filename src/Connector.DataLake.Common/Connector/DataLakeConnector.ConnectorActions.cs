@@ -41,7 +41,6 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
     {
         await using var executionContext = _applicationContext.CreateExecutionContext(eventData.OrganizationId);
         var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, eventData.ProviderDefinitionId, eventData.ContainerName);
-        var hashCode = configuration.GetHashCode();
 
         if (_buffer.TryGet(configuration, out var buffer))
         {
