@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
@@ -13,8 +13,7 @@ internal static class DataLakeJobDataFactoryExtensions
     {
         var configurations = await jobDataFactory.GetConfiguration(
             context,
-            stream.ConnectorProviderDefinitionId.Value,
-            stream.ContainerName);
+            stream);
 
         if (configurations.IsStreamCacheEnabled
             && stream.Status == StreamStatus.Started

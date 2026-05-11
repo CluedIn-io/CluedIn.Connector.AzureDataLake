@@ -144,6 +144,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             CommandType = CommandType.Text
         };
+
         if (shouldProduceDelta)
         {
             command.Parameters.Add(new SqlParameter("@ValidFrom", LastExport.DataTime));
@@ -366,7 +367,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         var containerName = streamModel.ContainerName;
         var executionContext = context.ApplicationContext.CreateExecutionContext(streamModel.OrganizationId);
 
-        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, providerDefinitionId, containerName);
+        var configuration = await _dataLakeJobDataFactory.GetConfiguration(executionContext, streamModel);
 
         if (!configuration.IsStreamCacheEnabled)
         {

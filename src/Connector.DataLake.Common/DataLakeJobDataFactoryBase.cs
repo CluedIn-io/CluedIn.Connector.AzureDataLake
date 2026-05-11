@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
+using CluedIn.Core.Streams.Models;
 
 namespace CluedIn.Connector.DataLake.Common;
 
@@ -32,10 +33,31 @@ public abstract class DataLakeJobDataFactoryBase
         }
     }
 
-    public virtual async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, Guid providerDefinitionId, string containerName)
+    public virtual async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, Guid providerDefinitionId)
     {
         var authenticationDetails = await GetAuthenticationDetails(executionContext, providerDefinitionId);
-        return await GetConfiguration(executionContext, authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value), containerName);
+        return await GetConfiguration(
+            executionContext,
+            authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value),
+            string.Empty);
+    }
+
+    public virtual async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+    {
+        var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+        var containerName = streamModel.ContainerName;
+        var authenticationDetails = await GetAuthenticationDetails(executionContext, providerDefinitionId);
+        var authenticationDetailsDict = authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value);
+
+        if (streamModel.ConnectorProperties != null)
+        {
+            foreach (var property in streamModel.ConnectorProperties!)
+            {
+                authenticationDetailsDict[property.Key] = property.Value;
+            }
+        }
+
+        return await GetConfiguration(executionContext, authenticationDetailsDict, containerName);
     }
 
     public virtual async Task<IDataLakeJobData> GetConfiguration(ExecutionContext executionContext, IDictionary<string, object> authenticationDetails, string containerName = null)

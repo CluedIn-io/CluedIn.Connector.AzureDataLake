@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
+using CluedIn.Core.Streams.Models;
 
 namespace CluedIn.Connector.DataLake.Common;
 
@@ -10,8 +11,11 @@ public interface IDataLakeJobDataFactory
 {
     Task<IDataLakeJobData> GetConfiguration(
         ExecutionContext executionContext,
-        Guid providerDefinitionId,
-        string containerName);
+        Guid providerDefinitionId);
+
+    Task<IDataLakeJobData> GetConfiguration(
+        ExecutionContext executionContext,
+        IReadOnlyStreamModel streamModel);
 
     Task<IDataLakeJobData> GetConfiguration(
         ExecutionContext executionContext,

@@ -1,4 +1,4 @@
-﻿namespace CluedIn.Connector.DataLake.Common;
+namespace CluedIn.Connector.DataLake.Common;
 
 public interface IDataLakeJobData
 {
@@ -19,4 +19,5 @@ public interface IDataLakeJobData
     string FileSystemName { get; }
 
     string RootDirectoryPath { get; }
+    bool IsSoftDelete { get; }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.DataLake.Common;
@@ -100,7 +100,7 @@ internal class ExportTargetEventHandler : IDisposable
             return;
         }
 
-        var jobData = await _jobDataFactory.GetConfiguration(executionContext, providerDefinitionId, string.Empty) as OpenMirroringConnectorJobData;
+        var jobData = await _jobDataFactory.GetConfiguration(executionContext, providerDefinitionId) as OpenMirroringConnectorJobData;
         if (jobData == null)
         {
             throw new ApplicationException($"Failed to get job data for ProviderDefinitionId {providerDefinitionId}.");

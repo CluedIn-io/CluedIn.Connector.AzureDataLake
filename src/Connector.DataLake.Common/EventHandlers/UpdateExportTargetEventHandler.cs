@@ -49,7 +49,7 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
 
         var streamRepository = ApplicationContext.Container.Resolve<IStreamRepository>();
         var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
-        var streamsCount = await streamRepository.GetOrganizationStreamsCount(executionContext);
+        var streamsCount = await streamRepository.GetOrganizationStreamsCount(executionContext, filterConnectorProviderDefinitionId: providerDefinitionId);
         var streamsPerPage = StreamsPerPage;
         var totalPages = (streamsCount + streamsPerPage - 1) / streamsPerPage;
 

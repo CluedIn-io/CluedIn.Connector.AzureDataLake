@@ -6,7 +6,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-using Azure;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
@@ -51,6 +50,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     where TJobDataFactory : class, IDataLakeJobDataFactory
     where TConstants : class, IDataLakeConstants
 {
+    private const int NotTemporalTableErrorCode = 13591;
     private readonly ITestOutputHelper _testOutputHelper;
     private static readonly DateTimeOffset _defaultCurrentTime = new(2024, 8, 21, 3, 16, 0, TimeSpan.FromHours(5));
 
@@ -58,6 +58,106 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     public DataLakeConnectorTestsBase(ITestOutputHelper testOutputHelper)
     {
         _testOutputHelper = testOutputHelper ?? throw new ArgumentNullException(nameof(testOutputHelper));
+    }
+
+    private protected abstract Task VerifyStoreData_Sync_WithStreamCache(
+        string format,
+        Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
+        Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
+        Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
+        Action<Dictionary<string, object>> configureAuthentication = null,
+        Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
+        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null,
+        Func<IDataLakeJobData, SetupContainerResult, string> configureDirectoryName = null);
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheCanHandleMultipleUpdates()
+    {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
+        var secondChangeUserData = initialUserData with { Age = initialUserData.Age + 2 };
+        await VerifyStoreData_Sync_WithStreamCache("csv",
+            async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
+            {
+                var updated = rows.ToList();
+                updated[0].Columns[DataLakeConstants.PersistVersionKey] = 3.ToString();
+                updated[0].Columns["user_age"] = secondChangeUserData.Age.ToString();
+                return updated;
+            }),
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+                var secondChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: secondChangeUserData);
+
+                return new[] { initialEntityData, firstChangeEntityData, secondChangeEntityData };
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+            });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreOutdatedValues()
+    {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
+        var secondChangeUserData = initialUserData with { Age = initialUserData.Age + 2 };
+        await VerifyStoreData_Sync_WithStreamCache("csv",
+            async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
+            {
+                var updated = rows.ToList();
+                updated[0].Columns[DataLakeConstants.PersistVersionKey] = 3.ToString();
+                updated[0].Columns["user_age"] = secondChangeUserData.Age.ToString();
+                return updated;
+            }),
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+                var secondChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: secondChangeUserData);
+
+                // Second change is the most recent version, so first change should be ignored and not cause the export to fail
+                return new[] { initialEntityData, secondChangeEntityData, firstChangeEntityData };
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+            });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheCanReAddAfterDeletion()
+    {
+        var initialUserData = UserData.Default;
+        var removedUserData = initialUserData with { Age = initialUserData.Age + 1 };
+        var readdUserData = initialUserData with { Age = initialUserData.Age + 2 };
+        await VerifyStoreData_Sync_WithStreamCache("csv",
+            async (fileClient, _, _) => await AssertCsvResult(fileClient, "_", (rows) =>
+            {
+                var updated = rows.ToList();
+                updated[0].Columns[DataLakeConstants.PersistVersionKey] = 3.ToString();
+                updated[0].Columns["user_age"] = readdUserData.Age.ToString();
+                return updated;
+            }),
+            getConnectorEntityData: () =>
+            {
+
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var removedEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Removed, persistVersion: 2, userData: removedUserData);
+                var readdEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 3, userData: readdUserData);
+
+                // Intermediate version is outdated when final version is stored, so it should be ignored and not cause the export to fail
+                return new[] { initialEntityData, removedEntityData, readdEntityData };
+            },
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(DataLakeConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(DataLakeConstants.ShouldWriteGuidAsString), true);
+            });
     }
 
     private protected Task<SetupContainerResult> SetupContainer<TJobData>(
@@ -85,7 +185,9 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         var constantsMock = CreateConstantsMock();
         var jobDataFactoryMock = CreateJobDataFactoryMock(container);
         var connectorMock = GetConnectorMock(applicationContext, mockDateTimeOffsetProvider, constantsMock, jobDataFactoryMock);
-        jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), providerDefinitionId, It.IsAny<string>()))
+        jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<IReadOnlyStreamModel>()))
+            .ReturnsAsync(jobData);
+        jobDataFactoryMock.Setup(x => x.GetConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<Guid>()))
             .ReturnsAsync(jobData);
         connectorMock.CallBase = true;
 
@@ -336,7 +438,6 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         try
         {
             var fsClient = client.GetFileSystemClient(fileSystemName);
-            await ModifyHistoryTimeToBeCurrentTime(setupContainerResult);
 
             var executeExportArg = new ExecuteExportArg(
                 context,
@@ -345,7 +446,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                 FileSystemName: fileSystemName,
                 DirectoryName: directoryName,
                 client,
-                exportJob);
+                exportJob,
+                setupContainerResult);
 
             var path = executeExport == null
                 ? await DefaultExecuteExport(executeExportArg)
@@ -393,8 +495,6 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
     protected static async Task DeleteTable(Guid streamId, string streamCacheConnectionString)
     {
-        await using var connection = new SqlConnection(streamCacheConnectionString);
-        await connection.OpenAsync();
         var tableName = CacheTableHelper.GetCacheTableName(streamId);
         var deleteTableSql = $"""
             IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
@@ -402,15 +502,37 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
             DROP TABLE IF EXISTS [{tableName}];
             DROP TABLE IF EXISTS [{tableName}_History];
+            DROP TABLE IF EXISTS [{CacheTableHelper.GetExportHistoryTableName(streamId)}_ExportHistory];
             """;
-        var command = new SqlCommand(deleteTableSql, connection)
+        try
         {
-            CommandType = CommandType.Text
-        };
-        _ = await command.ExecuteNonQueryAsync();
+            await DeleteTableInternal(deleteTableSql, streamCacheConnectionString);
+        }
+        catch (SqlException ex) when (ex.Number == NotTemporalTableErrorCode)
+        {
+            var deleteTableSeparatelySql = $"""
+                IF EXISTS (SELECT * FROM SYSOBJECTS WHERE NAME='{tableName}' AND XTYPE='U')
+                DROP TABLE IF EXISTS [{tableName}];
+                DROP TABLE IF EXISTS [{tableName}_History];
+                DROP TABLE IF EXISTS [{CacheTableHelper.GetExportHistoryTableName(streamId)}_ExportHistory];
+                """;
+            await DeleteTableInternal(deleteTableSeparatelySql, streamCacheConnectionString);
+        }
+
+        static async Task DeleteTableInternal(string deleteTableSql, string streamCacheConnectionString)
+        {
+            await using var connection = new SqlConnection(streamCacheConnectionString);
+            await connection.OpenAsync();
+
+            var command = new SqlCommand(deleteTableSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
+            _ = await command.ExecuteNonQueryAsync();
+        }
     }
 
-    private protected static async Task ModifyHistoryTimeToBeCurrentTime(SetupContainerResult setupContainerResult)
+    private protected async Task ModifyHistoryTimeToBeCurrentTime(SetupContainerResult setupContainerResult, ConnectorEntityData connectorEntityData)
     {
         var jobData = setupContainerResult.DataLakeJobData;
         var connectionString = jobData.StreamCacheConnectionString;
@@ -428,14 +550,34 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             await EnableHistory(connection, tableName);
             await AssertRowCount(connection, tableName);
         }
-        catch
+        catch (Exception ex)
         {
+            _testOutputHelper.WriteLine(ex.Message + Environment.NewLine + ex.StackTrace);
             await DeleteTable(streamModel.Id, jobData.StreamCacheConnectionString);
+            throw;
         }
+
+        static async Task AssertRowCount(SqlConnection connection, string tableName)
+        {
+            var getCountSql = $"SELECT COUNT(*) FROM [{tableName}]";
+            var sqlCommand = new SqlCommand(getCountSql, connection)
+            {
+                CommandType = CommandType.Text,
+            };
+            var total = (int)await sqlCommand.ExecuteScalarAsync();
+
+            Assert.Equal(1, total);
+        }
+
 
         static async Task EnableHistory(SqlConnection connection, string tableName)
         {
-            var enableHistorySql = $"ALTER TABLE [dbo].[{tableName}] SET (SYSTEM_VERSIONING = ON (HISTORY_TABLE = [dbo].[{tableName}_History], DATA_CONSISTENCY_CHECK = ON));";
+            var enableHistorySql = $"""
+                    ALTER TABLE [dbo].[{tableName}] ADD PERIOD FOR SYSTEM_TIME ([ValidFrom], [ValidTo]);
+                    ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidFrom] ADD HIDDEN;
+                    ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidTo] ADD HIDDEN;
+                    ALTER TABLE [dbo].[{tableName}] SET (SYSTEM_VERSIONING = ON (HISTORY_TABLE = [dbo].[{tableName}_History], DATA_CONSISTENCY_CHECK = ON));
+                    """;
 
             var enableHistoryCommand = new SqlCommand(enableHistorySql, connection)
             {
@@ -458,34 +600,61 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             await disableHistoryCommand.ExecuteNonQueryAsync();
         }
 
-        static async Task AlterHistory(Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider, SqlConnection connection, string tableName)
+        async Task AlterHistory(Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider, SqlConnection connection, string tableName)
         {
-            var alterHistorySql = $"""
-                    UPDATE [dbo].[{tableName}] SET [ValidFrom] = @ValidFrom;
-                    ALTER TABLE [dbo].[{tableName}] ADD PERIOD FOR SYSTEM_TIME ([ValidFrom], [ValidTo]);
-                    ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidFrom] ADD HIDDEN;
-                    ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidTo] ADD HIDDEN;
+
+            var targetTime = mockDateTimeOffsetProvider.Object.GetCurrentUtcTime();
+            var getCurrentValidFromSql = $"""
+                        SELECT
+                            [ValidFrom]
+                        FROM
+                            [dbo].[{tableName}]
+                        WHERE
+                            [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
+                        """;
+            using var getCurrentValidFromCommand = new SqlCommand(getCurrentValidFromSql, connection);
+            getCurrentValidFromCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            var validFrom = await getCurrentValidFromCommand.ExecuteScalarAsync() as DateTime?;
+
+
+            var updateCurrentValidFromToTimeSql = $"""
+                    UPDATE
+                        [dbo].[{tableName}]
+                    SET
+                        [ValidFrom] = @ValidFrom
+                    WHERE
+                        [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
                     """;
-            var alterHistoryCommand = new SqlCommand(alterHistorySql, connection)
+            using var updateCurrentValidFromToTimeCommand = new SqlCommand(updateCurrentValidFromToTimeSql, connection)
             {
                 CommandType = CommandType.Text,
             };
-            alterHistoryCommand.Parameters.Add(new SqlParameter("@ValidFrom", mockDateTimeOffsetProvider.Object.GetCurrentUtcTime()));
-            await alterHistoryCommand.ExecuteNonQueryAsync();
-        }
+            updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter("@ValidFrom", targetTime));
+            updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            await updateCurrentValidFromToTimeCommand.ExecuteNonQueryAsync();
 
-        static async Task AssertRowCount(SqlConnection connection, string tableName)
-        {
-            var getCountSql = $"SELECT COUNT(*) FROM [{tableName}]";
-            var sqlCommand = new SqlCommand(getCountSql, connection)
+
+            var updateHistoryValidFromToTimeSql = $"""
+                    UPDATE
+                        [dbo].[{tableName}_History]
+                    SET
+                        [ValidTo] = @TargetValidTo
+                    WHERE
+                        [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
+                        [ValidTo] = @OriginalValidTo;
+                    """;
+            using var updateHistoryValidFromToTimeCommand = new SqlCommand(updateHistoryValidFromToTimeSql, connection)
             {
                 CommandType = CommandType.Text,
             };
-            var total = (int)await sqlCommand.ExecuteScalarAsync();
-
-            Assert.Equal(1, total);
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@TargetValidTo", targetTime));
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@OriginalValidTo", validFrom?.ToString("o")));
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            await updateHistoryValidFromToTimeCommand.ExecuteNonQueryAsync();
         }
     }
+
+
 
     private protected virtual async Task AssertCsvResultUnescaped(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
     {
@@ -533,8 +702,9 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
 
     private void AssertResult(List<DataRow> actualRows, List<DataRow> expectedRows)
     {
-        TestOutputHelper.WriteLine(JsonConvert.SerializeObject(actualRows, Formatting.Indented));
-        Assert.Equal(actualRows.Count, actualRows.Count);
+        TestOutputHelper.WriteLine("Actual"  + Environment.NewLine + JsonConvert.SerializeObject(actualRows, Formatting.Indented));
+        TestOutputHelper.WriteLine("Expected" + Environment.NewLine + JsonConvert.SerializeObject(expectedRows, Formatting.Indented));
+        Assert.Equal(actualRows.Count, expectedRows.Count);
         for (var i = 0; i < expectedRows.Count; i++)
         {
             var expectedRow = expectedRows[i];
@@ -853,19 +1023,25 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     protected ITestOutputHelper TestOutputHelper => _testOutputHelper;
     protected static DateTimeOffset DefaultCurrentTime => _defaultCurrentTime;
 
-    public ConnectorEntityData CreateBaseConnectorEntityData(StreamMode streamMode, VersionChangeType versionChangeType)
+    private protected ConnectorEntityData CreateBaseConnectorEntityData(
+        StreamMode streamMode,
+        VersionChangeType versionChangeType,
+        int persistVersion = 1,
+        UserData? userData = null)
     {
-        var dobInDateTime = new DateTime(2000, 01, 02, 03, 04, 05);
-        var dobInDateTimeOffset = new DateTimeOffset(2000, 01, 02, 03, 04, 05, TimeSpan.FromMinutes(12 * 60 + 34));
+        var userDataToUse = userData ?? UserData.Default;
+        var dobInDateTimeOffset = userDataToUse.DobInDateTimeOffset;
+        var dobInDateTime = dobInDateTimeOffset.DateTime;
+
         var data = new ConnectorEntityData(versionChangeType, streamMode,
             Guid.Parse("f55c66dc-7881-55c9-889f-344992e71cb8"),
-            new ConnectorEntityPersistInfo("etypzcezkiehwq8vw4oqog==", 1), null,
+            new ConnectorEntityPersistInfo("etypzcezkiehwq8vw4oqog==", persistVersion), null,
             EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"),
             "/Person",
             [
-                new ConnectorPropertyData("user.lastName", "Picard",
+                new ConnectorPropertyData("user.lastName", userDataToUse.LastName,
                     new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
-                new ConnectorPropertyData("user.age", "123",
+                new ConnectorPropertyData("user.age", userDataToUse.Age.ToString(),
                     new VocabularyKeyConnectorPropertyDataType(
                         new VocabularyKey("user.age", dataType: VocabularyKeyDataType.Integer)
                         {
@@ -883,7 +1059,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                         {
                             Storage = VocabularyKeyStorage.Typed,
                         })),
-                new ConnectorPropertyData("Name", "Jean Luc Picard",
+                new ConnectorPropertyData("Name", userDataToUse.Name,
                     new EntityPropertyConnectorPropertyDataType(typeof(string))),
             ],
             [EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0")],
@@ -922,7 +1098,21 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             string FileSystemName,
             string DirectoryName,
             DataLakeServiceClient Client,
-            DataLakeExportEntitiesJobBase ExportJob);
+            DataLakeExportEntitiesJobBase ExportJob,
+            SetupContainerResult SetupContainerResult);
+
+    private protected record UserData(
+        string Name,
+        string LastName,
+        int Age,
+        DateTimeOffset DobInDateTimeOffset)
+    {
+        public static UserData Default => new UserData(
+            "Jean Luc Picard",
+            "Picard",
+            123,
+            new DateTimeOffset(2000, 01, 02, 03, 04, 05, TimeSpan.FromMinutes(12 * 60 + 34)));
+    };
 
     public class DataRow
     {
