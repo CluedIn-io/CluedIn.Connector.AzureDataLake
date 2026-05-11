@@ -21,7 +21,6 @@ using Microsoft.Extensions.Logging;
 using Moq;
 
 using Xunit;
-using Xunit.Abstractions;
 
 using Encoding = System.Text.Encoding;
 
@@ -474,7 +473,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     private protected override DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
         var logger = new Mock<ILogger<OpenMirroringClient>>();
-        var dataLakeClient = new OpenMirroringClient(logger.Object, setupResult.DateTimeOffsetProviderMock.Object);
+        var dataLakeClient = new OpenMirroringClient(logger.Object, setupResult.ApplicationContext, setupResult.DateTimeOffsetProviderMock.Object);
         var exportJob = new OpenMirroringExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
@@ -550,6 +549,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     }
 
     protected override Mock<OpenMirroringConnector> GetConnectorMock(
+        ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
         Mock<IOpenMirroringConstants> constantsMock,
         Mock<OpenMirroringJobDataFactory> jobDataFactory)
@@ -557,7 +557,8 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         var logger = new Mock<ILogger<OpenMirroringClient>>();
         var mockConnector = new Mock<OpenMirroringConnector>(
             new Mock<ILogger<OpenMirroringConnector>>().Object,
-            new OpenMirroringClient(logger.Object, mockDateTimeOffsetProvider.Object),
+            applicationContext,
+            new OpenMirroringClient(logger.Object, applicationContext, mockDateTimeOffsetProvider.Object),
             constantsMock.Object,
             jobDataFactory.Object,
             mockDateTimeOffsetProvider.Object);

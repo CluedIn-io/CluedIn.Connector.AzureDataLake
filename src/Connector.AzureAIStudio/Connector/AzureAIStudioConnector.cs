@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
@@ -11,11 +11,12 @@ public class AzureAIStudioConnector : DataLakeConnector
 {
     public AzureAIStudioConnector(
         ILogger<AzureAIStudioConnector> logger,
+        ApplicationContext applicationContext,
         AzureAIStudioClient client,
         IAzureAIStudioConstants constants,
         AzureAIStudioJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
     }
 
