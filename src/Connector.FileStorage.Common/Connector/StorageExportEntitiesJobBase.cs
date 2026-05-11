@@ -6,6 +6,11 @@ using System.Net;
 using System.Threading.Tasks;
 using System.Transactions;
 
+<<<<<<<< HEAD:src/Connector.FileStorage.Common/Connector/StorageExportEntitiesJobBase.cs
+========
+using Azure.Storage.Files.DataLake;
+using CluedIn.Connector.FileStorage.Common.Extensions;
+>>>>>>>> develop:src/Connector.FileStorage.Common/Connector/DataLakeExportEntitiesJobBase.cs
 using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;

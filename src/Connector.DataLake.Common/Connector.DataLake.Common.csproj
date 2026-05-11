@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>CluedIn.Connector.DataLake.Common provides the common functionality to post data to DataLake</Description>
     <AssemblyName>CluedIn.Connector.DataLake.Common</AssemblyName>
@@ -21,6 +21,9 @@
   <ItemGroup>
     <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Azure.Storage.Files.DataLake" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
