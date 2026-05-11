@@ -214,6 +214,15 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
         return FlushAsync(default);
     }
 
+    Task<BufferStatus> IBuffer<T>.GetStatus()
+    {
+        return Task.FromResult(new BufferStatus(
+            TotalPendingItems: _channel.Reader.Count,
+            MaxPendingItems: _maxBatchSize,
+            TimeOutMilliseconds: (int)_options.IdleTimeout.TotalMilliseconds,
+            new Dictionary<string, string>()));
+    }
+
     /// <summary>Add item and complete only when that item is flushed.</summary>
     public async Task AddAsync(T item, CancellationToken cancellationToken = default)
     {

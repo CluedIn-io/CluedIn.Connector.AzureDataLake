@@ -29,11 +29,12 @@ public class OpenMirroringConnector : DataLakeConnector
 
     public OpenMirroringConnector(
         ILogger<OpenMirroringConnector> logger,
+        ApplicationContext applicationContext,
         OpenMirroringClient client,
         IOpenMirroringConstants constants,
         OpenMirroringJobDataFactory dataLakeJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _client = client ?? throw new ArgumentNullException(nameof(client));

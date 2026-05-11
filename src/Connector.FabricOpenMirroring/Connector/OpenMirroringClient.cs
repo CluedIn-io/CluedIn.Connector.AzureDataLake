@@ -1,7 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
+using Azure.Core;
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
 
@@ -10,18 +17,12 @@ using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
 using Microsoft.Extensions.Logging;
-using System.Text;
-using System.Net.Http;
-using System.Net.Http.Json;
-using Azure.Core;
-using System.Net.Http.Headers;
-using System.Text.Json.Serialization;
-using System.Text.Json;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
 public class OpenMirroringClient : DataLakeClient
 {
+    private readonly ApplicationContext _applicationContext;
     private readonly ILogger<OpenMirroringClient> _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
 
@@ -38,9 +39,11 @@ public class OpenMirroringClient : DataLakeClient
 
     public OpenMirroringClient(
         ILogger<OpenMirroringClient> logger,
+        ApplicationContext applicationContext,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
@@ -50,19 +53,93 @@ public class OpenMirroringClient : DataLakeClient
         return await fileSystemClient.ExistsAsync();
     }
 
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
+    protected override async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IDataLakeJobData configuration)
     {
         var casted = CastJobData<OpenMirroringConnectorJobData>(configuration);
-        var accountName = "onelake";
 
         var sharedKeyCredential = new ClientSecretCredential(casted.TenantId, casted.ClientId, casted.ClientSecret);
 
-        var dfsUri = $"https://{accountName}.dfs.fabric.microsoft.com";
-
         var dataLakeServiceClient = new DataLakeServiceClient(
-            new Uri(dfsUri),
+            await GetDataLakeServiceUriAsync(casted),
             sharedKeyCredential);
         return dataLakeServiceClient;
+    }
+
+    private async Task<Uri> GetDataLakeServiceUriAsync(OpenMirroringConnectorJobData configuration)
+    {
+        if (configuration.UseWorkspaceLevelPrivateLink)
+        {
+            var workspaceId = await GetWorkspaceIdAsync(configuration);
+            if (workspaceId == null)
+            {
+                throw new InvalidOperationException($"Failed to obtain workspace id from workspace name {configuration.WorkspaceName}");
+            }
+
+            var url = GetStorageUrl(configuration, workspaceId.Value);
+            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            return new Uri(url);
+        }
+
+        var accountName = "onelake";
+        return new Uri($"https://{accountName}.dfs.fabric.microsoft.com");
+    }
+    private string GetStorageUrl(OpenMirroringConnectorJobData configuration, Guid workspaceId)
+    {
+        if (configuration.UseWorkspaceLevelPrivateLink)
+        {
+            var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.dfs.fabric.microsoft.com";
+            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            return url;
+        }
+
+        return "https://onelake.dfs.fabric.microsoft.com";
+    }
+
+    private string GetWorkspaceSpecificPrefix(Guid workspaceId)
+    {
+        var workspaceIdString = workspaceId.ToString("N");
+        return $"{workspaceIdString}.z{workspaceIdString[..2]}";
+    }
+
+    private string GetApiUrl(OpenMirroringConnectorJobData configuration, Guid workspaceId)
+    {
+        if (configuration.UseWorkspaceLevelPrivateLink)
+        {
+            var url = $"https://{GetWorkspaceSpecificPrefix(workspaceId)}.w.api.fabric.microsoft.com";
+            _logger.LogDebug("Using workspace level private link url {Url} for workspace {WorkspaceName}", url, configuration.WorkspaceName);
+            return url;
+        }
+
+        return "https://api.fabric.microsoft.com";
+    }
+
+    internal async Task<Guid?> GetWorkspaceIdAsync(OpenMirroringConnectorJobData configuration)
+    {
+        return await _applicationContext.System.Cache.GetItemAsync(
+            $"OpenMirroringWorkspaceId_{configuration.TenantId}_{configuration.ClientId}_{configuration.WorkspaceName}",
+            GetWorkspaceIdFromServiceAsync,
+            cachePolicy: policy => policy.WithAbsoluteExpiration(_dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(30))
+        );
+
+        async Task<Guid?> GetWorkspaceIdFromServiceAsync()
+        {
+            var token = await GetToken(configuration);
+            using var httpClient = new HttpClient();
+            var workspace = await GetWorkspaceAsync(httpClient, token, configuration.WorkspaceName);
+            return workspace?.Id;
+        }
+
+    }
+    private async Task<string> GetToken(OpenMirroringConnectorJobData configuration)
+    {
+        var sharedKeyCredential = new ClientSecretCredential(configuration.TenantId, configuration.ClientId, configuration.ClientSecret);
+        var tokenResult = await sharedKeyCredential.GetTokenAsync(
+            new TokenRequestContext(
+            [
+                "https://api.fabric.microsoft.com/.default"
+            ]));
+        var token = tokenResult.Token;
+        return token;
     }
 
     public virtual async Task UpdateOrCreateMirroredDatabaseAsync(IDataLakeJobData dataLakeJobData, bool isEnabled)
@@ -74,15 +151,9 @@ public class OpenMirroringClient : DataLakeClient
             return;
         }
 
-        var sharedKeyCredential = new ClientSecretCredential(jobData.TenantId, jobData.ClientId, jobData.ClientSecret);
-        var tokenResult = await sharedKeyCredential.GetTokenAsync(
-        new TokenRequestContext(new string[]
-        {
-            "https://api.fabric.microsoft.com/.default"
-        }));
-        var token = tokenResult.Token;
+        var token = await GetToken(jobData);
 
-        var httpClient = new HttpClient();
+        using var httpClient = new HttpClient();
 
         var workspace = await GetWorkspaceAsync(httpClient, token, jobData.WorkspaceName);
         if (workspace == null)
@@ -91,27 +162,27 @@ public class OpenMirroringClient : DataLakeClient
         }
 
         var mirrorDatabaseName = jobData.MirroredDatabaseName;
-        var mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id, jobData.MirroredDatabaseName);
+        var mirroredDatabase = await GetMirroredDatabaseAsync(jobData, httpClient, token, workspace.Id, jobData.MirroredDatabaseName);
         if (mirroredDatabase == null)
         {
             await CreateMirroredDatabase(httpClient, token, jobData, workspace, mirrorDatabaseName);
-            mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id, jobData.MirroredDatabaseName);
+            mirroredDatabase = await GetMirroredDatabaseAsync(jobData, httpClient, token, workspace.Id, jobData.MirroredDatabaseName);
         }
 
         if (isEnabled)
         {
-            await StartMirroringAsync(httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
+            await StartMirroringAsync(jobData, httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
         }
         else
         {
-            await StopMirroringAsync(httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
+            await StopMirroringAsync(jobData, httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
         }
     }
 
-    private async Task StopMirroringAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
+    private async Task StopMirroringAsync(OpenMirroringConnectorJobData configuration, HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
         _logger.LogDebug("Begin stop mirroring of Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseId, workspaceId);
-        var url = $"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/startMirroring";
+        var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/stopMirroring";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri(url);
@@ -123,10 +194,10 @@ public class OpenMirroringClient : DataLakeClient
         _logger.LogDebug("End stop mirroring of Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseId, workspaceId);
     }
 
-    private async Task StartMirroringAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
+    private async Task StartMirroringAsync(OpenMirroringConnectorJobData configuration, HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
         _logger.LogDebug("Begin start mirroring of Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseId, workspaceId);
-        var url = $"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/startMirroring";
+        var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}/startMirroring";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri(url);
@@ -150,7 +221,7 @@ public class OpenMirroringClient : DataLakeClient
             throw new ApplicationException($"Mirrored database is not found using workspace {jobData.WorkspaceName} and mirrored database name {jobData.MirroredDatabaseName}.");
         }
         _logger.LogDebug("Begin creating Mirrored Database {MirroredDatabaseName} in Workspace {WorkspaceId}.", mirroredDatabaseName, workspace.Id);
-        var url = $"https://api.fabric.microsoft.com/v1/workspaces/{workspace.Id}/mirroredDatabases";
+        var url = $"{GetApiUrl(jobData, workspace.Id)}/v1/workspaces/{workspace.Id}/mirroredDatabases";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Post;
         request.RequestUri = new Uri(url);
@@ -200,7 +271,7 @@ public class OpenMirroringClient : DataLakeClient
         }
 
         _logger.LogDebug("Begin polling completion status for  Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseName, workspace.Id);
-        var status = await PollForCompletionAsync(httpClient, token, workspace.Id, result.Id.Value);
+        var status = await PollForCompletionAsync(jobData, httpClient, token, workspace.Id, result.Id.Value);
         if (status != SqlEndpointProvisioningStatus.Success)
         {
             throw new ApplicationException($"Failed to provision sql endpoint using workspace {jobData.WorkspaceName} and mirrored database name {jobData.MirroredDatabaseName}.");
@@ -208,12 +279,12 @@ public class OpenMirroringClient : DataLakeClient
         _logger.LogDebug("End polling completion status for  Mirrored Database {MirroredDatabaseId} in Workspace {WorkspaceId}.", mirroredDatabaseName, workspace.Id);
     }
 
-    private async Task<SqlEndpointProvisioningStatus?> PollForCompletionAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
+    private async Task<SqlEndpointProvisioningStatus?> PollForCompletionAsync(OpenMirroringConnectorJobData configuration, HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
         var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
         while (true)
         {
-            var result = await GetMirroredDatabaseAsync(httpClient, token, workspaceId, mirroredDatabaseId);
+            var result = await GetMirroredDatabaseAsync(configuration, httpClient, token, workspaceId, mirroredDatabaseId);
             var status = result?.Properties?.SqlEndpointProperties?.ProvisioningStatus;
 
             if (status != null && status != SqlEndpointProvisioningStatus.InProgress)
@@ -231,9 +302,9 @@ public class OpenMirroringClient : DataLakeClient
 
     }
 
-    private async Task<MirroredDatabase> GetMirroredDatabaseAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
+    private async Task<MirroredDatabase> GetMirroredDatabaseAsync(OpenMirroringConnectorJobData configuration, HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
-        var url = $"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}";
+        var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases/{mirroredDatabaseId}";
         var request = new HttpRequestMessage();
         request.Method = HttpMethod.Get;
         request.RequestUri = new Uri(url);
@@ -244,7 +315,7 @@ public class OpenMirroringClient : DataLakeClient
         return content;
     }
 
-    private async Task<MirroredDatabase?> GetMirroredDatabaseAsync(HttpClient httpClient, string token, Guid workspaceId, string mirroredDatabaseName)
+    private async Task<MirroredDatabase?> GetMirroredDatabaseAsync(OpenMirroringConnectorJobData configuration, HttpClient httpClient, string token, Guid workspaceId, string mirroredDatabaseName)
     {
         await foreach (var mirroredDatabase in ListMirroredDatabasesAsync())
         {
@@ -257,7 +328,7 @@ public class OpenMirroringClient : DataLakeClient
         return null;
         async IAsyncEnumerable<MirroredDatabase> ListMirroredDatabasesAsync()
         {
-            var url = $"https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/mirroredDatabases";
+            var url = $"{GetApiUrl(configuration, workspaceId)}/v1/workspaces/{workspaceId}/mirroredDatabases";
             do
             {
                 var request = new HttpRequestMessage();

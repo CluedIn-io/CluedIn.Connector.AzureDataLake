@@ -1,4 +1,4 @@
-﻿using Castle.MicroKernel.Registration;
+using Castle.MicroKernel.Registration;
 using Castle.MicroKernel.SubSystems.Configuration;
 using Castle.Windsor;
 using CluedIn.Connector.FileStorage.Common.Connector;
@@ -9,6 +9,9 @@ namespace CluedIn.Connector.FileStorage.Common;
 
 internal abstract class InstallComponentsBase : IWindsorInstaller
 {
+    private static readonly object _extendedConfigurationRegistrationLock = new();
+    private static bool _isExtendedConfigurationRegistered;
+
     public abstract void Install(IWindsorContainer container, IConfigurationStore store);
 
     protected static void DefaultInstall<TExportJob, TClient, TIConstants, TConstants, TJobDataFactory>(IWindsorContainer container, IConfigurationStore store)
@@ -23,6 +26,13 @@ internal abstract class InstallComponentsBase : IWindsorInstaller
         container.Register(Component.For<TIConstants>().ImplementedBy<TConstants>().LifestyleSingleton());
         container.Register(Component.For<TJobDataFactory>().ImplementedBy<TJobDataFactory>().LifestyleSingleton());
 
-        container.Register(Component.For<IExtendedConfigurationProvider>().ImplementedBy<DataLakeExtendedConfigurationProvider>().LifestyleSingleton().OnlyNewServices());
+        lock (_extendedConfigurationRegistrationLock)
+        {
+            if (!_isExtendedConfigurationRegistered)
+            {
+                container.Register(Component.For<IExtendedConfigurationProvider>().ImplementedBy<DataLakeExtendedConfigurationProvider>().LifestyleSingleton());
+                _isExtendedConfigurationRegistered = true;
+            }
+        }
     }
 }

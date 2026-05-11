@@ -1,5 +1,5 @@
-﻿using System;
-
+using System;
+using System.Threading.Tasks;
 using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 using CluedIn.Connector.FileStorage.Common;
@@ -9,7 +9,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector;
 
 public class AzureDataLakeClient : DataLakeClient
 {
-    protected override DataLakeServiceClient GetDataLakeServiceClient(IDataLakeJobData configuration)
+    protected override async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IDataLakeJobData configuration)
     {
         var casted = CastJobData<AzureDataLakeConnectorJobData>(configuration);
         return new DataLakeServiceClient(

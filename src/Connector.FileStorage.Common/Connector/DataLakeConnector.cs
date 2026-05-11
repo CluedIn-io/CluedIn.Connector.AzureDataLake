@@ -22,7 +22,7 @@ using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.FileStorage.Common.Connector
 {
-    public abstract partial class DataLakeConnector : ConnectorBaseV2
+    public abstract partial class DataLakeConnector : ConnectorBaseV2, IDisposable
     {
         protected static readonly ConnectionVerificationResult SuccessfulConnectionVerification = new (true);
         private const string JsonMimeType = "application/json";
@@ -31,6 +31,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private static readonly string _invalidFileNameHasInvalidCharacters = $"File name contains invalid characters. It cannot have {string.Join(", ", _invalidFileNameCharacters.Select(c => $"'{c}'"))} characters";
         private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<DataLakeConnector> _logger;
+        private readonly ApplicationContext _applicationContext;
         private readonly IDataLakeClient _client;
         private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
         private readonly IDataLakeJobDataFactory _dataLakeJobDataFactory;
@@ -55,6 +56,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             [typeof(Guid)] = "UNIQUEIDENTIFIER",
             [typeof(string)] = "NVARCHAR(MAX)"
         };
+        private bool _disposedValue;
 
         protected IDataLakeJobDataFactory DataLakeJobDataFactory => _dataLakeJobDataFactory;
 
@@ -62,6 +64,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
         protected DataLakeConnector(
             ILogger<DataLakeConnector> logger,
+            ApplicationContext applicationContext,
             IDataLakeClient client,
             IDataLakeConstants constants,
             IDataLakeJobDataFactory dataLakeJobDataFactory,
@@ -69,6 +72,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             : base(constants.ProviderId, false)
         {
             _logger = logger;
+            _applicationContext = applicationContext;
             _client = client;
             _dateTimeOffsetProvider = dateTimeOffsetProvider;
             _dataLakeJobDataFactory = dataLakeJobDataFactory;
@@ -85,11 +89,33 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
             _buffer = new PartitionedBuffer<IDataLakeJobData, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush, dateTimeOffsetProvider, cacheBufferStrategy);
+            SetupBufferStatusSubscription();
         }
 
         ~DataLakeConnector()
         {
-            _buffer.Dispose();
+            Dispose(disposing: false);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    _buffer.Dispose();
+                    _bufferStatusSubscription?.Dispose();
+                }
+
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
 
         public override Task VerifyExistingContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
