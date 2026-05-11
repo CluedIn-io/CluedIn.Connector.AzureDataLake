@@ -154,7 +154,7 @@ public abstract partial class DataLakeConnector : ICustomActionConnector
         var bufferStatus = new ConcurrentDictionary<string, BufferStatus>();
         var timeOutInMilliseconds =
             request?.Parameters?.TryGetValue("TimeOutInMilliseconds", out var timeOutObj) == true &&
-            int.TryParse(timeOutObj?.ToString(), out var parsedTimeOut)
+            int.TryParse(timeOutObj?.ToString(), out var parsedTimeOut) && parsedTimeOut > 0
                 ? Math.Min(parsedTimeOut, MaximumGetBufferTimeOutInMilliseconds)
                 : MaximumGetBufferTimeOutInMilliseconds;
 
