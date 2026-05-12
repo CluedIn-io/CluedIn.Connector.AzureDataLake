@@ -9,6 +9,8 @@
 
         MUST SPECIFY IN CSPROJ AS <PackageReference Name="<depName>" />
     -->
+    <PackageReference Update="System.Configuration.ConfigurationManager" Version="8.0.0" />
+    <PackageReference Update="System.Runtime.Caching" Version="8.0.0" />
     <PackageReference Update="AWSSDK.S3" Version="4.0.19.4" />
     <PackageReference Update="Azure.Identity" Version="1.21.0" />
     <PackageReference Update="Azure.Storage.Files.DataLake" Version="12.22.0" />
