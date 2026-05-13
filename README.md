@@ -12,6 +12,7 @@ To learn more about CluedIn, [contact the team](https://www.cluedin.com/discover
 
 ## Development
 
+
 ### Parquet File Output
 
 Microsoft support for Parquet format varies across products:
