@@ -8,12 +8,16 @@ using System.Transactions;
 
 using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
-using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+using CluedIn.ComponentHealth.Services;
+using CluedIn.ComponentHealth.Services.Models;
+using CluedIn.ComponentHealth.Storage;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
+using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
 namespace CluedIn.Connector.FileStorage.Common.Connector;
 
@@ -59,6 +63,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         var exportJobData = await GetJobDataAsync(context, args, "export");
         if (exportJobData == null)
         {
+            return;
+        }
+
+        if (!await IsConnectorHealthyAsync(context, exportJobData))
+        {
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as provider definition {ProviderDefinitionId} is not healthy.", exportJobData.StreamId, exportJobData.ProviderDefinition.Id);
             return;
         }
 
@@ -287,6 +297,23 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             await targetFileClient.DeleteIfExistsAsync();
         }
     }
+
+    private async Task<bool> IsConnectorHealthyAsync(
+        ExecutionContext executionContext,
+        ExportJobData exportJobData)
+    {
+        var providerDefinitionId = exportJobData.ProviderDefinition.Id;
+        var componentHealthService = executionContext.ApplicationContext.Container.Resolve<IComponentHealthService>();
+        var result = await componentHealthService.GetComponentHealth(executionContext, ComponentArea.Connector, providerDefinitionId);
+
+        if (result.Status != ComponentHealthStatus.Healthy)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     protected async Task<IStorageClient> CreateStorageClient(ExecutionContext context, IStorageConfiguration configuration)
     {
         return await _storageFactory.CreateStorageClient(context, configuration);
