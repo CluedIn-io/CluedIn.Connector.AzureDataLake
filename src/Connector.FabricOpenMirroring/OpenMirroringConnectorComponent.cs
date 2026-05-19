@@ -35,9 +35,7 @@ public sealed class OpenMirroringConnectorComponent : StorageConnectorComponentB
     private protected override void SubscribeToEvents(IStorageConfigurationConstants constants, IStorageFactory storageFactory, IScheduledJobQueue jobQueue)
     {
         var logger = Container.Resolve<ILogger<ExportTargetEventHandler>>();
-        var dateTimeProvider = Container.Resolve<IDateTimeOffsetProvider>();
-        var fabricClient = Container.Resolve<OpenMirroringStorageClient>();
-        _exportTargetEventHandler = new(logger, ApplicationContext, constants, storageFactory, fabricClient);
+        _exportTargetEventHandler = new(logger, ApplicationContext, constants, storageFactory);
         base.SubscribeToEvents(constants, storageFactory, jobQueue);
     }
 }
