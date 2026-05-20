@@ -84,7 +84,7 @@ internal class AmazonS3WriteStream : Stream
 
     public override void Flush()
     {
-        FlushAsync().GetAwaiter().GetResult();
+        FlushAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
 
     public override async Task FlushAsync(CancellationToken cancellationToken)
