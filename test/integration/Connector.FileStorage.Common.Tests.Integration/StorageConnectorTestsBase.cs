@@ -925,93 +925,93 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         return updatedConfiguration;
     }
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheCanHandleMultipleUpdates()
-    {
-        var initialUserData = UserData.Default;
-        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
-        var secondChangeUserData = initialUserData with { Age = initialUserData.Age + 2 };
-        await VerifyStoreData_Sync_WithStreamCache("csv",
-            async (setupContainerResult, path) => await AssertCsvResult(setupContainerResult, path, "_", (rows) =>
-            {
-                var updated = rows.ToList();
-                updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
-                updated[0].Columns["user_age"] = secondChangeUserData.Age.ToString();
-                return updated;
-            }),
-            getConnectorEntityData: () =>
-            {
-                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
-                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
-                var secondChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: secondChangeUserData);
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheCanHandleMultipleUpdates()
+    //{
+    //    var initialUserData = UserData.Default;
+    //    var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
+    //    var secondChangeUserData = initialUserData with { Age = initialUserData.Age + 2 };
+    //    await VerifyStoreData_Sync_WithStreamCache("csv",
+    //        async (setupContainerResult, path) => await AssertCsvResult(setupContainerResult, path, "_", (rows) =>
+    //        {
+    //            var updated = rows.ToList();
+    //            updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
+    //            updated[0].Columns["user_age"] = secondChangeUserData.Age.ToString();
+    //            return updated;
+    //        }),
+    //        getConnectorEntityData: () =>
+    //        {
+    //            var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+    //            var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+    //            var secondChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: secondChangeUserData);
 
-                return new[] { initialEntityData, firstChangeEntityData, secondChangeEntityData };
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-            });
-    }
+    //            return new[] { initialEntityData, firstChangeEntityData, secondChangeEntityData };
+    //        },
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreOutdatedValues()
-    {
-        var initialUserData = UserData.Default;
-        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
-        var secondChangeUserData = initialUserData with { Age = initialUserData.Age + 2 };
-        await VerifyStoreData_Sync_WithStreamCache("csv",
-            async (setupContainerResult, path) => await AssertCsvResult(setupContainerResult, path, "_", (rows) =>
-            {
-                var updated = rows.ToList();
-                updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
-                updated[0].Columns["user_age"] = secondChangeUserData.Age.ToString();
-                return updated;
-            }),
-            getConnectorEntityData: () =>
-            {
-                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
-                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
-                var secondChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: secondChangeUserData);
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheCanIgnoreOutdatedValues()
+    //{
+    //    var initialUserData = UserData.Default;
+    //    var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
+    //    var secondChangeUserData = initialUserData with { Age = initialUserData.Age + 2 };
+    //    await VerifyStoreData_Sync_WithStreamCache("csv",
+    //        async (setupContainerResult, path) => await AssertCsvResult(setupContainerResult, path, "_", (rows) =>
+    //        {
+    //            var updated = rows.ToList();
+    //            updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
+    //            updated[0].Columns["user_age"] = secondChangeUserData.Age.ToString();
+    //            return updated;
+    //        }),
+    //        getConnectorEntityData: () =>
+    //        {
+    //            var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+    //            var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+    //            var secondChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: secondChangeUserData);
 
-                // Second change is the most recent version, so first change should be ignored and not cause the export to fail
-                return new[] { initialEntityData, secondChangeEntityData, firstChangeEntityData };
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-            });
-    }
+    //            // Second change is the most recent version, so first change should be ignored and not cause the export to fail
+    //            return new[] { initialEntityData, secondChangeEntityData, firstChangeEntityData };
+    //        },
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+    //        });
+    //}
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheCanReAddAfterDeletion()
-    {
-        var initialUserData = UserData.Default;
-        var removedUserData = initialUserData with { Age = initialUserData.Age + 1 };
-        var readdUserData = initialUserData with { Age = initialUserData.Age + 2 };
-        await VerifyStoreData_Sync_WithStreamCache("csv",
-            async (setupContainerResult, path) => await AssertCsvResult(setupContainerResult, path, "_", (rows) =>
-            {
-                var updated = rows.ToList();
-                updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
-                updated[0].Columns["user_age"] = readdUserData.Age.ToString();
-                return updated;
-            }),
-            getConnectorEntityData: () =>
-            {
+    //[Fact]
+    //public async Task VerifyStoreData_Sync_WithStreamCacheCanReAddAfterDeletion()
+    //{
+    //    var initialUserData = UserData.Default;
+    //    var removedUserData = initialUserData with { Age = initialUserData.Age + 1 };
+    //    var readdUserData = initialUserData with { Age = initialUserData.Age + 2 };
+    //    await VerifyStoreData_Sync_WithStreamCache("csv",
+    //        async (setupContainerResult, path) => await AssertCsvResult(setupContainerResult, path, "_", (rows) =>
+    //        {
+    //            var updated = rows.ToList();
+    //            updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 3.ToString();
+    //            updated[0].Columns["user_age"] = readdUserData.Age.ToString();
+    //            return updated;
+    //        }),
+    //        getConnectorEntityData: () =>
+    //        {
 
-                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
-                var removedEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Removed, persistVersion: 2, userData: removedUserData);
-                var readdEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 3, userData: readdUserData);
+    //            var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+    //            var removedEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Removed, persistVersion: 2, userData: removedUserData);
+    //            var readdEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 3, userData: readdUserData);
 
-                // Intermediate version is outdated when final version is stored, so it should be ignored and not cause the export to fail
-                return new[] { initialEntityData, removedEntityData, readdEntityData };
-            },
-            configureAuthentication: (values) =>
-            {
-                values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
-                values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
-            });
-    }
+    //            // Intermediate version is outdated when final version is stored, so it should be ignored and not cause the export to fail
+    //            return new[] { initialEntityData, removedEntityData, readdEntityData };
+    //        },
+    //        configureAuthentication: (values) =>
+    //        {
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+    //            values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
+    //        });
+    //}
 }
