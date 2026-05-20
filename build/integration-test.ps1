@@ -66,53 +66,6 @@ function Run-Setup() {
 	$createDatabaseCommand = "CREATE DATABASE [$databaseName]"
 	Write-Host "##[command]docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand"
 	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand
-	
-	Get-Location
-	dotnet test --blame-hang-timeout 5m --blame --blame-hang-dump-type full --diag log.txt ./test/integration/Connector.AmazonS3.Tests.Integration/Connector.AmazonS3.Tests.Integration.csproj --configuration Release --no-restore --no-build
-	
-	Write-Host "LSET EXIT CDOE $LASTEXITCODE AmazonS3"
-	Write-Host "WEEEEEEEEEEEEE AmazonS3"
-	$dumpFiles = Get-ChildItem -Path "./test/integration/Connector.AmazonS3.Tests.Integration/" -Recurse | where { $_.Name -like "*.dmp" }
-	Write-Host "WAAAAAAAAAAAAAAAA AmazonS3 totalDumpFIles = $($dumpFiles.Length)"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	Write-Host "WUUUUUUUUUUUUUU AmazonS3"
-	
-	dotnet test --blame-hang-timeout 5m --blame --blame-hang-dump-type full --diag log.txt ./test/integration/Connector.AzureDataLake.Tests.Integration/Connector.AzureDataLake.Tests.Integration.csproj --configuration Release --no-restore --no-build
-	Write-Host "LSET EXIT CDOE $LASTEXITCODE AzureDataLake"
-	Write-Host "WEEEEEEEEEEEEE AzureDataLake"
-	$dumpFiles = Get-ChildItem -Path "./test/integration/Connector.AzureDataLake.Tests.Integration/" -Recurse | where { $_.Name -like "*.dmp" }
-	Write-Host "WAAAAAAAAAAAAAAAA AzureDataLake totalDumpFIles = $($dumpFiles.Length)"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	Write-Host "WUUUUUUUUUUUUUU AzureDataLake"
-	
-	dotnet test --blame-hang-timeout 5m --blame --blame-hang-dump-type full --diag log.txt ./test/integration/Connector.OneLake.Tests.Integration/Connector.OneLake.Tests.Integration.csproj --configuration Release --no-restore --no-build
-	Write-Host "LSET EXIT CDOE $LASTEXITCODE OneLake"
-	Write-Host "WEEEEEEEEEEEEE OneLake"
-	$dumpFiles = Get-ChildItem -Path "./test/integration/Connector.OneLake.Tests.Integration/" -Recurse | where { $_.Name -like "*.dmp" }
-	Write-Host "WAAAAAAAAAAAAAAAA OneLake totalDumpFIles = $($dumpFiles.Length)"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
-	Write-Host "WUUUUUUUUUUUUUU OneLake"
 }
 
 function Run-TearDown() {
