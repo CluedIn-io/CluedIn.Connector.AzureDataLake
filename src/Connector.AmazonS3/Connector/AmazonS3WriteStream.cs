@@ -86,12 +86,6 @@ internal class AmazonS3WriteStream : Stream
         FlushAsync().GetAwaiter().GetResult();
     }
 
-    public override void Close()
-    {
-        base.Close();
-        CompleteUploadAsync().GetAwaiter().GetResult();
-    }
-
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
         if (_buffer.Length > 0)
