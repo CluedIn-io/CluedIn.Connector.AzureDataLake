@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -140,6 +141,7 @@ internal class AmazonS3WriteStream : Stream
         _disposed = true;
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task InitiateMultipartUploadAsync()
     {
         if (_uploadId != null)
@@ -157,6 +159,7 @@ internal class AmazonS3WriteStream : Stream
         _uploadId = response.UploadId;
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task UploadPartAsync()
     {
         MemoryStream sendStream;
@@ -191,6 +194,7 @@ internal class AmazonS3WriteStream : Stream
         await sendStream.DisposeAsync();
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task CompleteUploadAsync()
     {
         if (_completed)
@@ -229,6 +233,7 @@ internal class AmazonS3WriteStream : Stream
         }
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task CompleteMultiPartUploadAsync()
     {
         var completeRequest = new CompleteMultipartUploadRequest
@@ -242,6 +247,7 @@ internal class AmazonS3WriteStream : Stream
         await _s3Client.CompleteMultipartUploadAsync(completeRequest);
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task UploadSinglePartFileAsync()
     {
         _buffer.Position = 0;
@@ -255,6 +261,7 @@ internal class AmazonS3WriteStream : Stream
         await _s3Client.PutObjectAsync(putRequest);
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task AbortMultipartUploadAsync()
     {
         if (_uploadId == null)
