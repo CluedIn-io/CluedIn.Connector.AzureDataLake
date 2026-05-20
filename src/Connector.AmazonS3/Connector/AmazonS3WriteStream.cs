@@ -66,7 +66,7 @@ internal class AmazonS3WriteStream : Stream
             await UploadPartAsync();
         }
     }
-
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private bool WriteInternal(byte[] buffer, int offset, int count)
     {
         var shouldFlush = false;
@@ -94,7 +94,7 @@ internal class AmazonS3WriteStream : Stream
             await UploadPartAsync();
         }
     }
-
+    [MethodImpl(MethodImplOptions.NoInlining)]
     protected override void Dispose(bool disposing)
     {
         if (!_disposed && disposing)
