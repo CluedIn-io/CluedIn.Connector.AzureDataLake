@@ -167,9 +167,11 @@ internal class AmazonS3WriteStream : Stream
 
         try
         {
+            Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - InitiateMultipartUploadAsync - Send UploadId: " + _uploadId + " BucketName: " + _bucketName + " Key: " + _key);
+            Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - InitiateMultipartUploadAsync - Stack " + Environment.NewLine + Environment.StackTrace);
             var response = await _s3Client.InitiateMultipartUploadAsync(request);
             _uploadId = response.UploadId;
-            Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - InitiateMultipartUploadAsync - End" + _uploadId);
+            Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - InitiateMultipartUploadAsync - End " + _uploadId);
         }
         catch (Exception ex)
         {
