@@ -79,3 +79,8 @@ steps:
     inputs:
       artifactName: 'asdf'
       targetPath: $(System.DefaultWorkingDirectory)/test/integration/Connector.AmazonS3.Tests.Integration/TestResults
+  - task: PublishPipelineArtifact@0
+    displayName: 'Create Pipeline Artifact 33'
+    inputs:
+      artifactName: 'asdf'
+      targetPath: $(System.DefaultWorkingDirectory)/log.txt

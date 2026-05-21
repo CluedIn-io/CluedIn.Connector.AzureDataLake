@@ -68,7 +68,7 @@ function Run-Setup() {
 	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand
 	
 	Get-Location
-	dotnet test --blame-hang-timeout 5m --blame --blame-hang-dump-type full --diag log.txt ./test/integration/Connector.AmazonS3.Tests.Integration/Connector.AmazonS3.Tests.Integration.csproj --configuration Release --no-restore --no-build
+	dotnet test --blame-hang-timeout 3m --blame --blame-hang-dump-type full --diag log.txt ./test/integration/Connector.AmazonS3.Tests.Integration/Connector.AmazonS3.Tests.Integration.csproj --configuration Release --no-restore --no-build
 	
 	Write-Host "LSET EXIT CDOE $LASTEXITCODE AmazonS3"
 	Write-Host "WEEEEEEEEEEEEE AmazonS3"
@@ -113,6 +113,32 @@ function Run-Setup() {
 	# Write-Host "WUUUUUUUUUUUUUU OneLake"
 	# Write-Host "WUUUUUUUUUUUUUU OneLake"
 	# Write-Host "WUUUUUUUUUUUUUU OneLake"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Write-Host "WSSSSSSSSSSSSSSS"
+	Get-Content "log.txt" | Write-Host
 }
 
 function Run-TearDown() {
