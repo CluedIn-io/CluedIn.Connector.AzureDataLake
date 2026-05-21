@@ -153,7 +153,7 @@ internal class AmazonS3WriteStream : Stream
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task InitiateMultipartUploadAsync()
     {
-        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - InitiateMultipartUploadAsync");
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - InitiateMultipartUploadAsync - Begin");
         if (_uploadId != null)
         {
             return;
@@ -167,12 +167,13 @@ internal class AmazonS3WriteStream : Stream
 
         var response = await _s3Client.InitiateMultipartUploadAsync(request);
         _uploadId = response.UploadId;
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - InitiateMultipartUploadAsync - End" + _uploadId);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task UploadPartAsync()
     {
-        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - UploadPartAsync");
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - UploadPartAsync - Begin");
         MemoryStream sendStream;
         lock (_bufferLock)
         {
@@ -199,10 +200,13 @@ internal class AmazonS3WriteStream : Stream
             InputStream = sendStream,
         };
 
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - UploadPartAsync - UploadPartAsync - Begin");
         var response = await _s3Client.UploadPartAsync(request);
         _partETags.Add(new PartETag(_partNumber, response.ETag));
 
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - UploadPartAsync - UploadPartAsync - End");
         await sendStream.DisposeAsync();
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - UploadPartAsync - UploadPartAsync - DisposedSendStream");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
