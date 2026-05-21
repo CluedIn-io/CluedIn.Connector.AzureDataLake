@@ -82,5 +82,5 @@ steps:
   - task: PublishPipelineArtifact@0
     displayName: 'Create Pipeline Artifact 33'
     inputs:
-      artifactName: 'asdf'
+      artifactName: 'asd2f'
       targetPath: $(System.DefaultWorkingDirectory)/log.txt
