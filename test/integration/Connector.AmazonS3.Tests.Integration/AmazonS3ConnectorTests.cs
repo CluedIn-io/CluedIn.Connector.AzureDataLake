@@ -527,7 +527,12 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         {
             if (!S3Clients.TryGetValue(clientKey, out var client))
             {
-                client = new AmazonS3Client(config.AccessKey, config.SecretKey, RegionEndpoint.GetBySystemName(config.Region));
+                var s3config = new AmazonS3Config
+                {
+                    RegionEndpoint = RegionEndpoint.GetBySystemName(config.Region),
+                    MaxConnectionsPerServer = 50,
+                };
+                client = new AmazonS3Client(config.AccessKey, config.SecretKey, s3config);
                 S3Clients[clientKey] = client;
             }
 
