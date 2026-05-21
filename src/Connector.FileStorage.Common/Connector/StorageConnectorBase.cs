@@ -123,6 +123,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             IReadOnlyStreamModel streamModel,
             IReadOnlyConnectorEntityData connectorEntityData)
         {
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - StoreData");
             var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
             var containerName = streamModel.ContainerName;
             var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
@@ -144,6 +145,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 dataValueTypes.Add(key, RemoveNullableType(typeof(T)));
             }
 
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - StoreData - 1");
             AddToData(StorageConfigurationConstants.IdKey, connectorEntityData.EntityId);
             AddToData("PersistHash", connectorEntityData.PersistInfo?.PersistHash);
             AddToData(StorageConfigurationConstants.PersistVersionKey, connectorEntityData.PersistInfo?.PersistVersion);
@@ -165,6 +167,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 AddToData(StorageConfigurationConstants.EpochKey, now.ToUnixTimeMilliseconds());
             }
 
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - StoreData - 2");
             var useSoftDelete = GetUseSoftDelete(streamModel, configuration);
             if (useSoftDelete && !data.ContainsKey(StorageConfigurationConstants.ChangeTypeKey))
             {
@@ -181,6 +184,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 AddToData("IncomingEdges", connectorEntityData.IncomingEdges.SafeEnumerate());
             }
 
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - StoreData - 3");
             try
             {
                 if (configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
@@ -194,6 +198,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.Message + Environment.NewLine + ex.StackTrace);
                 _logger.LogError(ex, "Exception thrown. Returning SaveResult.ReQueue");
                 return SaveResult.ReQueue;
             }
@@ -263,6 +268,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             Dictionary<string, object> data,
             Dictionary<string, Type> dataValueTypes)
         {
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A1");
             if (streamModel.Mode != StreamMode.Sync)
             {
                 _logger.LogError($"Buffer mode is only supported with '{StreamMode.Sync}' mode.");
@@ -278,17 +284,25 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 dataValueTypes);
             var tableName = GetCacheTableName(syncItem.StreamId);
 
+                Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A2");
             var useSoftDelete = GetUseSoftDelete(streamModel, configurations);
             try
             {
+                Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A2-1");
                 using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
                 await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
+                Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A2-2");
                 await connection.OpenAsync();
+                Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A2-3");
                 await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: useSoftDelete);
+                Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A2-4");
                 transactionScope.Complete();
+                Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A2-5");
             }
             catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
             {
+                Console.WriteLine(writeDataException.Message + Environment.NewLine + writeDataException.StackTrace);
+                Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A3" );
                 try
                 {
                     _logger.LogDebug("Table {TableName} does not exist. Trying to create and retry.", tableName);
@@ -297,6 +311,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                     await connection.OpenAsync();
 
                     var acquiredLock = await TryAcquireTableCreationLock(connection, tableName);
+                    Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A4");
                     if (!acquiredLock)
                     {
                         _logger.LogDebug("Unable to acquire lock for table creation. Table might be in the process of being created.");
@@ -310,16 +325,19 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 }
                 catch (Exception ex2)
                 {
+                    Console.WriteLine(ex2.Message + Environment.NewLine + ex2.StackTrace);
                     _logger.LogError(ex2, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
                     throw;
                 }
             }
             catch (Exception ex1)
             {
+                Console.WriteLine(ex1.Message + Environment.NewLine + ex1.StackTrace);
                 _logger.LogError(ex1, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
                 throw;
             }
 
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable A5");
             return SaveResult.Success;
         }
 
@@ -338,15 +356,18 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             string tableName,
             bool useSoftDelete)
         {
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable B1");
             var propertyKeys = GetPropertyKeysWithoutId(syncItem);
             if (syncItem.ChangeType == VersionChangeType.Removed)
             {
                 if (useSoftDelete)
                 {
+                    Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable B2");
                     await SoftDeleteEntity(connection, syncItem, tableName);
                 }
                 else
                 {
+                    Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable B3");
                     await HardDeleteEntity(connection, syncItem, tableName);
                 }
             }
@@ -354,14 +375,17 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             {
                 if (useSoftDelete)
                 {
+                    Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable B4");
                     await InsertWithSoftDelete();
                 }
                 else
                 {
+                    Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable B5");
                     await InsertWithHardDelete();
                 }
             }
 
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteToCacheTable B6");
             static async Task HardDeleteEntity(SqlConnection connection, SyncItem syncItem, string tableName)
             {
                 var deleteCommandText = $"DELETE FROM [{tableName}] WHERE {StorageConfigurationConstants.IdKey} = @{StorageConfigurationConstants.IdKey}";
@@ -597,6 +621,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             IStorageConfiguration configurations,
             Dictionary<string, object> data)
         {
+            Console.WriteLine("StorageConnectorBase - " + this.GetHashCode() + " - WriteOutputImmediately");
             if (streamModel.Mode == StreamMode.Sync)
             {
                 var filePathAndName = $"{connectorEntityData.EntityId.ToString().Substring(0, 2)}/{connectorEntityData.EntityId.ToString().Substring(2, 2)}/{connectorEntityData.EntityId}.json";

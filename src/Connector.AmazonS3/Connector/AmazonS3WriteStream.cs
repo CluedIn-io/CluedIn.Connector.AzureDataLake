@@ -33,6 +33,7 @@ internal class AmazonS3WriteStream : Stream
 
     public AmazonS3WriteStream(IAmazonS3 s3Client, string bucketName, string key)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - Constructor");
         _s3Client = s3Client ?? throw new ArgumentNullException(nameof(s3Client));
         _bucketName = bucketName ?? throw new ArgumentNullException(nameof(bucketName));
         _key = key ?? throw new ArgumentNullException(nameof(key));
@@ -51,6 +52,7 @@ internal class AmazonS3WriteStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - Write");
         var shouldFlush = WriteInternal(buffer, offset, count);
         if (shouldFlush)
         {
@@ -60,6 +62,7 @@ internal class AmazonS3WriteStream : Stream
 
     public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - WriteAsync");
         var shouldFlush = WriteInternal(buffer, offset, count);
         if (shouldFlush)
         {
@@ -69,6 +72,7 @@ internal class AmazonS3WriteStream : Stream
     [MethodImpl(MethodImplOptions.NoInlining)]
     private bool WriteInternal(byte[] buffer, int offset, int count)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - WriteInternal");
         var shouldFlush = false;
         lock (_bufferLock)
         {
@@ -84,19 +88,23 @@ internal class AmazonS3WriteStream : Stream
 
     public override void Flush()
     {
-        FlushAsync(CancellationToken.None).GetAwaiter().GetResult();
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - Flush");
+        FlushAsync().GetAwaiter().GetResult();
     }
 
     public override async Task FlushAsync(CancellationToken cancellationToken)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - FlushAsync");
         if (_buffer.Length > 0)
         {
+            Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - FlushAsync UploadPartAsync");
             await UploadPartAsync();
         }
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
     protected override void Dispose(bool disposing)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - Dispose");
         if (!_disposed && disposing)
         {
             try
@@ -119,6 +127,7 @@ internal class AmazonS3WriteStream : Stream
 
     public override async ValueTask DisposeAsync()
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - DisposeAsync");
         if (_disposed)
         {
             return;
@@ -144,6 +153,7 @@ internal class AmazonS3WriteStream : Stream
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task InitiateMultipartUploadAsync()
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - InitiateMultipartUploadAsync");
         if (_uploadId != null)
         {
             return;
@@ -162,6 +172,7 @@ internal class AmazonS3WriteStream : Stream
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task UploadPartAsync()
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - UploadPartAsync");
         MemoryStream sendStream;
         lock (_bufferLock)
         {
@@ -197,6 +208,7 @@ internal class AmazonS3WriteStream : Stream
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task CompleteUploadAsync()
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - CompleteUploadAsync");
         if (_completed)
         {
             return;
@@ -236,6 +248,7 @@ internal class AmazonS3WriteStream : Stream
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task CompleteMultiPartUploadAsync()
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - CompleteMultiPartUploadAsync");
         var completeRequest = new CompleteMultipartUploadRequest
         {
             BucketName = _bucketName,
@@ -250,6 +263,7 @@ internal class AmazonS3WriteStream : Stream
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task UploadSinglePartFileAsync()
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - UploadSinglePartFileAsync");
         _buffer.Position = 0;
         var putRequest = new PutObjectRequest
         {
@@ -264,6 +278,7 @@ internal class AmazonS3WriteStream : Stream
     [MethodImpl(MethodImplOptions.NoInlining)]
     private async Task AbortMultipartUploadAsync()
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - AbortMultipartUploadAsync");
         if (_uploadId == null)
         {
             return;
@@ -286,16 +301,19 @@ internal class AmazonS3WriteStream : Stream
 
     public override int Read(byte[] buffer, int offset, int count)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - Read");
         throw new NotSupportedException();
     }
 
     public override long Seek(long offset, SeekOrigin origin)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - Seek");
         throw new NotSupportedException();
     }
 
     public override void SetLength(long value)
     {
+        Console.WriteLine("AmazonS3WriteStream - " + this.GetHashCode() + " - SetLength");
         throw new NotSupportedException();
     }
 }

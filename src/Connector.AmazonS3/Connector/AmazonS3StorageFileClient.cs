@@ -66,6 +66,8 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
             throw new IOException($"The object '{_filePath.GetKey()}' already exists and overwrite is disabled.");
         }
 
+
+        Console.WriteLine("AmazonS3StorageFileClient - " + this.GetHashCode() + " - OpenWriteAsync");
         return new FileStorageBufferedWriteStream(new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey()), BufferSize);
     }
 

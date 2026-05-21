@@ -359,6 +359,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     [Fact]
     public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingJobServer_CanCreateNewFile()
     {
+        Console.WriteLine("AmazonS3ConnectorTests - " + this.GetHashCode() + " - VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingJobServer_CanCreateNewFile");
         var executionCount = 0;
         var dateTimeList = new List<DateTimeOffset>
         {
@@ -370,6 +371,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             AssertCsvResultEscaped,
             async executeExportArg =>
             {
+                Console.WriteLine("AmazonS3ConnectorTests - " + this.GetHashCode() + " - VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingJobServer_CanCreateNewFile - ExecuteExport");
                 var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
@@ -446,6 +448,8 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
 
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
+
+        Console.WriteLine("AmazonS3ConnectorTests - " + this.GetHashCode() + " - CreateExportJob");
         var exportJob = new AmazonS3ExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
@@ -492,8 +496,31 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         Mock<IAmazonS3ConfigurationConstants> constantsMock,
         Mock<AmazonS3StorageFactory> storageConfigurationFactory)
     {
+        Console.WriteLine("AmazonS3ConnectorTests - " + this.GetHashCode() + " - GetConnectorMock");
+        var logger = new Mock<ILogger<AmazonS3Connector>>();
+        logger.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+        logger.Setup(x => x.Log(
+            It.IsAny<LogLevel>(),
+            It.IsAny<EventId>(),
+            It.IsAny<It.IsAnyType>(),
+            It.IsAny<Exception>(),
+            It.IsAny<Func<It.IsAnyType, Exception, string>>()))
+            .Callback(new InvocationAction(invocation =>
+            {
+                // 3. Extract the message and write to Console
+                var logLevel = invocation.Arguments[0];
+                var state = invocation.Arguments[2];
+                var exception = (Exception)invocation.Arguments[3];
+                var formatter = invocation.Arguments[4];
+
+                // Use the formatter to get the actual string message
+                var delegateFormatter = (Delegate)formatter;
+                var message = delegateFormatter.DynamicInvoke(state, exception);
+
+                Console.WriteLine($"[{logLevel}] {message}");
+            }));
         var mockConnector = new Mock<AmazonS3Connector>(
-            new Mock<ILogger<AmazonS3Connector>>().Object,
+            logger.Object,
             applicationContext,
             constantsMock.Object,
             storageConfigurationFactory.Object,

@@ -108,6 +108,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null)
         where TConfiguration : StorageConfigurationBase
     {
+        Console.WriteLine("StorageConnectorTestsBase - " + this.GetHashCode() + " - SetupContainer");
         var organizationId = Guid.NewGuid();
         var providerDefinitionId = Guid.Parse("c444cda8-d9b5-45cc-a82d-fef28e08d55c");
 
@@ -195,6 +196,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
 
     private protected async Task ModifyHistoryTimeToBeCurrentTime(SetupContainerResult setupContainerResult, ConnectorEntityData connectorEntityData)
     {
+        Console.WriteLine("StorageConnectorTestsBase - " + this.GetHashCode() + " - ModifyHistoryTimeToBeCurrentTime");
         var jobData = setupContainerResult.StorageConfiguration;
         var connectionString = jobData.StreamCacheConnectionString;
         var streamModel = setupContainerResult.StreamModel;
@@ -806,6 +808,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         Func<SetupContainerResult, ExportedFilePath, Task> assertMethod,
         Func<ExecuteExportArg, Task<ExportedFilePath>> executeExport = null)
     {
+
+        Console.WriteLine("StorageConnectorTestsBase - " + this.GetHashCode() + " - AssertExportJobOutputFileContents");
         var context = setupContainerResult.Context;
         var streamModel = setupContainerResult.StreamModel;
         var organization = setupContainerResult.Organization;
@@ -871,6 +875,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
        Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null)
     {
+        Console.WriteLine("StorageConnectorTestsBase - " + this.GetHashCode() + " - VerifyStoreData_Sync_WithStreamCache");
+
         var configuration = CreateConfigurationWithStreamCache(format);
         configureAuthentication?.Invoke(configuration);
         var jobData = CreateStorageConfiguration(configuration);
@@ -883,12 +889,14 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             : getConnectorEntityData();
         foreach (var data in connectorEntityData)
         {
+            Console.WriteLine("StorageConnectorTestsBase - " + this.GetHashCode() + " - SetupContainer - StoreData");
             if (storeData != null)
             {
                 await storeData(setupResult, data);
                 continue;
             }
 
+            Console.WriteLine("StorageConnectorTestsBase - " + this.GetHashCode() + " - SetupContainer - StoreData - Default");
             await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
             await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
         }
@@ -907,6 +915,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
 
     private protected virtual Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
     {
+        Console.WriteLine("StorageConnectorTestsBase - " + this.GetHashCode() + " - CreateConfigurationWithStreamCache");
         var baseConfiguration = CreateConfigurationWithoutStreamCache();
         var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
         var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));

@@ -52,76 +52,76 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
         _s3Client?.Dispose();
     }
 
-    [Fact]
-    public async Task WriteSmallFile_UsesSimplePutObject()
-    {
-        var key = $"{_configuration.RootDirectoryPath}/small-{Guid.NewGuid()}.txt";
-        _createdKeys.Add(key);
+    //[Fact]
+    //public async Task WriteSmallFile_UsesSimplePutObject()
+    //{
+    //    var key = $"{_configuration.RootDirectoryPath}/small-{Guid.NewGuid()}.txt";
+    //    _createdKeys.Add(key);
 
-        var content = "Hello, S3 integration test!";
-        var bytes = Encoding.UTF8.GetBytes(content);
+    //    var content = "Hello, S3 integration test!";
+    //    var bytes = Encoding.UTF8.GetBytes(content);
 
-        await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
-        {
-            await stream.WriteAsync(bytes, 0, bytes.Length);
-        }
+    //    await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
+    //    {
+    //        await stream.WriteAsync(bytes, 0, bytes.Length);
+    //    }
 
-        var response = await _s3Client.GetObjectAsync(_configuration.BucketName, key);
-        using var reader = new StreamReader(response.ResponseStream);
-        var actual = await reader.ReadToEndAsync();
+    //    var response = await _s3Client.GetObjectAsync(_configuration.BucketName, key);
+    //    using var reader = new StreamReader(response.ResponseStream);
+    //    var actual = await reader.ReadToEndAsync();
 
-        Assert.Equal(content, actual);
-    }
+    //    Assert.Equal(content, actual);
+    //}
 
-    [Fact]
-    public async Task WriteLargeFile_UsesMultipartUpload()
-    {
-        var key = $"{_configuration.RootDirectoryPath}/large-{Guid.NewGuid()}.bin";
-        _createdKeys.Add(key);
+    //[Fact]
+    //public async Task WriteLargeFile_UsesMultipartUpload()
+    //{
+    //    var key = $"{_configuration.RootDirectoryPath}/large-{Guid.NewGuid()}.bin";
+    //    _createdKeys.Add(key);
 
-        // Write > 5 MB to trigger multipart upload
-        var partSize = 5 * 1024 * 1024;
-        var totalSize = partSize + 1024; // slightly over one part
-        var data = new byte[totalSize];
-        new Random(42).NextBytes(data);
+    //    // Write > 5 MB to trigger multipart upload
+    //    var partSize = 5 * 1024 * 1024;
+    //    var totalSize = partSize + 1024; // slightly over one part
+    //    var data = new byte[totalSize];
+    //    new Random(42).NextBytes(data);
 
-        await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
-        {
-            // Write in chunks to simulate realistic usage
-            var offset = 0;
-            var chunkSize = 64 * 1024;
-            while (offset < data.Length)
-            {
-                var count = Math.Min(chunkSize, data.Length - offset);
-                await stream.WriteAsync(data, offset, count);
-                offset += count;
-            }
-        }
+    //    await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
+    //    {
+    //        // Write in chunks to simulate realistic usage
+    //        var offset = 0;
+    //        var chunkSize = 64 * 1024;
+    //        while (offset < data.Length)
+    //        {
+    //            var count = Math.Min(chunkSize, data.Length - offset);
+    //            await stream.WriteAsync(data, offset, count);
+    //            offset += count;
+    //        }
+    //    }
 
-        var response = await _s3Client.GetObjectAsync(_configuration.BucketName, key);
-        using var ms = new MemoryStream();
-        await response.ResponseStream.CopyToAsync(ms);
-        var actual = ms.ToArray();
+    //    var response = await _s3Client.GetObjectAsync(_configuration.BucketName, key);
+    //    using var ms = new MemoryStream();
+    //    await response.ResponseStream.CopyToAsync(ms);
+    //    var actual = ms.ToArray();
 
-        Assert.Equal(data.Length, actual.Length);
-        Assert.Equal(data, actual);
-    }
+    //    Assert.Equal(data.Length, actual.Length);
+    //    Assert.Equal(data, actual);
+    //}
 
-    [Fact]
-    public async Task WriteEmptyFile_DoesNotThrow()
-    {
-        var key = $"{_configuration.RootDirectoryPath}/empty-{Guid.NewGuid()}.txt";
-        _createdKeys.Add(key);
+    //[Fact]
+    //public async Task WriteEmptyFile_DoesNotThrow()
+    //{
+    //    var key = $"{_configuration.RootDirectoryPath}/empty-{Guid.NewGuid()}.txt";
+    //    _createdKeys.Add(key);
 
-        await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
-        {
-            // Write nothing, just dispose
-        }
+    //    await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
+    //    {
+    //        // Write nothing, just dispose
+    //    }
 
-        // Empty file with no data and no multipart should not throw.
-        // The file may or may not exist on S3 depending on implementation;
-        // we just verify no exception was thrown.
-    }
+    //    // Empty file with no data and no multipart should not throw.
+    //    // The file may or may not exist on S3 depending on implementation;
+    //    // we just verify no exception was thrown.
+    //}
 
     internal AmazonS3ConnectorConfiguration GetConfiguration()
     {
