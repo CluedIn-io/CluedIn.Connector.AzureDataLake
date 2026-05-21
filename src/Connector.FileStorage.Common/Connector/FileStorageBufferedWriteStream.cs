@@ -40,12 +40,6 @@ internal class FileStorageBufferedWriteStream : Stream
         return Task.CompletedTask;
     }
 
-    public override void Close()
-    {
-        _bufferedStream?.Flush();
-        base.Close();
-    }
-
     public override int Read(byte[] buffer, int offset, int count)
     {
         throw new NotSupportedException("Reading is not supported");
