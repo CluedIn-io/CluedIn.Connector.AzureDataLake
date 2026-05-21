@@ -32,8 +32,9 @@ public class AmazonS3StorageFactory : StorageFactoryBase, IStorageFactory
             throw new ArgumentException($"Configuration must be of type {nameof(AmazonS3ConnectorConfiguration)}.", nameof(configuration));
         }
 
-        var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<AmazonS3StorageClient>>();
-        var client = new AmazonS3StorageClient(logger, amazonS3Configuration);
+        var loggerFactory = executionContext.ApplicationContext.Container.Resolve<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger<AmazonS3StorageClient>();
+        var client = new AmazonS3StorageClient(logger, loggerFactory, amazonS3Configuration);
         return Task.FromResult<IStorageClient>(client);
     }
 }

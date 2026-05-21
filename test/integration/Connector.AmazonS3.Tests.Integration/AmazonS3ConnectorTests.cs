@@ -508,7 +508,8 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     {
         var storageFactory = new Mock<AmazonS3StorageFactory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new AmazonS3StorageClient(NullLogger<AmazonS3StorageClient>.Instance, data as AmazonS3ConnectorConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(
+                new AmazonS3StorageClient(NullLogger<AmazonS3StorageClient>.Instance, NullLoggerFactory.Instance, data as AmazonS3ConnectorConfiguration)));
         return storageFactory;
     }
 

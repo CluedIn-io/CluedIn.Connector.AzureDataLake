@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 
 using Amazon.S3;
 using Amazon.S3.Model;
+using CluedIn.Core;
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AmazonS3.Connector;
 
@@ -18,6 +20,7 @@ namespace CluedIn.Connector.AmazonS3.Connector;
 internal class AmazonS3WriteStream : Stream
 {
     private const int PartSize = 5 * 1024 * 1024; // 5 MB – S3 minimum part size
+    private readonly ILogger<AmazonS3WriteStream> _logger;
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
     private readonly string _key;
@@ -30,8 +33,9 @@ internal class AmazonS3WriteStream : Stream
     private readonly List<PartETag> _partETags = new();
     private bool _completed;
 
-    public AmazonS3WriteStream(IAmazonS3 s3Client, string bucketName, string key)
+    public AmazonS3WriteStream([NotNull] ILogger<AmazonS3WriteStream> logger, IAmazonS3 s3Client, string bucketName, string key)
     {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _s3Client = s3Client ?? throw new ArgumentNullException(nameof(s3Client));
         _bucketName = bucketName ?? throw new ArgumentNullException(nameof(bucketName));
         _key = key ?? throw new ArgumentNullException(nameof(key));
@@ -153,8 +157,18 @@ internal class AmazonS3WriteStream : Stream
             Key = _key,
         };
 
-        var response = await _s3Client.InitiateMultipartUploadAsync(request);
-        _uploadId = response.UploadId;
+        try
+        {
+            _logger.LogDebug("Begin multipart upload to {BucketName} and {Key}", _bucketName, _key);
+            var response = await _s3Client.InitiateMultipartUploadAsync(request);
+            _uploadId = response.UploadId;
+            _logger.LogDebug("End multipart upload to {BucketName} and {Key} with {UploadId}", _bucketName, _key, _uploadId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initiate multipart upload");
+            throw;
+        }
     }
 
     private async Task UploadPartAsync()
@@ -185,9 +199,18 @@ internal class AmazonS3WriteStream : Stream
             InputStream = sendStream,
         };
 
-        var response = await _s3Client.UploadPartAsync(request);
-        _partETags.Add(new PartETag(_partNumber, response.ETag));
-
+        try
+        {
+            _logger.LogDebug("Begin upload part {PartNumber} to {BucketName} and {Key}", _partNumber, _bucketName, _key);
+            var response = await _s3Client.UploadPartAsync(request);
+            _partETags.Add(new PartETag(_partNumber, response.ETag));
+            _logger.LogDebug("Begin upload part {PartNumber} to {BucketName} and {Key} with {ETag}", _partNumber, _bucketName, _key, response.ETag);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload part");
+            throw;
+        }
         await sendStream.DisposeAsync();
     }
 
@@ -239,7 +262,17 @@ internal class AmazonS3WriteStream : Stream
             PartETags = _partETags,
         };
 
-        await _s3Client.CompleteMultipartUploadAsync(completeRequest);
+        try
+        {
+            _logger.LogDebug("Begin completing multipart upload {UploadId} to {BucketName} and {Key} with {TotalETags} etags", _uploadId, _bucketName, _key, _partETags.Count);
+            await _s3Client.CompleteMultipartUploadAsync(completeRequest);
+            _logger.LogDebug("End completing multipart upload {UploadId} to {BucketName} and {Key} with {TotalETags} etags", _uploadId, _bucketName, _key, _partETags.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to complete multipart upload");
+            throw;
+        }
     }
 
     private async Task UploadSinglePartFileAsync()
@@ -252,7 +285,17 @@ internal class AmazonS3WriteStream : Stream
             InputStream = _buffer,
         };
 
-        await _s3Client.PutObjectAsync(putRequest);
+        try
+        {
+            _logger.LogDebug("Begin single part upload to {BucketName} and {Key}", _bucketName, _key);
+            await _s3Client.PutObjectAsync(putRequest);
+            _logger.LogDebug("End single part upload to {BucketName} and {Key}", _bucketName, _key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload single part");
+            throw;
+        }
     }
 
     private async Task AbortMultipartUploadAsync()
@@ -264,15 +307,18 @@ internal class AmazonS3WriteStream : Stream
 
         try
         {
+            _logger.LogDebug("Begin aborting multi part upload {UploadId} to {BucketName} and {Key}", _uploadId, _bucketName, _key);
             await _s3Client.AbortMultipartUploadAsync(new AbortMultipartUploadRequest
             {
                 BucketName = _bucketName,
                 Key = _key,
                 UploadId = _uploadId,
             });
+            _logger.LogDebug("End aborting multi part upload {UploadId} to {BucketName} and {Key}", _uploadId, _bucketName, _key);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to abort multipart upload");
             // Best-effort abort; do not mask the original exception.
         }
     }
