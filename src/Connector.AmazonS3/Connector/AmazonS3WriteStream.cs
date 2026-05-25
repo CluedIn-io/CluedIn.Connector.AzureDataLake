@@ -204,7 +204,7 @@ internal class AmazonS3WriteStream : Stream
             _logger.LogDebug("Begin upload part {PartNumber} to {BucketName} and {Key}", _partNumber, _bucketName, _key);
             var response = await _s3Client.UploadPartAsync(request);
             _partETags.Add(new PartETag(_partNumber, response.ETag));
-            _logger.LogDebug("Begin upload part {PartNumber} to {BucketName} and {Key} with {ETag}", _partNumber, _bucketName, _key, response.ETag);
+            _logger.LogDebug("End upload part {PartNumber} to {BucketName} and {Key} with {ETag}", _partNumber, _bucketName, _key, response.ETag);
         }
         catch (Exception ex)
         {
