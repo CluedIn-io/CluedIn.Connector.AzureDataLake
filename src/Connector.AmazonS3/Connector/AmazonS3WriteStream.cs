@@ -211,7 +211,10 @@ internal class AmazonS3WriteStream : Stream
             _logger.LogError(ex, "Failed to upload part");
             throw;
         }
-        await sendStream.DisposeAsync();
+        finally
+        {
+            await sendStream.DisposeAsync();
+        }
     }
 
     private async Task CompleteUploadAsync()
