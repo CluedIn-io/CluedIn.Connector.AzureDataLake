@@ -11,6 +11,7 @@ using CluedIn.Connector.AmazonS3.Connector;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Xunit;
+using Xunit.Abstractions;
 
 namespace CluedIn.Connector.AmazonS3.Tests.Integration;
 
@@ -28,15 +29,15 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
 
     protected ITestOutputHelper TestOutputHelper => _testOutputHelper;
 
-    public ValueTask InitializeAsync()
+    public Task InitializeAsync()
     {
         _configuration = GetConfiguration();
         var region = RegionEndpoint.GetBySystemName(_configuration.Region);
         _s3Client = new AmazonS3Client(_configuration.AccessKey, _configuration.SecretKey, region);
-        return ValueTask.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
+    public async Task DisposeAsync()
     {
         foreach (var key in _createdKeys)
         {
