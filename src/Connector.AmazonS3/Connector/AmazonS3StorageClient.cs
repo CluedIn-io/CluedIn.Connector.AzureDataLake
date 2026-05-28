@@ -10,7 +10,6 @@ using Amazon.S3;
 using Amazon.S3.Model;
 
 using CluedIn.Connector.FileStorage.Common;
-
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AmazonS3.Connector;
@@ -18,15 +17,18 @@ namespace CluedIn.Connector.AmazonS3.Connector;
 internal class AmazonS3StorageClient : IStorageClient
 {
     private readonly ILogger<AmazonS3StorageClient> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly AmazonS3ConnectorConfiguration _configuration;
     private readonly IAmazonS3 _s3Client;
     private bool _disposed;
 
     public AmazonS3StorageClient(
         ILogger<AmazonS3StorageClient> logger,
+        ILoggerFactory loggerFactory,
         AmazonS3ConnectorConfiguration configuration)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _s3Client = GetS3Client(_configuration);
     }
@@ -145,7 +147,13 @@ internal class AmazonS3StorageClient : IStorageClient
 
     public Task<IStorageFileClient> GetFileClientAsync(FilePath filePath)
     {
-        return Task.FromResult<IStorageFileClient>(new AmazonS3StorageFileClient(_s3Client, _configuration.BucketName, filePath));
+        return Task.FromResult<IStorageFileClient>(
+            new AmazonS3StorageFileClient(
+                _loggerFactory.CreateLogger<AmazonS3StorageFileClient>(),
+                _loggerFactory,
+                _s3Client,
+                _configuration.BucketName,
+                filePath));
     }
 
     public async Task<FileMetadata> GetFileMetadataAsync(FilePath filePath)
