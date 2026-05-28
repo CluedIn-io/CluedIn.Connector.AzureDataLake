@@ -8,9 +8,7 @@ using Amazon;
 using Amazon.S3;
 
 using CluedIn.Connector.AmazonS3.Connector;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 
 using Xunit;
 

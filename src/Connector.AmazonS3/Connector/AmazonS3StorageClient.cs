@@ -10,7 +10,6 @@ using Amazon.S3;
 using Amazon.S3.Model;
 
 using CluedIn.Connector.FileStorage.Common;
-using CluedIn.Core;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AmazonS3.Connector;

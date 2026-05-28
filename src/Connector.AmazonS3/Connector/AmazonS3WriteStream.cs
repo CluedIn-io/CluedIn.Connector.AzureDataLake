@@ -218,14 +218,17 @@ internal class AmazonS3WriteStream : Stream
             using var cts = new CancellationTokenSource(_operationTimeout);
             var response = await _s3Client.UploadPartAsync(request, cts.Token);
             _partETags.Add(new PartETag(_partNumber, response.ETag));
-            _logger.LogDebug("Begin upload part {PartNumber} to {BucketName} and {Key} with {ETag}", _partNumber, _bucketName, _key, response.ETag);
+            _logger.LogDebug("End upload part {PartNumber} to {BucketName} and {Key} with {ETag}", _partNumber, _bucketName, _key, response.ETag);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to upload part");
             throw;
         }
-        await sendStream.DisposeAsync();
+        finally
+        {
+            await sendStream.DisposeAsync();
+        }
     }
 
     private async Task CompleteUploadAsync()
