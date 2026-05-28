@@ -8,6 +8,8 @@ using Amazon;
 using Amazon.S3;
 
 using CluedIn.Connector.AmazonS3.Connector;
+using Microsoft.Extensions.Logging.Abstractions;
+
 using Xunit;
 
 namespace CluedIn.Connector.AmazonS3.Tests.Integration;
@@ -60,7 +62,7 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
         var content = "Hello, S3 integration test!";
         var bytes = Encoding.UTF8.GetBytes(content);
 
-        await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
+        await using (var stream = new AmazonS3WriteStream(NullLogger<AmazonS3WriteStream>.Instance, _s3Client, _configuration.BucketName, key))
         {
             await stream.WriteAsync(bytes, 0, bytes.Length);
         }
@@ -84,7 +86,7 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
         var data = new byte[totalSize];
         new Random(42).NextBytes(data);
 
-        await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
+        await using (var stream = new AmazonS3WriteStream(NullLogger<AmazonS3WriteStream>.Instance, _s3Client, _configuration.BucketName, key))
         {
             // Write in chunks to simulate realistic usage
             var offset = 0;
@@ -112,7 +114,7 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
         var key = $"{_configuration.RootDirectoryPath}/empty-{Guid.NewGuid()}.txt";
         _createdKeys.Add(key);
 
-        await using (var stream = new AmazonS3WriteStream(_s3Client, _configuration.BucketName, key))
+        await using (var stream = new AmazonS3WriteStream(NullLogger<AmazonS3WriteStream>.Instance, _s3Client, _configuration.BucketName, key))
         {
             // Write nothing, just dispose
         }

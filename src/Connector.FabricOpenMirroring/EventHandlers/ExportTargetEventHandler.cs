@@ -27,22 +27,15 @@ internal class ExportTargetEventHandler : IDisposable
         ILogger<ExportTargetEventHandler> logger,
         ApplicationContext applicationContext,
         IStorageConfigurationConstants constants,
-        IStorageFactory jobDataFactory,
-        OpenMirroringStorageClient openMirroringStorageDataLakeClient)
+        IStorageFactory jobDataFactory)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
         _configurationConstants = constants ?? throw new ArgumentNullException(nameof(constants));
         _storageFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
 
-        _registerExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<RegisterExportTargetEvent>(ProcessEvent);
-        _updateExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
-    }
-
-    private void ProcessEvent<TEvent>(TEvent eventData)
-        where TEvent : RemoteEvent
-    {
-        ProcessEventAsync(eventData).GetAwaiter().GetResult();
+        _registerExportTargetSubscription = applicationContext.System.Events.Local.SubscribeAsync<RegisterExportTargetEvent>(ProcessEventAsync);
+        _updateExportTargetSubscription = applicationContext.System.Events.Local.SubscribeAsync<UpdateExportTargetEvent>(ProcessEventAsync);
     }
 
     private async Task ProcessEventAsync<TEvent>(TEvent eventData)
