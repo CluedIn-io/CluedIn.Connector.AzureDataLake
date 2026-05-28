@@ -8,11 +8,15 @@ using Amazon.S3.Model;
 
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
+using CluedIn.Core;
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AmazonS3.Connector;
 
 internal class AmazonS3StorageFileClient : IStorageFileClient
 {
+    private readonly ILogger<AmazonS3StorageFileClient> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly FilePath _filePath;
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
@@ -20,8 +24,15 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
     // When we tested further, we can increase size of this because S3 supports up to 5GB chunks
     private static int BufferSize => 5 * 1024 * 1024;
 
-    public AmazonS3StorageFileClient(IAmazonS3 s3Client, string bucketName, FilePath filePath)
+    public AmazonS3StorageFileClient(
+        ILogger<AmazonS3StorageFileClient> logger,
+        ILoggerFactory loggerFactory,
+        IAmazonS3 s3Client,
+        string bucketName,
+        FilePath filePath)
     {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
         _s3Client = s3Client ?? throw new ArgumentNullException(nameof(s3Client));
         _bucketName = bucketName;
@@ -66,7 +77,8 @@ internal class AmazonS3StorageFileClient : IStorageFileClient
             throw new IOException($"The object '{_filePath.GetKey()}' already exists and overwrite is disabled.");
         }
 
-        return new FileStorageBufferedWriteStream(new AmazonS3WriteStream(_s3Client, _bucketName, _filePath.GetKey()), BufferSize);
+        _logger.LogDebug("Opening write stream for {FilePath}", _filePath.FullPath);
+        return new FileStorageBufferedWriteStream(new AmazonS3WriteStream(_loggerFactory.CreateLogger<AmazonS3WriteStream>(), _s3Client, _bucketName, _filePath.GetKey()), BufferSize);
     }
 
     public async Task RenameAsync(FilePath targetPath)
