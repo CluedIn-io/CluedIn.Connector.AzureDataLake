@@ -8,12 +8,16 @@ using System.Transactions;
 
 using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
-using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+using CluedIn.ComponentHealth.Services;
+using CluedIn.ComponentHealth.Services.Models;
+using CluedIn.ComponentHealth.Storage;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
+
+using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
 namespace CluedIn.Connector.FileStorage.Common.Connector;
 
@@ -29,6 +33,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     private const string DataTimeKey = "DataTime";
     private const string InstanceTimeKey = "InstanceTime";
     private const string TemporaryFileSuffix = ".tmp";
+    internal static readonly string ConnectorIsNotHealthyReason = "Connector is not healthy";
 
     protected StorageExportEntitiesJobBase(
         ApplicationContext appContext,
@@ -47,6 +52,11 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
     public override async Task DoRunAsync(ExecutionContext context, IStorageJobArgs args)
     {
+        _ = await DoRunInternalAsync(context, args);
+    }
+
+    internal async Task<ExportResult> DoRunInternalAsync(ExecutionContext context, IStorageJobArgs args)
+    {
         var typeName = GetType().Name;
         using var exportJobLoggingScope = context.Log.BeginScope(CreateLoggingScope(args));
         context.Log.LogInformation(
@@ -59,13 +69,19 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         var exportJobData = await GetJobDataAsync(context, args, "export");
         if (exportJobData == null)
         {
-            return;
+            return ExportResult.CreateSkipped("Unable to get export data information.");
+        }
+
+        if (!await IsConnectorHealthyAsync(context, exportJobData))
+        {
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as provider definition {ProviderDefinitionId} is not healthy.", exportJobData.StreamId, exportJobData.ProviderDefinition.Id);
+            return ExportResult.CreateSkipped(ConnectorIsNotHealthyReason);
         }
 
         if (ShouldSkipExport(exportJobData))
         {
             context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required.", exportJobData.StreamId);
-            return;
+            return ExportResult.CreateSkipped("Export is not required");
         }
 
         var (streamId,
@@ -89,7 +105,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"{typeName}_{streamModel.Id}", ExportEntitiesLockInMilliseconds))
         {
             context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamModel.Id);
-            return;
+            return ExportResult.CreateSkipped("Failed to acquire lock");
         }
 
         using var storageClient = await CreateStorageClient(context, configuration);
@@ -114,7 +130,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                     outputFileName,
                     asOfTime,
                     nameof(StorageConnectorComponentBase));
-                return;
+                return ExportResult.CreateSkipped("Exported before");
             }
             else
             {
@@ -286,7 +302,26 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             var targetFileClient = await storageClient.GetFileClientAsync(filePath);
             await targetFileClient.DeleteIfExistsAsync();
         }
+
+        return ExportResult.CreateSuccess(outputFilePath);
     }
+
+    private async Task<bool> IsConnectorHealthyAsync(
+        ExecutionContext executionContext,
+        ExportJobData exportJobData)
+    {
+        var providerDefinitionId = exportJobData.ProviderDefinition.Id;
+        var componentHealthService = executionContext.ApplicationContext.Container.Resolve<IComponentHealthService>();
+        var result = await componentHealthService.GetComponentHealth(executionContext, ComponentArea.Connector, providerDefinitionId);
+
+        if (result.Status != ComponentHealthStatus.Healthy)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     protected async Task<IStorageClient> CreateStorageClient(ExecutionContext context, IStorageConfiguration configuration)
     {
         return await _storageFactory.CreateStorageClient(context, configuration);
@@ -878,4 +913,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         long? TotalRows,
         string Status,
         string ExporterHostName);
+
+    internal record ExportResult(FilePath? FilePath, string? Reason)
+    {
+        public static ExportResult CreateSkipped(string reason) => new (null, reason);
+
+        public static ExportResult CreateSuccess(FilePath outputFilePath) => new(outputFilePath, null);
+    }
+
 }
