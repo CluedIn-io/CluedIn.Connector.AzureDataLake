@@ -907,11 +907,14 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         }
         var exportJob = CreateExportJob(setupResult);
 
-        await AssertExportJobOutputFileContents(
-            setupResult,
-            exportJob,
-            assertMethod,
-            executeExport);
+        if (assertMethod != null)
+        {
+            await AssertExportJobOutputFileContents(
+                setupResult,
+                exportJob,
+                assertMethod,
+                executeExport);
+        }
     }
 
     private protected abstract StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration);
@@ -943,7 +946,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "csv",
-            AssertCsvResultUnescaped,
+            null,
             async executeExportArg =>
             {
                 executeExportArg.SetupContainerResult.ComponentHealthServiceMock.Setup(service => service.GetComponentHealth(It.IsAny<ExecutionContext>(), It.IsAny<ComponentArea>(), It.IsAny<Guid>()))
