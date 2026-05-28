@@ -131,7 +131,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                     asOfTime,
                     nameof(StorageConnectorComponentBase));
                 return ExportResult.CreateSkipped("Exported before");
-                ;
             }
             else
             {
