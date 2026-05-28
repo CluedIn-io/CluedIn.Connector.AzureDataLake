@@ -10,7 +10,10 @@ using System.Threading.Tasks;
 using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
-using CluedIn.Connector.FileStorage.Common;
+
+using CluedIn.ComponentHealth.Services;
+using CluedIn.ComponentHealth.Services.Models;
+using CluedIn.ComponentHealth.Storage;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
@@ -41,6 +44,7 @@ using Parquet;
 using Xunit;
 using Xunit.Abstractions;
 using ExecutionContext = CluedIn.Core.ExecutionContext;
+using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
 namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 
@@ -116,6 +120,13 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
 
         var systemEventsMock = new Mock<ISystemEvents>();
         container.Register(Component.For<ISystemEvents>().Instance(systemEventsMock.Object));
+        var componentHealthServiceMock = new Mock<IComponentHealthService>();
+        componentHealthServiceMock.Setup(service => service.GetComponentHealth(It.IsAny<ExecutionContext>(), It.IsAny<ComponentArea>(), It.IsAny<Guid>()))
+            .ReturnsAsync(new ComponentHealthModel()
+            {
+                Status = ComponentHealthStatus.Healthy,
+            });
+        container.Register(Component.For<IComponentHealthService>().Instance(componentHealthServiceMock.Object));
 
         var mockDateTimeOffsetProvider = SetupDateTimeOffsetProvider(configureTimeProvider);
         _ = SetupApplicationCache(container);
@@ -147,7 +158,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                 configuration,
                 constantsMock,
                 streamRepositoryMock,
-                providerDefinition));
+                providerDefinition,
+                componentHealthServiceMock));
     }
 
     protected abstract Mock<TConnector> GetConnectorMock(
@@ -749,7 +761,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         StorageConfigurationBase StorageConfiguration,
         Mock<TConfigurationConstants> ConstantsMock,
         Mock<IStreamRepository> StreamRepositoryMock,
-        ProviderDefinition ProviderDefinition);
+        ProviderDefinition ProviderDefinition,
+        Mock<IComponentHealthService> ComponentHealthServiceMock);
 
     private protected record UserData(
         string Name,
@@ -923,6 +936,36 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             { nameof(StorageConfigurationConstants.ContainerName), "test" },
         };
         return updatedConfiguration;
+    }
+
+    [Fact]
+    public async Task VerifyExport_CanSkipIfConnectorNotHealthy()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultUnescaped,
+            async executeExportArg =>
+            {
+                executeExportArg.SetupContainerResult.ComponentHealthServiceMock.Setup(service => service.GetComponentHealth(It.IsAny<ExecutionContext>(), It.IsAny<ComponentArea>(), It.IsAny<Guid>()))
+                    .ReturnsAsync(new ComponentHealthModel()
+                    {
+                        Status = ComponentHealthStatus.Unhealthy,
+                    });
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.Null(result.FilePath);
+                Assert.Equal(StorageExportEntitiesJobBase.ConnectorIsNotHealthyReason, result.Reason);
+                return null;
+            });
     }
 
     [Fact]
