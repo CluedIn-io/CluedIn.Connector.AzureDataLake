@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup Label="Compilation Metadata">
     <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>13.0</LangVersion>
   </PropertyGroup>
 
   <PropertyGroup Label="Assembly Metadata">
