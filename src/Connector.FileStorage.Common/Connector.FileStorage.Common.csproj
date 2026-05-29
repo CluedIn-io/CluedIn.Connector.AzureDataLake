@@ -30,8 +30,6 @@
     <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="System.Configuration.ConfigurationManager" />
-    <PackageReference Include="System.Runtime.Caching" />
     <PackageReference Include="CluedIn.Core" />
     <PackageReference Include="CluedIn.ComponentHealth" />
     <PackageReference Include="CsvHelper" />
