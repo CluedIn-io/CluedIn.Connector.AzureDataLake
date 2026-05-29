@@ -5,6 +5,9 @@
     <RootNamespace>CluedIn.Connector.FileStorage.Common</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <IgnoresAccessChecksTo Include="CluedIn.ComponentHealth" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Connectors -->
     <InternalsVisibleTo Include="CluedIn.Connector.DataLake.Common" />
     <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3" />
@@ -30,7 +33,9 @@
     <PackageReference Include="System.Configuration.ConfigurationManager" />
     <PackageReference Include="System.Runtime.Caching" />
     <PackageReference Include="CluedIn.Core" />
+    <PackageReference Include="CluedIn.ComponentHealth" />
     <PackageReference Include="CsvHelper" />
+    <PackageReference Include="IgnoresAccessChecksToGenerator" />
     <PackageReference Include="NCrontab" />
     <PackageReference Include="Parquet.Net" />
   </ItemGroup>
