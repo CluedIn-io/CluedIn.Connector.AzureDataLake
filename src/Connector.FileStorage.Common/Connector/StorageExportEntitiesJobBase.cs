@@ -337,7 +337,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     {
         if (string.IsNullOrWhiteSpace(args.Message))
         {
-            throw new ArgumentException("StreamId is required in job arguments message.", nameof(args));
+            context.Log.LogDebug("Skipping job execution because StreamId is missing in job arguments.");
+            return false;
         }
 
         var model = await _streamRepository.GetStream(context, new Guid(args.Message));
