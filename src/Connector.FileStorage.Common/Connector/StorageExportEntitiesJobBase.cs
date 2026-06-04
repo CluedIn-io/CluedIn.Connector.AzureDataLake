@@ -369,15 +369,22 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
     private async Task AddErrorToStreamIngestionLog(ExecutionContext executionContext, ExportJobData exportJobData, string message, Exception? exception = null)
     {
-        var streamLogService = executionContext.ApplicationContext.Container.Resolve<IStreamLogService>();
-        await streamLogService.StoreHistoryLogEntryAsync(StreamHistoryLogHistoryModel.BuildError(
-                streamId: exportJobData.StreamId,
-                entityId: null,
-                exportTargetId: exportJobData.ProviderDefinition.Id,
-                area: StreamHistoryLogAreaEnum.ExportTarget,
-                changeType: null,
-                message: message,
-                exceptions: exception == null ? [] : [exception]));
+        try
+        {
+            var streamLogService = executionContext.ApplicationContext.Container.Resolve<IStreamLogService>();
+            await streamLogService.StoreHistoryLogEntryAsync(StreamHistoryLogHistoryModel.BuildError(
+                    streamId: exportJobData.StreamId,
+                    entityId: null,
+                    exportTargetId: exportJobData.ProviderDefinition.Id,
+                    area: StreamHistoryLogAreaEnum.ExportTarget,
+                    changeType: null,
+                    message: message,
+                    exceptions: exception == null ? Array.Empty<Exception>() : new[] { exception }));
+        }
+        catch (Exception ex)
+        {
+            executionContext.Log.LogDebug(ex, "Failed to store stream ingestion history log entry.");
+        }
     }
 
     protected async Task<IStorageClient> CreateStorageClient(ExecutionContext context, IStorageConfiguration configuration)
