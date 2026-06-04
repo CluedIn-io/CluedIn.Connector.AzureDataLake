@@ -31,10 +31,14 @@ namespace CluedIn.Connector.FileStorage.Common
         /// <summary>
         /// Default value for Cache buffer strategy
         /// </summary>
-        string CacheBufferStrategyDefaultValue { get; }
-
+        /// <summary>
+        /// Environment key name for the minimum interval between repeated error logs from health-check connection verification.
+        /// </summary>
         string HealthCheckErrorLogIntervalKeyName { get; }
 
+        /// <summary>
+        /// Default value for health-check error log interval in milliseconds.
+        /// </summary>
         int HealthCheckErrorLogIntervalDefaultValue { get; }
     }
 }
