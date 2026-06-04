@@ -97,6 +97,16 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     /// Default value for Cache records threshold
     /// </summary>
     public int CacheRecordsThresholdDefaultValue => 50;
+    /// <summary>
+    /// Environment key name for the minimum interval between repeated error logs from health-check connection verification.
+    /// </summary>
+    public string HealthCheckErrorLogIntervalKeyName => $"Streams.{CacheKeyword}.HealthCheckErrorLogInterval";
+
+    /// <summary>
+    /// Default value for health-check error log interval in milliseconds.
+    /// </summary>
+    public int HealthCheckErrorLogIntervalDefaultValue => 60 * 60 * 1000; // 1 hour in milliseconds
+
 
     public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
 
