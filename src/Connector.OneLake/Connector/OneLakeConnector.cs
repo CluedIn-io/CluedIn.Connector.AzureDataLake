@@ -37,7 +37,7 @@ public class OneLakeConnector : DataLakeConnector
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData, bool shouldLogException)
     {
         if (jobData is not OneLakeConnectorJobData casted)
         {
@@ -56,37 +56,49 @@ public class OneLakeConnector : DataLakeConnector
 
         try
         {
-            return await base.VerifyDataLakeConnection(jobData);
+            return await base.VerifyDataLakeConnection(executionContext, jobData, shouldLogException);
         }
         catch (AuthenticationFailedException ex)
         {
-            _logger.LogWarning(ex, InvalidCredentialsErrorMessage);
-            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, InvalidCredentialsErrorMessage);
+            }
+            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage, hasException: true);
         }
         catch (RequestFailedException ex) when (WorkspaceNotFoundErrorCode.Equals(ex.ErrorCode))
         {
             var errorMessage = WorkspaceNotFoundErrorMessageFormat.FormatWith(casted.WorkspaceName);
-            _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted?.WorkspaceName);
-            return CreateFailedConnectionVerification(errorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted?.WorkspaceName);
+            }
+            return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
         catch (RequestFailedException ex) when (ArtifactNotFoundErrorCode.Equals(ex.ErrorCode))
         {
             var errorMessage = ArtifactNotFoundErrorMessageFormat.FormatWith(casted.ItemName, casted.ItemType);
-            _logger.LogWarning(ex, ArtifactNotFoundErrorMessageFormat, casted.ItemName, casted.ItemType);
-            return CreateFailedConnectionVerification(errorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, ArtifactNotFoundErrorMessageFormat, casted.ItemName, casted.ItemType);
+            }
+            return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error when verifying datalake connection.");
-            return CreateFailedConnectionVerification(ex.Message);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, "Error when verifying datalake connection.");
+            }
+            return CreateFailedConnectionVerification(ex.Message, hasException: true);
         }
     }
 
     protected override Type ExportJobType => typeof(OneLakeExportEntitiesJob);
 
-    protected override async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData, bool shouldLogException)
     {
-        var result = await base.VerifyConnectionInternal(executionContext, jobData);
+        var result = await base.VerifyConnectionInternal(executionContext, jobData, shouldLogException);
 
         if (result?.Success != true || !jobData.IsStreamCacheEnabled)
         {
@@ -103,12 +115,12 @@ public class OneLakeConnector : DataLakeConnector
         {
             var supported = string.Join(',', DataLakeConstants.OutputFormats.ReducedSupportedFormats);
             var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
-            return new ConnectionVerificationResult(false, errorMessage);
+            return CreateFailedConnectionVerification(errorMessage);
         }
 
         if (!casted.ShouldEscapeVocabularyKeys)
         {
-            return new ConnectionVerificationResult(false, $"Must set {nameof(casted.ShouldEscapeVocabularyKeys)} when data should be loaded to table.");
+            return CreateFailedConnectionVerification($"Must set {nameof(casted.ShouldEscapeVocabularyKeys)} when data should be loaded to table.");
         }
 
         return result;
