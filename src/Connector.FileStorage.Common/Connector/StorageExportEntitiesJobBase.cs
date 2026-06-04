@@ -343,7 +343,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         var model = await _streamRepository.GetStream(context, new Guid(args.Message));
 
-        if (model == null)
+        if (model?.ConnectorProviderDefinitionId == null)
         {
             return false;
         }
