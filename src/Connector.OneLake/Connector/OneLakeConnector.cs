@@ -59,25 +59,37 @@ public class OneLakeConnector : StorageConnectorBase
         }
         catch (AuthenticationFailedException ex)
         {
-            _logger.LogWarning(ex, InvalidCredentialsErrorMessage);
-            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, InvalidCredentialsErrorMessage);
+            }
+            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage, hasException: true);
         }
         catch (RequestFailedException ex) when (WorkspaceNotFoundErrorCode.Equals(ex.ErrorCode))
         {
             var errorMessage = WorkspaceNotFoundErrorMessageFormat.FormatWith(casted.WorkspaceName);
-            _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted?.WorkspaceName);
-            return CreateFailedConnectionVerification(errorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted?.WorkspaceName);
+            }
+            return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
         catch (RequestFailedException ex) when (ArtifactNotFoundErrorCode.Equals(ex.ErrorCode))
         {
             var errorMessage = ArtifactNotFoundErrorMessageFormat.FormatWith(casted.ItemName, casted.ItemType);
-            _logger.LogWarning(ex, ArtifactNotFoundErrorMessageFormat, casted.ItemName, casted.ItemType);
-            return CreateFailedConnectionVerification(errorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, ArtifactNotFoundErrorMessageFormat, casted.ItemName, casted.ItemType);
+            }
+            return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error when verifying datalake connection.");
-            return CreateFailedConnectionVerification(ex.Message);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, "Error when verifying datalake connection.");
+            }
+            return CreateFailedConnectionVerification(ex.Message, hasException: true);
         }
     }
 

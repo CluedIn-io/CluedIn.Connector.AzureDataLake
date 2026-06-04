@@ -152,7 +152,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
 
             var previousRunTimeArg = previousRunTime == null ? null : CreateDataLakeJobArgs(jobData, previousRunTime.Value);
 
-            if (!await jobInstance.CanRunAsync(executionContext, previousRunTimeArg))
+            if (previousRunTimeArg != null && !await jobInstance.CanRunAsync(executionContext, previousRunTimeArg))
             {
                 _logger.LogDebug("Job '{JobType}' with Key '{JobKey}' of scheduler '{SchedulerName}' cannot run now based on {CronSchedule} cron.",
                     jobData.Type,

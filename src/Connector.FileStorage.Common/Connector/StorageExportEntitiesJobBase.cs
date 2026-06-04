@@ -335,6 +335,11 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
     public override async Task<bool> CanRunAsync(ExecutionContext context, IStorageJobArgs args)
     {
+        if (string.IsNullOrWhiteSpace(args.Message))
+        {
+            throw new ArgumentException("StreamId is required in job arguments message.", nameof(args));
+        }
+
         var model = await _streamRepository.GetStream(context, new Guid(args.Message));
 
         if (model == null)
@@ -445,14 +450,19 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     {
         using var exportJobLoggingScope = context.Log.BeginScope(CreateLoggingScope(args));
 
-        var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
-
         if (streamModel == null)
         {
-            context.Log.LogWarning("Unable to get stream with Id {StreamId}. Skipping {TaskName}.", streamModel.Id, taskName);
+            context.Log.LogWarning("StreamModel is null. Skipping {TaskName}.", taskName);
             return null;
         }
 
+        if (streamModel.ConnectorProviderDefinitionId == null)
+        {
+            context.Log.LogWarning("Unable to get ConnectorProviderDefinitionId  with Id {StreamId}. Skipping {TaskName}.", streamModel.Id, taskName);
+            return null;
+        }
+
+        var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
         var streamId = streamModel.Id;
 
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
@@ -559,6 +569,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         if (model.ConnectorProviderDefinitionId == null)
         {
             context.Log.LogDebug("Skipping check for StreamId {StreamId} as it does not have connector provider definition id.", model.Id);
+            return false;
         }
 
         var isHealthy = await IsConnectorHealthyAsync(context, model.ConnectorProviderDefinitionId.Value);

@@ -76,7 +76,7 @@ public class AmazonS3Connector : StorageConnectorBase
                 _logger.LogWarning(s3Ex, "S3 authentication error when verifying connection.");
             }
 
-            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
+            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage, hasException: true);
         }
         catch (AmazonS3Exception s3Ex)
         {
@@ -85,7 +85,7 @@ public class AmazonS3Connector : StorageConnectorBase
                 _logger.LogWarning(s3Ex, "S3 error when verifying connection.");
             }
 
-            return CreateFailedConnectionVerification($"S3 error: {s3Ex.Message}");
+            return CreateFailedConnectionVerification($"S3 error: {s3Ex.Message}", hasException: true);
         }
         catch (Exception ex)
         {
@@ -94,7 +94,7 @@ public class AmazonS3Connector : StorageConnectorBase
                 _logger.LogWarning(ex, "Error when verifying S3 connection.");
             }
 
-            return CreateFailedConnectionVerification($"Failed to connect to S3: {ex.Message}");
+            return CreateFailedConnectionVerification($"Failed to connect to S3: {ex.Message}", hasException: true);
         }
     }
 

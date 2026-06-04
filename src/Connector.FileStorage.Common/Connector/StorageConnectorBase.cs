@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -37,7 +38,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private readonly PartitionedBuffer<Partition, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
-        private static readonly Dictionary<Type, DateTimeOffset> _lastHealthCheckErrorLogs = new Dictionary<Type, DateTimeOffset>();
+        private static readonly ConcurrentDictionary<Type, DateTimeOffset> _lastHealthCheckErrorLogs = new ConcurrentDictionary<Type, DateTimeOffset>();
         private readonly TimeSpan _delayBetweenHealthCheckErrorLog;
 
         // TODO: Handle ushort, ulong, uint
@@ -686,7 +687,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             {
                 if (isHealthCheck && shouldLogError)
                 {
-                    _lastHealthCheckErrorLogs.TryAdd(connectorType, _dateTimeOffsetProvider.GetCurrentUtcTime());
+                    _lastHealthCheckErrorLogs[connectorType] = _dateTimeOffsetProvider.GetCurrentUtcTime();
                 }
             }
         }

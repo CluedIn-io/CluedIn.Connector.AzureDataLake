@@ -73,7 +73,7 @@ public class AzureDataLakeConnector : StorageConnectorBase
             {
                 _logger.LogWarning(ex, "Error when verifying datalake connection.");
             }
-            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
+            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage, hasException: true);
         }
 
         bool IsValidAccountName()
