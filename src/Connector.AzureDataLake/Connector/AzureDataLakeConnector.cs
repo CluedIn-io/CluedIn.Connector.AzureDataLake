@@ -36,7 +36,7 @@ public class AzureDataLakeConnector : StorageConnectorBase
 
     protected override Type ExportJobType => typeof(AzureDataLakeExportEntitiesJob);
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
         if (configuration is not AzureDataLakeConnectorConfiguration casted)
         {
@@ -65,11 +65,14 @@ public class AzureDataLakeConnector : StorageConnectorBase
 
         try
         {
-            return await base.VerifyDataLakeConnection(executionContext, configuration);
+            return await base.VerifyDataLakeConnection(executionContext, configuration, shouldLogException);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error when verifying datalake connection.");
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, "Error when verifying datalake connection.");
+            }
             return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
         }
 

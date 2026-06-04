@@ -38,7 +38,7 @@ public class AmazonS3Connector : StorageConnectorBase
 
     protected override Type ExportJobType => typeof(AmazonS3ExportEntitiesJob);
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
         if (configuration is not AmazonS3ConnectorConfiguration casted)
         {
@@ -67,21 +67,33 @@ public class AmazonS3Connector : StorageConnectorBase
 
         try
         {
-            return await base.VerifyDataLakeConnection(executionContext, configuration);
+            return await base.VerifyDataLakeConnection(executionContext, configuration, shouldLogException);
         }
         catch (AmazonS3Exception s3Ex) when (IsAuthenticationError(s3Ex))
         {
-            _logger.LogWarning(s3Ex, "S3 authentication error when verifying connection.");
+            if (shouldLogException)
+            {
+                _logger.LogWarning(s3Ex, "S3 authentication error when verifying connection.");
+            }
+
             return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
         }
         catch (AmazonS3Exception s3Ex)
         {
-            _logger.LogWarning(s3Ex, "S3 error when verifying connection.");
+            if (shouldLogException)
+            {
+                _logger.LogWarning(s3Ex, "S3 error when verifying connection.");
+            }
+
             return CreateFailedConnectionVerification($"S3 error: {s3Ex.Message}");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error when verifying S3 connection.");
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, "Error when verifying S3 connection.");
+            }
+
             return CreateFailedConnectionVerification($"Failed to connect to S3: {ex.Message}");
         }
     }

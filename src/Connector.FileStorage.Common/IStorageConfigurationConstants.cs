@@ -32,5 +32,9 @@ namespace CluedIn.Connector.FileStorage.Common
         /// Default value for Cache buffer strategy
         /// </summary>
         string CacheBufferStrategyDefaultValue { get; }
+
+        string HealthCheckErrorLogIntervalKeyName { get; }
+
+        int HealthCheckErrorLogIntervalDefaultValue { get; }
     }
 }

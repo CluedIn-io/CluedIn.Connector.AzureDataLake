@@ -102,6 +102,10 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     /// </summary>
     public int CacheRecordsThresholdDefaultValue => 50;
 
+    public string HealthCheckErrorLogIntervalKeyName => $"Streams.{CacheKeyword}.HealthCheckErrorLogInterval";
+
+    public int HealthCheckErrorLogIntervalDefaultValue => 60 * 60 * 1000; // 1 hour in milliseconds
+
     public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
 
     public string CacheBufferStrategyDefaultValue => nameof(BufferStrategy.Safe);
