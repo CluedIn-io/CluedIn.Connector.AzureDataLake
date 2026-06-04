@@ -111,6 +111,7 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     /// Default value for health-check error log interval in milliseconds.
     /// </summary>
     public int HealthCheckErrorLogIntervalDefaultValue => 60 * 60 * 1000; // 1 hour in milliseconds
+
     public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
 
     public string CacheBufferStrategyDefaultValue => nameof(BufferStrategy.Safe);
