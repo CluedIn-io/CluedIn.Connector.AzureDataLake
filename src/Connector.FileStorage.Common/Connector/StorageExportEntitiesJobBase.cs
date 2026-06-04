@@ -567,6 +567,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         var model = await _streamRepository.GetStream(context, new Guid(args.Message));
 
+        if (model == null)
+        {
+            context.Log.LogDebug("Skipping check for StreamId {StreamId} because stream could not be found.", args.Message);
+            return false;
+        }
+
         if (model.ConnectorProviderDefinitionId == null)
         {
             context.Log.LogDebug("Skipping check for StreamId {StreamId} as it does not have connector provider definition id.", model.Id);
