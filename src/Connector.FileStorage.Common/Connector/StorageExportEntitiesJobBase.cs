@@ -469,7 +469,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             context.Log.LogWarning("Stream {StreamId} does not have a ConnectorProviderDefinitionId. Skipping {TaskName}.", streamModel.Id, taskName);
             return null;
         }
-        }
 
         var organizationProviderDataStore = context.Organization.DataStores.GetDataStore<ProviderDefinition>();
         var streamId = streamModel.Id;
