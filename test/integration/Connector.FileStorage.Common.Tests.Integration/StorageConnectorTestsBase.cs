@@ -122,6 +122,9 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         var systemEventsMock = new Mock<ISystemEvents>();
         container.Register(Component.For<ISystemEvents>().Instance(systemEventsMock.Object));
         var streamLogServiceMock = new Mock<IStreamLogService>();
+        streamLogServiceMock
+            .Setup(s => s.StoreHistoryLogEntryAsync(It.IsAny<CluedIn.Streams.StreamLog.History.StreamHistoryLogHistoryModel>()))
+            .Returns(Task.CompletedTask);
         container.Register(Component.For<IStreamLogService>().Instance(streamLogServiceMock.Object));
         var componentHealthServiceMock = new Mock<IComponentHealthService>();
         componentHealthServiceMock.Setup(service => service.GetComponentHealth(It.IsAny<ExecutionContext>(), It.IsAny<ComponentArea>(), It.IsAny<Guid>()))
