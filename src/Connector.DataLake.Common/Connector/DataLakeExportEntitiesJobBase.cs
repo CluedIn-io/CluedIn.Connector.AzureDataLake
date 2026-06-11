@@ -74,7 +74,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             args.Schedule,
             args.InstanceTime);
 
-        var streamModel = await _streamRepository.GetStream(context, new Guid(args.Message));
+        var streamModel = await _streamRepository.GetStream(new Guid(args.Message));
         var exportJobData = await GetJobDataAsync(context, args, streamModel, "export");
         if (exportJobData == null)
         {
@@ -336,7 +336,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return false;
         }
 
-        var model = await _streamRepository.GetStream(context, new Guid(args.Message));
+        var model = await _streamRepository.GetStream(new Guid(args.Message));
 
         if (model?.ConnectorProviderDefinitionId == null)
         {
@@ -535,7 +535,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             args.Schedule,
             args.InstanceTime);
 
-        var model = await _streamRepository.GetStream(context, new Guid(args.Message));
+        var model = await _streamRepository.GetStream(new Guid(args.Message));
 
         if (model == null)
         {
