@@ -78,13 +78,20 @@ namespace CluedIn.Connector.DataLake.Common.Connector
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
+            var cacheStrategyValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
+
+            if (!Enum.TryParse(cacheStrategyValue, ignoreCase: true, out BufferStrategy cacheBufferStrategy))
+            {
+                logger.LogWarning("Invalid value for buffer {CacheBufferKeyName}. Using default {CacheBufferDefaultValue}", constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
+                cacheBufferStrategy = Enum.Parse<BufferStrategy>(constants.CacheBufferStrategyDefaultValue);
+            }
 
             var healthCheckErrorLogDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
 
             _delayBetweenHealthCheckErrorLog = healthCheckErrorLogDelayMilliseconds > 0 ? TimeSpan.FromMilliseconds(healthCheckErrorLogDelayMilliseconds) : TimeSpan.Zero;
 
             _buffer = new PartitionedBuffer<IDataLakeJobData, string>(cacheRecordsThreshold,
-                backgroundFlushMaxIdleDefaultValue, Flush);
+                backgroundFlushMaxIdleDefaultValue, Flush, dateTimeOffsetProvider, cacheBufferStrategy);
         }
 
         ~DataLakeConnector()
@@ -662,7 +669,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
         }
 
-        private void Flush(IDataLakeJobData configuration, string[] entityData)
+        private async Task Flush(IDataLakeJobData configuration, string[] entityData)
         {
             if (entityData == null)
             {
@@ -681,7 +688,7 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH-mm-ss.fffffff");
             var fileName = $"{configuration.ContainerName}.{timestamp}.json";
 
-            Client.SaveData(configuration, content, fileName, JsonMimeType).GetAwaiter().GetResult();
+            await Client.SaveData(configuration, content, fileName, JsonMimeType);
         }
 
         public override async Task CreateContainer(ExecutionContext executionContext, Guid connectorProviderDefinitionId, IReadOnlyCreateContainerModelV2 model)

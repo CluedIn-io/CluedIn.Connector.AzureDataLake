@@ -108,6 +108,10 @@ public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeC
     public int HealthCheckErrorLogIntervalDefaultValue => 60 * 60 * 1000; // 1 hour in milliseconds
 
 
+    public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
+
+    public string CacheBufferStrategyDefaultValue => nameof(BufferStrategy.Safe);
+
     public string EnableCustomCronKeyName => $"Streams.{CacheKeyword}.Scheduling.CustomCron.Enabled";
 
     public bool EnableCustomCronDefaultValue => false;
