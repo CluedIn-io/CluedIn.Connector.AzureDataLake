@@ -40,7 +40,7 @@ public class OpenMirroringConnector : DataLakeConnector
         _dateTimeOffsetProvider = dateTimeOffsetProvider;
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData, bool shouldLogException)
     {
         // There are three places where verification can be called
         // 1. Health check
@@ -82,24 +82,30 @@ public class OpenMirroringConnector : DataLakeConnector
         }
         catch (AuthenticationFailedException ex)
         {
-            _logger.LogWarning(ex, InvalidCredentialsErrorMessage);
-            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, InvalidCredentialsErrorMessage);
+            }
+
+            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage, hasException: true);
         }
         catch (RequestFailedException ex) when (WorkspaceNotFoundErrorCode.Equals(ex.ErrorCode))
         {
             var errorMessage = WorkspaceNotFoundErrorMessageFormat.FormatWith(casted.WorkspaceName);
-            _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted.WorkspaceName);
-            return CreateFailedConnectionVerification(errorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted.WorkspaceName);
+            }
+
+            return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to check if directory exists.");
-            return CreateFailedConnectionVerification(ex.Message);
-        }
-
-        static bool IsHealthCheckVerification(OpenMirroringConnectorJobData castedJobData)
-        {
-            return castedJobData.Configurations.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out _);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, "Failed to check if directory exists.");
+            }
+            return CreateFailedConnectionVerification(ex.Message, hasException: true);
         }
     }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
 using CluedIn.Core;
@@ -54,5 +54,10 @@ internal abstract class DataLakeJobBase : JobBase, ICustomScheduledJob, IDataLak
     {
         jobArgs.Message = jobInstanceId;
         jobServerClient.Run(this, jobArgs);
+    }
+
+    public virtual Task<bool> CanRunAsync(ExecutionContext context, IDataLakeJobArgs args)
+    {
+        return Task.FromResult(true);
     }
 }
