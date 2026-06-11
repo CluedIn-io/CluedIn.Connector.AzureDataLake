@@ -27,6 +27,7 @@ using CluedIn.Core.DataStore;
 using CluedIn.Core.Events;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+using CluedIn.Streams.StreamLog;
 
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -120,6 +121,11 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
 
         var systemEventsMock = new Mock<ISystemEvents>();
         container.Register(Component.For<ISystemEvents>().Instance(systemEventsMock.Object));
+        var streamLogServiceMock = new Mock<IStreamLogService>();
+        streamLogServiceMock
+            .Setup(s => s.StoreHistoryLogEntryAsync(It.IsAny<CluedIn.Streams.StreamLog.History.StreamHistoryLogHistoryModel>()))
+            .Returns(Task.CompletedTask);
+        container.Register(Component.For<IStreamLogService>().Instance(streamLogServiceMock.Object));
         var componentHealthServiceMock = new Mock<IComponentHealthService>();
         componentHealthServiceMock.Setup(service => service.GetComponentHealth(It.IsAny<ExecutionContext>(), It.IsAny<ComponentArea>(), It.IsAny<Guid>()))
             .ReturnsAsync(new ComponentHealthModel()
@@ -201,6 +207,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         constants.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
         constants.Setup(x => x.CacheBufferStrategyKeyName).Returns("CacheBufferStrategyKeyName");
         constants.Setup(x => x.CacheBufferStrategyDefaultValue).Returns(nameof(BufferStrategy.Safe));
+        constants.Setup(x => x.HealthCheckErrorLogIntervalKeyName).Returns("HealthCheckErrorLogInterval");
+        constants.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
         constants.Setup(x => x.ProviderId).Returns(StorageProviderId);
         return constants;
     }

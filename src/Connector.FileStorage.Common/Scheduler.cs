@@ -15,7 +15,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
     protected readonly ILogger _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     private static readonly string _schedulerCron = "* * * * *";
-    private static readonly TimeSpan _initialDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan _initialDelay = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan _errorDelay = TimeSpan.FromMinutes(1);
 
     protected readonly ApplicationContext _applicationContext;
@@ -151,6 +151,16 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
             var jobInstance = CreateJobInstance(jobData.Type);
 
             var previousRunTimeArg = previousRunTime == null ? null : CreateDataLakeJobArgs(jobData, previousRunTime.Value);
+
+            if (previousRunTimeArg != null && !await jobInstance.CanRunAsync(executionContext, previousRunTimeArg))
+            {
+                _logger.LogDebug("Job '{JobType}' with Key '{JobKey}' of scheduler '{SchedulerName}' cannot run now based on {CronSchedule} cron.",
+                    jobData.Type,
+                    jobData.Key,
+                    _schedulerName,
+                    jobData.Schedule.CronSchedule);
+                continue;
+            }
 
             // LastSuccessfulRunTime is only saved when HasMissed = false
             var shouldRerun = previousRunTime != null && jobData.LastSuccessfulRunTime != previousRunTime && jobData.StartFromTime < previousRunTime

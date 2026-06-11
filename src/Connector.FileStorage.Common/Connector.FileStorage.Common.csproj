@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <IgnoresAccessChecksTo Include="CluedIn.ComponentHealth" />
+    <IgnoresAccessChecksTo Include="CluedIn.Streams" />
   </ItemGroup>
   <ItemGroup>
     <!-- Connectors -->
@@ -31,6 +32,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CluedIn.Core" />
+    <PackageReference Include="CluedIn.Streams" />
     <PackageReference Include="CluedIn.ComponentHealth" />
     <PackageReference Include="CsvHelper" />
     <PackageReference Include="IgnoresAccessChecksToGenerator" />

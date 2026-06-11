@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -24,7 +25,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 {
     public abstract partial class StorageConnectorBase : ConnectorBaseV2
     {
-        protected static readonly ConnectionVerificationResult SuccessfulConnectionVerification = new (true);
+        protected static readonly FileStorageConnectionVerificationResult SuccessfulConnectionVerification = new(true);
         private const string JsonMimeType = "application/json";
         private const int TableCreationLockTimeoutInMilliseconds = 100;
         private static readonly char[] _invalidFileNameCharacters = ['/', '\\', '?', '%'];
@@ -37,9 +38,11 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private readonly PartitionedBuffer<Partition, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
+        private static readonly ConcurrentDictionary<Type, DateTimeOffset> _lastHealthCheckErrorLogs = new ConcurrentDictionary<Type, DateTimeOffset>();
+        private readonly TimeSpan _delayBetweenHealthCheckErrorLog;
 
         // TODO: Handle ushort, ulong, uint
-        private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new ()
+        private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new()
         {
             [typeof(bool)] = "BIT",
             [typeof(byte)] = "TINYINT",
@@ -75,6 +78,10 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
             var cacheStrategyValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
+
+            var healthCheckErrorLogDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
+
+            _delayBetweenHealthCheckErrorLog = healthCheckErrorLogDelayMilliseconds > 0 ? TimeSpan.FromMilliseconds(healthCheckErrorLogDelayMilliseconds) : TimeSpan.Zero;
 
             if (!Enum.TryParse(cacheStrategyValue, ignoreCase: true, out BufferStrategy cacheBufferStrategy))
             {
@@ -649,21 +656,55 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
         public override async Task<ConnectionVerificationResult> VerifyConnection(ExecutionContext executionContext, IReadOnlyDictionary<string, object> config)
         {
+            var isHealthCheck = false;
+            var shouldLogError = true;
+            var connectorType = GetType();
             try
             {
                 var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, config.ToDictionary(config => config.Key, config => config.Value));
-                return await VerifyConnectionInternal(executionContext, configuration);
+                isHealthCheck = IsHealthCheckVerification(configuration);
+                shouldLogError = !isHealthCheck ||
+                    !_lastHealthCheckErrorLogs.TryGetValue(connectorType, out var lastCheck) ||
+                    _dateTimeOffsetProvider.GetCurrentUtcTime() - lastCheck > _delayBetweenHealthCheckErrorLog;
+                var result = await VerifyConnectionInternal(executionContext, configuration, shouldLogError);
+                if (result.HasException)
+                {
+                    UpdateLastHealthCheckErrorLogTime(isHealthCheck, shouldLogError, connectorType);
+                }
+                return result;
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Error verifying connection");
+                if (shouldLogError)
+                {
+                    _logger.LogError(e, "Error verifying connection");
+                    UpdateLastHealthCheckErrorLogTime(isHealthCheck, shouldLogError, connectorType);
+                }
                 return new ConnectionVerificationResult(false, e.Message);
+            }
+
+            void UpdateLastHealthCheckErrorLogTime(bool isHealthCheck, bool shouldLogError, Type connectorType)
+            {
+                if (isHealthCheck && shouldLogError)
+                {
+                    _lastHealthCheckErrorLogs[connectorType] = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                }
             }
         }
 
-        protected virtual async Task<ConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration)
+        private protected static bool IsHealthCheckVerification(IStorageConfiguration storageConfiguration)
         {
-            var verifyConnectionResult = await VerifyDataLakeConnection(executionContext, configuration);
+            if (storageConfiguration is StorageConfigurationBase storageConfigurationBase)
+            {
+                return storageConfigurationBase.Configurations.TryGetValue(StorageConfigurationConstants.ProviderDefinitionIdKey, out _);
+            }
+
+            return false;
+        }
+
+        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
+        {
+            var verifyConnectionResult = await VerifyDataLakeConnection(executionContext, configuration, shouldLogException);
             if (!verifyConnectionResult.Success)
             {
                 return verifyConnectionResult;
@@ -716,16 +757,16 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             return SuccessfulConnectionVerification;
         }
 
-        protected virtual async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration)
+        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
         {
             using var client = await _storageFactory.CreateStorageClient(executionContext, configuration);
             await client.VerifyConnectionAsync();
             return SuccessfulConnectionVerification;
         }
 
-        protected virtual ConnectionVerificationResult CreateFailedConnectionVerification(string message)
+        protected virtual FileStorageConnectionVerificationResult CreateFailedConnectionVerification(string message, bool hasException = false)
         {
-            return new ConnectionVerificationResult(false, message);
+            return new FileStorageConnectionVerificationResult(false, message, hasException);
         }
 
         private async Task VerifyTableOperations(string connectionString)
@@ -980,5 +1021,15 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             IDictionary<string, object> Data,
             Dictionary<string, Type> DataValueTypes);
         private record Partition(Guid OrganizationId, IStorageConfiguration Configuration);
+
+        protected class FileStorageConnectionVerificationResult : ConnectionVerificationResult
+        {
+            public FileStorageConnectionVerificationResult(bool success, string errorMessage = null, bool hasException = false) : base(success, errorMessage)
+            {
+                HasException = hasException;
+            }
+
+            public bool HasException { get; }
+        }
     }
 }
