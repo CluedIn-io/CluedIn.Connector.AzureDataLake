@@ -256,6 +256,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         constants.Setup(x => x.CacheRecordsThresholdDefaultValue).Returns(50);
         constants.Setup(x => x.CacheSyncIntervalKeyName).Returns("abc");
         constants.Setup(x => x.CacheSyncIntervalDefaultValue).Returns(2000);
+        constants.Setup(x => x.CacheBufferStrategyKeyName).Returns("CacheBufferStrategyKeyName");
+        constants.Setup(x => x.CacheBufferStrategyDefaultValue).Returns(nameof(BufferStrategy.Safe));
         constants.Setup(x => x.ProviderId).Returns(DataLakeProviderId);
         constants.Setup(x => x.HealthCheckErrorLogIntervalKeyName).Returns("HealthCheckErrorLogInterval");
         constants.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
