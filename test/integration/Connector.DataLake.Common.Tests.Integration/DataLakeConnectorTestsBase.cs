@@ -13,6 +13,9 @@ using Azure.Storage.Files.DataLake.Models;
 using Castle.MicroKernel.Registration;
 using Castle.Windsor;
 
+using CluedIn.ComponentHealth.Services;
+using CluedIn.ComponentHealth.Services.Models;
+using CluedIn.ComponentHealth.Storage;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Accounts;
@@ -25,6 +28,7 @@ using CluedIn.Core.Data.Vocabularies;
 using CluedIn.Core.DataStore;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
+using CluedIn.Streams.StreamLog;
 
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -43,6 +47,7 @@ using Xunit;
 using Xunit.Abstractions;
 
 using ExecutionContext = CluedIn.Core.ExecutionContext;
+using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
 namespace CluedIn.Connector.DataLake.Common.Tests.Integration;
 
@@ -72,6 +77,18 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         var container = new WindsorContainer();
         var applicationContext = new ApplicationContext(container);
 
+        var streamLogServiceMock = new Mock<IStreamLogService>();
+        streamLogServiceMock
+            .Setup(s => s.StoreHistoryLogEntryAsync(It.IsAny<CluedIn.Streams.StreamLog.History.StreamHistoryLogHistoryModel>()))
+            .Returns(Task.CompletedTask);
+        container.Register(Component.For<IStreamLogService>().Instance(streamLogServiceMock.Object));
+        var componentHealthServiceMock = new Mock<IComponentHealthService>();
+        componentHealthServiceMock.Setup(service => service.GetComponentHealth(It.IsAny<ExecutionContext>(), It.IsAny<ComponentArea>(), It.IsAny<Guid>()))
+            .ReturnsAsync(new ComponentHealthModel()
+            {
+                Status = ComponentHealthStatus.Healthy,
+            });
+        container.Register(Component.For<IComponentHealthService>().Instance(componentHealthServiceMock.Object));
         var mockDateTimeOffsetProvider = SetupDateTimeOffsetProvider(configureTimeProvider);
         _ = SetupApplicationCache(container);
         var providerDefinition = SetupProviderDefinition(providerDefinitionId, container);
@@ -234,6 +251,8 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         constants.Setup(x => x.CacheBufferStrategyKeyName).Returns("CacheBufferStrategyKeyName");
         constants.Setup(x => x.CacheBufferStrategyDefaultValue).Returns(nameof(BufferStrategy.Safe));
         constants.Setup(x => x.ProviderId).Returns(DataLakeProviderId);
+        constants.Setup(x => x.HealthCheckErrorLogIntervalKeyName).Returns("HealthCheckErrorLogInterval");
+        constants.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
         return constants;
     }
 

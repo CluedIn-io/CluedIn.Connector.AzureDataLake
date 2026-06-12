@@ -19,10 +19,16 @@
     <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
   </ItemGroup>
   <ItemGroup>
+    <IgnoresAccessChecksTo Include="CluedIn.ComponentHealth" />
+    <IgnoresAccessChecksTo Include="CluedIn.Streams" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Azure.Storage.Files.DataLake" />
     <PackageReference Include="CluedIn.Core" />
+    <PackageReference Include="CluedIn.Streams" />
     <PackageReference Include="CsvHelper" />
     <PackageReference Include="NCrontab" />
+    <PackageReference Include="IgnoresAccessChecksToGenerator" />
     <PackageReference Include="Parquet.Net" />
   </ItemGroup>
 </Project>
