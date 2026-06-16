@@ -6,10 +6,10 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
+using CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
-using CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
@@ -40,35 +40,111 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         DateTimeOffsetProvider = dateTimeOffsetProvider;
     }
 
-    protected override async Task<string> GetDefaultOutputFileNameAsync(ExecutionContext context, IStorageConfiguration configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    protected override async Task<string> GetOutputFileNameAsync(
+        ExecutionContext context,
+        ExportJobDataBase exportJobDataBase,
+        bool isInitialExport,
+        LastExportedFile lastExportedFile,
+        DirectoryPath outputDirectoryPath)
     {
-        if (LastExport == null)
+        var outputFormat = exportJobDataBase.OutputFormat;
+        if (isInitialExport)
         {
             return $"{1:D20}.{outputFormat.ToLowerInvariant()}";
         }
 
-        var lastName = Path.GetFileNameWithoutExtension(LastExport.FilePath);
-        var lastCount = int.Parse(lastName);
+        var lastExportedFileName = Path.GetFileNameWithoutExtension(lastExportedFile.FileName);
 
-        // Only increment if previous file is not empty
-        // This is because we are deleting empty files
-        var newCount = LastExport.TotalRows > 0 ? lastCount + 1 : lastCount;
+        var lastCount = long.Parse(lastExportedFileName);
+        var newCount = lastCount + 1;
         return $"{newCount:D20}.{outputFormat.ToLowerInvariant()}";
     }
 
-    private protected override bool ShouldSkipExport(ExportJobData exportJobData)
+    protected override async Task<LastExportedFile> GetLastExportedFile(
+        ExecutionContext context,
+        SqlConnection connection,
+        ExportJobDataBase exportJobDataBase,
+        IStorageClient storageClient,
+        DirectoryPath outputDirectoryPath)
     {
-        return LastExport?.DataTime == exportJobData.AsOfTime;
+        var lastFile = base.GetLastExportedFile(context, connection, exportJobDataBase, storageClient, outputDirectoryPath);
+
+        var files = await storageClient.GetFilesInDirectoryAsync(outputDirectoryPath);
+        var lastSequenceNumberInFabric = -1L;
+        FullyQualifiedFilePath? lastFileInFabric = null;
+        foreach (var file in files)
+        {
+            var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
+            if (fileNameWithoutExtension.Length == 20 &&
+                long.TryParse(fileNameWithoutExtension, out var fileNumber) &&
+                lastSequenceNumberInFabric < fileNumber)
+            {
+                lastSequenceNumberInFabric = fileNumber;
+                lastFileInFabric = file;
+            }
+        }
+
+        if (lastFileInFabric == null)
+        {
+            if (lastFile != null)
+            {
+                context.Log.LogWarning("No files found in the output directory '{OutputDirectoryPath}' for Stream '{StreamId}', but a last exported file was found in the database. This may indicate that files were deleted from the output directory.", outputDirectoryPath, exportJobDataBase.StreamId);
+            }
+
+            return null;
+        }
+
+        var fileMetadata = await storageClient.GetFileMetadataAsync(new FilePath(lastFileInFabric.Name, outputDirectoryPath));
+        if(fileMetadata == null || !TryGetMetadata(fileMetadata.Metadata, out var exportedFileMetadata))
+        {
+            context.Log.LogError("Failed to get metadata for file '{FileName}' in output directory '{OutputDirectoryPath}' for Stream '{StreamId}'.", lastFileInFabric.Name, outputDirectoryPath, exportJobDataBase.StreamId);
+            throw new ApplicationException($"Failed to get metadata for file '{lastFileInFabric.Name}' in output directory '{outputDirectoryPath}' for Stream '{exportJobDataBase.StreamId}'.");
+        }
+
+        return new LastExportedFile(lastFileInFabric.Name, exportedFileMetadata.DataTime, null);
+    }
+
+    protected override async Task<bool> GetIsInitialExport(
+        ExecutionContext context,
+        ExportJobDataBase exportJobDataBase,
+        IStorageClient storageClient,
+        LastExportedFile lastExportedFile,
+        DirectoryPath outputDirectoryPath)
+    {
+        // if we haven't exported any file yet, then this is definitely the initial export
+        if (lastExportedFile == null)
+        {
+            return true;
+        }
+
+        // Check if _metadata.json file exists in the output directory.
+        // If it doesn't exist, it means this is the first time we are exporting to this directory, then we can consider this as the initial export
+        if (!await storageClient.FileExistsAsync(outputDirectoryPath.GetFilePath("_metadata.json")))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private protected override async Task<ShouldSkipResult> ShouldSkipExport(ExecutionContext context, ExportJobData exportJobData, IStorageClient storageClient)
+    {
+        // instead of checking for existence of target file, we check for last exported file
+        if (exportJobData?.LastExportedFile?.DataTime == exportJobData.AsOfTime)
+        {
+            return new ShouldSkipResult(true, ExportedBeforeReason);
+        }
+
+        return new ShouldSkipResult(false, null);
     }
 
     private protected override bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => false;
+
     private protected override async Task InitializeBaseDirectoryAsync(
         ExecutionContext context,
         SqlConnection connection,
-        IStorageConfiguration configuration,
         ExportJobData exportJobData,
-        IStorageClient client,
-        DirectoryPath baseDirectoryPath)
+        IStorageClient client)
     {
         await CreatePartnerEventsJsonIfNotExists();
 
@@ -80,8 +156,8 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
                 return;
             }
 
-            await client.CreateDirectoryIfNotExistsAsync(baseDirectoryPath);
-            var fileClient = await client.GetFileClientAsync(baseDirectoryPath.GetFilePath("_partnerEvents.json"));
+            await client.CreateDirectoryIfNotExistsAsync(exportJobData.BaseDirectoryPath);
+            var fileClient = await client.GetFileClientAsync(exportJobData.BaseDirectoryPath.GetFilePath("_partnerEvents.json"));
 
             if (!await fileClient.ExistsAsync())
             {
@@ -111,17 +187,15 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
     private protected override async Task InitializeOutputDirectoryAsync(
         ExecutionContext context,
         SqlConnection connection,
-        IStorageConfiguration configuration,
         ExportJobData exportJobData,
-        IStorageClient client,
-        DirectoryPath outputDirectoryPath)
+        IStorageClient client)
     {
-        await client.CreateDirectoryIfNotExistsAsync(outputDirectoryPath);
+        await client.CreateDirectoryIfNotExistsAsync(exportJobData.OutputDirectoryPath);
         await EnsureMetadataJsonExists();
 
         async Task EnsureMetadataJsonExists()
         {
-            if (StorageConfigurationConstants.OutputFormats.Csv.Equals(configuration.OutputFormat, StringComparison.OrdinalIgnoreCase))
+            if (StorageConfigurationConstants.OutputFormats.Csv.Equals(exportJobData.StorageConfiguration.OutputFormat, StringComparison.OrdinalIgnoreCase))
             {
                 await EnsureCsvMetadataJsonExists();
             }
@@ -133,9 +207,9 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
 
         async Task EnsureCsvMetadataJsonExists()
         {
-            var fileClient = await client.GetFileClientAsync(outputDirectoryPath.GetFilePath("_metadata.json"));
+            var fileClient = await client.GetFileClientAsync(exportJobData.OutputDirectoryPath.GetFilePath("_metadata.json"));
 
-            if (IsInitialExport || !await fileClient.ExistsAsync())
+            if (exportJobData.LastExportedFile == null || !await fileClient.ExistsAsync())
             {
                 await using var outputStream = await fileClient.OpenWriteAsync(true);
                 await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
@@ -161,9 +235,9 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
 
         async Task EnsureGenericMetadataJsonExists()
         {
-            var fileClient = await client.GetFileClientAsync(outputDirectoryPath.GetFilePath("_metadata.json"));
+            var fileClient = await client.GetFileClientAsync(exportJobData.OutputDirectoryPath.GetFilePath("_metadata.json"));
 
-            if (IsInitialExport || !await fileClient.ExistsAsync())
+            if (exportJobData.LastExportedFile == null || !await fileClient.ExistsAsync())
             {
                 await using var outputStream = await fileClient.OpenWriteAsync(true);
                 await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
@@ -187,7 +261,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
 
         // We need to make sure DataLakeConstants.ChangeTypeKey is the last field in the list (if we need it)
         var isRemoved = baseFieldNames.Remove(StorageConfigurationConstants.ChangeTypeKey);
-        var isFirstFile = LastExport == null;
+        var isFirstFile = exportJobData.LastExportedFile == null;
 
         if (isRemoved && !isFirstFile)
         {
@@ -197,22 +271,6 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         }
 
         return baseFieldNames;
-    }
-
-    private protected override async Task<ExportHistory> GetLastExport(
-        ExecutionContext context,
-        SqlConnection connection,
-        IStorageConfiguration configuration,
-        ExportJobDataBase exportJobData,
-        DirectoryPath outputDirectoryPath)
-    {
-        var client = await CreateStorageClient(context, configuration);
-        if (!await client.FileExistsAsync(outputDirectoryPath.GetFilePath("_metadata.json")))
-        {
-            return null;
-        }
-
-        return await base.GetLastExport(context, connection, configuration, exportJobData, outputDirectoryPath);
     }
 
     private protected override Task<string> GetOutputDirectoryNameAsync(ExecutionContext executionContext, IStorageConfiguration configuration, ExportJobDataBase exportJobData)
