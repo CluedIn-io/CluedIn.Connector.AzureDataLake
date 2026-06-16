@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -12,6 +13,7 @@ namespace CluedIn.Connector.FileStorage.Common;
 
 internal class Scheduler : IScheduledJobQueue, IScheduler
 {
+    private static ActivitySource ActivitySource = new ActivitySource("CluedIn.Connector.FileStorage.Common.Scheduler", "1.0.0");
     protected readonly ILogger _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     private static readonly string _schedulerCron = "* * * * *";
@@ -128,6 +130,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
 
     protected async Task RunSchedulerIterationAsync()
     {
+        using var activity = ActivitySource.StartActivity("RunSchedulerIterationAsync");
         foreach (var jobProducers in _jobProducers)
         {
             await jobProducers(this);
@@ -186,6 +189,8 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
 
             _ = Task.Run(async () =>
             {
+                Activity.Current = null;
+                using var activity = ActivitySource.StartActivity($"RunJob - {jobData.Type}");
                 try
                 {
                     var executionContext = _applicationContext.CreateExecutionContext(jobData.OrganizationId);
