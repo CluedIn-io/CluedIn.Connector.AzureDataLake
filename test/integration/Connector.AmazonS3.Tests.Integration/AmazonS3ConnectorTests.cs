@@ -444,6 +444,21 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             });
     }
 
+    [Fact]
+    public async Task GetContainers_WhenDirectoryIsEmpty_ReturnsEmptyCollection()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        // Use a unique directory that is guaranteed to be empty
+        configuration[AmazonS3ConfigurationConstants.DirectoryName] = $"xunit-empty-{DateTime.Now.Ticks}";
+        var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(storageConfiguration, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        var containers = await connector.GetContainers(setupResult.Context, setupResult.ProviderDefinition.Id);
+        Assert.NotNull(containers);
+        Assert.Empty(containers);
+    }
+
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
         var exportJob = new AmazonS3ExportEntitiesJob(
