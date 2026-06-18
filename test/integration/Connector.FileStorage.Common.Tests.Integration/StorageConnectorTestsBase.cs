@@ -1069,4 +1069,38 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                 values.Add(nameof(StorageConfigurationConstants.ShouldWriteGuidAsString), true);
             });
     }
+
+    [Theory]
+    [InlineData(StreamStatus.New)]
+    [InlineData(StreamStatus.Paused)]
+    [InlineData(StreamStatus.Stopped)]
+    public async Task VerifyStoreData_Sync_WithStreamCacheCanSkipIfStreamNotStarted(StreamStatus streamStatus)
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            (_, _) => Task.CompletedTask,
+            async executeExportArg =>
+            {
+                executeExportArg.SetupContainerResult.StreamModel.Status = streamStatus;
+                executeExportArg.SetupContainerResult.ComponentHealthServiceMock.Setup(service => service.GetComponentHealth(It.IsAny<ExecutionContext>(), It.IsAny<ComponentArea>(), It.IsAny<Guid>()))
+                    .ReturnsAsync(new ComponentHealthModel()
+                    {
+                        Status = ComponentHealthStatus.Unhealthy,
+                    });
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.Null(result.FilePath);
+                Assert.Equal(StorageExportEntitiesJobBase.StreamNotStartedReason, result.Reason);
+                return null;
+            });
+    }
 }

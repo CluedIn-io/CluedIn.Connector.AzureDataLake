@@ -36,6 +36,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     private const string InstanceTimeKey = "InstanceTime";
     private const string TemporaryFileSuffix = ".tmp";
     internal static readonly string ConnectorIsNotHealthyReason = "Connector is not healthy";
+    internal static readonly string StreamNotStartedReason = "Stream is not started";
 
     protected StorageExportEntitiesJobBase(
         ApplicationContext appContext,
@@ -67,7 +68,15 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.Schedule,
             args.InstanceTime);
 
-        var streamModel = await _streamRepository.GetStream(context, new Guid(args.Message));
+        var streamId = new Guid(args.Message);
+        var streamModel = await _streamRepository.GetStream(context, streamId);
+
+        if (streamModel.Status != StreamStatus.Started)
+        {
+            context.Log.LogDebug("Skipping export for StreamId {StreamId} as it is not started.", streamId);
+            return ExportResult.CreateSkipped(StreamNotStartedReason);
+        }
+
         var exportJobData = await GetJobDataAsync(context, args, streamModel, "export");
         if (exportJobData == null)
         {
