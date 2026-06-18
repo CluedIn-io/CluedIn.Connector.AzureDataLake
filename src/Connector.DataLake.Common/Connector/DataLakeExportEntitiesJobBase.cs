@@ -76,7 +76,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             args.InstanceTime);
 
         var streamId = new Guid(args.Message);
-        var streamModel = await _streamRepository.GetStream(context, streamId);
+        var streamModel = await _streamRepository.GetStream(streamId);
 
         if (streamModel.Status != StreamStatus.Started)
         {
