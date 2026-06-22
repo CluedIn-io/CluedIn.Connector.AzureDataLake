@@ -1,21 +1,18 @@
-﻿using System;
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 
 namespace CluedIn.Connector.AzureAIStudio.Connector;
 
-internal class AzureAIStudioExportEntitiesJob : DataLakeExportEntitiesJobBase
+internal class AzureAIStudioExportEntitiesJob : StorageExportEntitiesJobBase
 {
     public AzureAIStudioExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
-        AzureAIStudioClient dataLakeClient,
-        IAzureAIStudioConstants dataLakeConstants,
-        AzureAIStudioJobDataFactory dataLakeJobDataFactory,
+        IAzureAIStudioConfigurationConstants configurationConstants,
+        AzureAIStudioStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, dataLakeClient, dataLakeConstants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
     {
     }
 }

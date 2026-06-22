@@ -1,5 +1,5 @@
 using CluedIn.Connector.AzureDatabricks.Connector;
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 
 using ComponentHost;
@@ -9,7 +9,7 @@ namespace CluedIn.Connector.AzureDatabricks
     [Component(nameof(AzureDatabricksConnectorComponent), "Providers", ComponentType.Service,
         ServerComponents.ProviderWebApi,
         Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
-    public sealed class AzureDatabricksConnectorComponent : DataLakeConnectorComponentBase
+    public sealed class AzureDatabricksConnectorComponent : StorageConnectorComponentBase
     {
 
         public AzureDatabricksConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
@@ -20,7 +20,7 @@ namespace CluedIn.Connector.AzureDatabricks
         /// <summary>Starts this instance.</summary>
         public override void Start()
         {
-            DefaultStartInternal<IAzureDatabricksConstants, AzureDatabricksJobDataFactory, AzureDatabricksExportEntitiesJob>();
+            DefaultStartInternal<IAzureDatabricksConfigurationConstants, AzureDatabricksStorageFactory, AzureDatabricksExportEntitiesJob>();
         }
 
         public const string ComponentName = "Azure Databricks";

@@ -1,13 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AutoFixture.Xunit2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="coverlet.msbuild" />
     <PackageReference Include="xunit" />
     <PackageReference Include="Moq" />
     <PackageReference Include="ParquetSharp" />
@@ -16,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
+    <ProjectReference Include="..\Connector.FileStorage.Common.Tests.Integration\Connector.FileStorage.Common.Tests.Integration.csproj" />
   </ItemGroup>
 
 </Project>
