@@ -1,12 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Azure;
 using Azure.Identity;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 
@@ -14,7 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.OneLake.Connector;
 
-public class OneLakeConnector : DataLakeConnector
+public class OneLakeConnector : StorageConnectorBase
 {
     internal const string InvalidCredentialsErrorMessage = "Authentication failed due to invalid credentials.";
     internal const string InvalidWorkspaceErrorMessage = "Workspace name cannot be empty.";
@@ -28,20 +27,20 @@ public class OneLakeConnector : DataLakeConnector
 
     public OneLakeConnector(
         ILogger<OneLakeConnector> logger,
-        OneLakeClient client,
-        IOneLakeConstants constants,
-        OneLakeJobDataFactory dataLakeJobDataFactory,
+        ApplicationContext applicationContext,
+        IOneLakeConfigurationConstants constants,
+        OneLakeStorageFactory dataLakeStorageJobDataFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, dataLakeStorageJobDataFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData, bool shouldLogException)
+    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
     {
-        if (jobData is not OneLakeConnectorJobData casted)
+        if (configuration is not OneLakeConnectorConfiguration casted)
         {
-            throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(OneLakeConnectorJobData)}.");
+            throw new ArgumentException($"Invalid job data type: {configuration.GetType().Name}. Expected: {nameof(OneLakeConnectorConfiguration)}.");
         }
 
         if (string.IsNullOrWhiteSpace(casted.WorkspaceName))
@@ -56,7 +55,7 @@ public class OneLakeConnector : DataLakeConnector
 
         try
         {
-            return await base.VerifyDataLakeConnection(executionContext, jobData, shouldLogException);
+            return await base.VerifyDataLakeConnection(jobData);
         }
         catch (AuthenticationFailedException ex)
         {
@@ -82,7 +81,6 @@ public class OneLakeConnector : DataLakeConnector
             {
                 _logger.LogWarning(ex, ArtifactNotFoundErrorMessageFormat, casted.ItemName, casted.ItemType);
             }
-            return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
         catch (Exception ex)
         {
@@ -96,25 +94,25 @@ public class OneLakeConnector : DataLakeConnector
 
     protected override Type ExportJobType => typeof(OneLakeExportEntitiesJob);
 
-    protected override async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData, bool shouldLogException)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
         var result = await base.VerifyConnectionInternal(executionContext, jobData, shouldLogException);
 
-        if (result?.Success != true || !jobData.IsStreamCacheEnabled)
+        if (result?.Success != true || !configuration.IsStreamCacheEnabled)
         {
             return result;
         }
 
-        var casted = (OneLakeConnectorJobData)jobData;
+        var casted = (OneLakeConnectorConfiguration)configuration;
         if (!casted.ShouldLoadToTable)
         {
             return result;
         }
 
-        if (!DataLakeConstants.OutputFormats.IsValid(casted.OutputFormat, isReducedSupportedFormat: true))
+        if (!StorageConfigurationConstants.OutputFormats.IsValid(casted.OutputFormat, isReducedSupportedFormat: true))
         {
-            var supported = string.Join(',', DataLakeConstants.OutputFormats.ReducedSupportedFormats);
-            var errorMessage = $"Format '{jobData.OutputFormat}' is not supported. Supported formats are {supported}.";
+            var supported = string.Join(',', StorageConfigurationConstants.OutputFormats.ReducedSupportedFormats);
+            var errorMessage = $"Format '{configuration.OutputFormat}' is not supported. Supported formats are {supported}.";
             return CreateFailedConnectionVerification(errorMessage);
         }
 
