@@ -23,7 +23,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
-
 using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;

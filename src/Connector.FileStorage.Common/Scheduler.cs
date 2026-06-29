@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -12,10 +13,11 @@ namespace CluedIn.Connector.FileStorage.Common;
 
 internal class Scheduler : IScheduledJobQueue, IScheduler
 {
+    private static ActivitySource ActivitySource = new ActivitySource("CluedIn.Connector.FileStorage.Common.Scheduler", "1.0.0");
     protected readonly ILogger _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     private static readonly string _schedulerCron = "* * * * *";
-    private static readonly TimeSpan _initialDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan _initialDelay = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan _errorDelay = TimeSpan.FromMinutes(1);
 
     protected readonly ApplicationContext _applicationContext;
@@ -128,6 +130,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
 
     protected async Task RunSchedulerIterationAsync()
     {
+        using var activity = ActivitySource.StartActivity("RunSchedulerIterationAsync");
         foreach (var jobProducers in _jobProducers)
         {
             await jobProducers(this);
@@ -151,6 +154,16 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
             var jobInstance = CreateJobInstance(jobData.Type);
 
             var previousRunTimeArg = previousRunTime == null ? null : CreateDataLakeJobArgs(jobData, previousRunTime.Value);
+
+            if (previousRunTimeArg != null && !await jobInstance.CanRunAsync(executionContext, previousRunTimeArg))
+            {
+                _logger.LogDebug("Job '{JobType}' with Key '{JobKey}' of scheduler '{SchedulerName}' cannot run now based on {CronSchedule} cron.",
+                    jobData.Type,
+                    jobData.Key,
+                    _schedulerName,
+                    jobData.Schedule.CronSchedule);
+                continue;
+            }
 
             // LastSuccessfulRunTime is only saved when HasMissed = false
             var shouldRerun = previousRunTime != null && jobData.LastSuccessfulRunTime != previousRunTime && jobData.StartFromTime < previousRunTime
@@ -176,6 +189,8 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
 
             _ = Task.Run(async () =>
             {
+                Activity.Current = null;
+                using var activity = ActivitySource.StartActivity($"RunJob - {jobData.Type}");
                 try
                 {
                     var executionContext = _applicationContext.CreateExecutionContext(jobData.OrganizationId);

@@ -40,7 +40,7 @@ public class OpenMirroringConnector : StorageConnectorBase
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
         // There are three places where verification can be called
         // 1. Health check
@@ -85,24 +85,30 @@ public class OpenMirroringConnector : StorageConnectorBase
         }
         catch (AuthenticationFailedException ex)
         {
-            _logger.LogWarning(ex, InvalidCredentialsErrorMessage);
-            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, InvalidCredentialsErrorMessage);
+            }
+
+            return CreateFailedConnectionVerification(InvalidCredentialsErrorMessage, hasException: true);
         }
         catch (RequestFailedException ex) when (WorkspaceNotFoundErrorCode.Equals(ex.ErrorCode))
         {
             var errorMessage = WorkspaceNotFoundErrorMessageFormat.FormatWith(casted.WorkspaceName);
-            _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted.WorkspaceName);
-            return CreateFailedConnectionVerification(errorMessage);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, WorkspaceNotFoundErrorMessageFormat, casted.WorkspaceName);
+            }
+
+            return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to check if directory exists.");
-            return CreateFailedConnectionVerification(ex.Message);
-        }
-
-        static bool IsHealthCheckVerification(OpenMirroringConnectorConfiguration castedJobData)
-        {
-            return castedJobData.Configurations.TryGetValue(StorageConfigurationConstants.ProviderDefinitionIdKey, out _);
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, "Failed to check if directory exists.");
+            }
+            return CreateFailedConnectionVerification(ex.Message, hasException: true);
         }
     }
 

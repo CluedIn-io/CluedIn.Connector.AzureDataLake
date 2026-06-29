@@ -55,4 +55,9 @@ internal abstract class StorageJobBase : JobBase, ICustomScheduledJob, IStorageJ
         jobArgs.Message = jobInstanceId;
         jobServerClient.Run(this, jobArgs);
     }
+
+    public virtual Task<bool> CanRunAsync(ExecutionContext context, IStorageJobArgs args)
+    {
+        return Task.FromResult(true);
+    }
 }

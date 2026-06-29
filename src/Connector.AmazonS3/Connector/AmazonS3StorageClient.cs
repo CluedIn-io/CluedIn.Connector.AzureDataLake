@@ -193,13 +193,16 @@ internal class AmazonS3StorageClient : IStorageClient
         {
             response = await _s3Client.ListObjectsV2Async(listRequest);
 
-            foreach (var s3Object in response.S3Objects)
+            if (response.S3Objects != null)
             {
-                if (!s3Object.Key.EndsWith("/"))
+                foreach (var s3Object in response.S3Objects)
                 {
-                    var fileName = Path.GetFileName(s3Object.Key);
-                    var filePath = new FilePath(fileName, directoryPath);
-                    result.Add(new FullyQualifiedFilePath (fileName, directoryPath, filePath.GetS3Url(_configuration.BucketName)));
+                    if (!s3Object.Key.EndsWith("/"))
+                    {
+                        var fileName = Path.GetFileName(s3Object.Key);
+                        var filePath = new FilePath(fileName, directoryPath);
+                        result.Add(new FullyQualifiedFilePath (fileName, directoryPath, filePath.GetS3Url(_configuration.BucketName)));
+                    }
                 }
             }
 
