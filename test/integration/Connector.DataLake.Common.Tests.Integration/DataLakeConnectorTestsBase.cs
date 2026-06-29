@@ -8,16 +8,11 @@ using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
 using CluedIn.Connector.FileStorage.Common;
-using CluedIn.ComponentHealth.Services;
-using CluedIn.ComponentHealth.Services.Models;
-using CluedIn.ComponentHealth.Storage;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Connector.FileStorage.Common.Tests.Integration;
-using CluedIn.Streams.StreamLog;
 using Newtonsoft.Json;
 using Xunit;
 
-using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 namespace CluedIn.Connector.DataLake.Common.Tests.Integration;
 
 public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFactory, TConfigurationConstants>
@@ -32,18 +27,6 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFact
 
     private protected abstract DataLakeServiceClient GetDataLakeClient(SetupContainerResult setupContainerResult);
 
-        var streamLogServiceMock = new Mock<IStreamLogService>();
-        streamLogServiceMock
-            .Setup(s => s.StoreHistoryLogEntryAsync(It.IsAny<CluedIn.Streams.StreamLog.History.StreamHistoryLogHistoryModel>()))
-            .Returns(Task.CompletedTask);
-        container.Register(Component.For<IStreamLogService>().Instance(streamLogServiceMock.Object));
-        var componentHealthServiceMock = new Mock<IComponentHealthService>();
-        componentHealthServiceMock.Setup(service => service.GetComponentHealth(It.IsAny<ExecutionContext>(), It.IsAny<ComponentArea>(), It.IsAny<Guid>()))
-            .ReturnsAsync(new ComponentHealthModel()
-            {
-                Status = ComponentHealthStatus.Healthy,
-            });
-        container.Register(Component.For<IComponentHealthService>().Instance(componentHealthServiceMock.Object));
     private protected override async Task CleanUpExportedFile(SetupContainerResult setupContainerResult, ExportedFilePath filePath)
     {
         var directoryClient = GetDataLakeDirectoryClient(setupContainerResult);
@@ -54,10 +37,6 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFact
     private protected override async Task CleanUpAfterImmediateOutputTest(SetupContainerResult setupContainerResult)
     {
         var client = GetDataLakeClient(setupContainerResult);
-        constants.Setup(x => x.CacheBufferStrategyKeyName).Returns("CacheBufferStrategyKeyName");
-        constants.Setup(x => x.CacheBufferStrategyDefaultValue).Returns(nameof(BufferStrategy.Safe));
-        constants.Setup(x => x.HealthCheckErrorLogIntervalKeyName).Returns("HealthCheckErrorLogInterval");
-        constants.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
         var fileSystemName = GetFileSystemName(setupContainerResult);
         var directoryName = GetDirectoryName(setupContainerResult);
         if (!IsFixedFileSystem)

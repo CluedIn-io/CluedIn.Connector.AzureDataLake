@@ -79,15 +79,15 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
             var cacheStrategyValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
 
+            var healthCheckErrorLogDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
+
+            _delayBetweenHealthCheckErrorLog = healthCheckErrorLogDelayMilliseconds > 0 ? TimeSpan.FromMilliseconds(healthCheckErrorLogDelayMilliseconds) : TimeSpan.Zero;
+
             if (!Enum.TryParse(cacheStrategyValue, ignoreCase: true, out BufferStrategy cacheBufferStrategy))
             {
                 logger.LogWarning("Invalid value for buffer {CacheBufferKeyName}. Using default {CacheBufferDefaultValue}", constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
                 cacheBufferStrategy = Enum.Parse<BufferStrategy>(constants.CacheBufferStrategyDefaultValue);
             }
-
-            var healthCheckErrorLogDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
-
-            _delayBetweenHealthCheckErrorLog = healthCheckErrorLogDelayMilliseconds > 0 ? TimeSpan.FromMilliseconds(healthCheckErrorLogDelayMilliseconds) : TimeSpan.Zero;
 
             _buffer = new PartitionedBuffer<Partition, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush, dateTimeOffsetProvider, cacheBufferStrategy);
@@ -692,19 +692,19 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             }
         }
 
-        private protected static bool IsHealthCheckVerification(IDataLakeJobData jobData)
+        private protected static bool IsHealthCheckVerification(IStorageConfiguration storageConfiguration)
         {
-            if (jobData is DataLakeJobData dataLakeJobData)
+            if (storageConfiguration is StorageConfigurationBase storageConfigurationBase)
             {
-                return dataLakeJobData.Configurations.TryGetValue(DataLakeConstants.ProviderDefinitionIdKey, out _);
+                return storageConfigurationBase.Configurations.TryGetValue(StorageConfigurationConstants.ProviderDefinitionIdKey, out _);
             }
 
             return false;
         }
 
-        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IDataLakeJobData jobData, bool shouldLogException)
+        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
         {
-            var verifyConnectionResult = await VerifyDataLakeConnection(executionContext, jobData, shouldLogException);
+            var verifyConnectionResult = await VerifyDataLakeConnection(executionContext, configuration, shouldLogException);
             if (!verifyConnectionResult.Success)
             {
                 return verifyConnectionResult;

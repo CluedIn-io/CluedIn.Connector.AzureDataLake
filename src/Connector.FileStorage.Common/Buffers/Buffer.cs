@@ -4,11 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 
-<<<<<<<< HEAD:src/Connector.DataLake.Common/Buffers/Buffer.cs
-namespace CluedIn.Connector.DataLake.Common.Buffers
-========
 namespace CluedIn.Connector.FileStorage.Common.Buffers
->>>>>>>> develop:src/Connector.FileStorage.Common/Buffers/Buffer.cs
 {
     internal class Buffer<T> : IDisposable, IBuffer<T>
     {

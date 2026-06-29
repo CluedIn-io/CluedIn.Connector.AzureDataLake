@@ -22,7 +22,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
-
 using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.OneLake.Tests.Integration;
@@ -152,23 +151,6 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         var connector = setupResult.ConnectorMock.Object;
         setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
             .Returns(Task.FromResult<IStorageConfiguration>(jobData));
-        var result = await connector.VerifyConnection(setupResult.Context, configuration);
-        Assert.NotNull(result);
-        Assert.False(result.Success);
-        Assert.Equal(OneLakeConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(jobData.ItemName, jobData.ItemType), result.ErrorMessage);
-    }
-
-    [Fact]
-    public async Task VerifyConnection_WhenItemNotFound_ReturnItemNotFoundErrorMessage()
-    {
-        var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(OneLakeConstants.ItemName)] = "NonExistent";
-        var storageConfiguration = new OneLakeConnectorConfiguration(configuration);
-
-        var setupResult = await SetupContainer(storageConfiguration, StreamMode.EventStream);
-        var connector = setupResult.ConnectorMock.Object;
-        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IStorageConfiguration>(storageConfiguration));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);

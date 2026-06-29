@@ -21,8 +21,6 @@ using Microsoft.Extensions.Logging;
 
 using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
-using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
-
 namespace CluedIn.Connector.FileStorage.Common.Connector;
 
 internal abstract class StorageExportEntitiesJobBase : StorageJobBase
@@ -62,12 +60,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
     internal async Task<ExportResult> DoRunInternalAsync(ExecutionContext context, IStorageJobArgs args)
     {
-        _ = await DoRunInternalAsync(context, args);
-    }
-
-
-    internal virtual async Task<ExportResult> DoRunInternalAsync(ExecutionContext context, IDataLakeJobArgs args)
-    {
         using var exportJobLoggingScope = context.Log.BeginScope(CreateLoggingScope(args));
         context.Log.LogInformation(
             "Begin export entities job '{ExportJob}' for '{StreamId}' using {Schedule} at {InstanceTime}.",
@@ -77,7 +69,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.InstanceTime);
 
         var streamId = new Guid(args.Message);
-        var streamModel = await _streamRepository.GetStream(streamId);
+        var streamModel = await _streamRepository.GetStream(context, streamId);
 
         if (streamModel.Status != StreamStatus.Started)
         {
@@ -98,7 +90,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return ExportResult.CreateSkipped("Stream does not have connector provider definition id");
         }
 
-
         if (!await IsConnectorHealthyAsync(context, streamModel.ConnectorProviderDefinitionId.Value))
         {
             context.Log.LogInformation("Skipping export for StreamId {StreamId} as provider definition {ProviderDefinitionId} is not healthy.", exportJobData.StreamId, exportJobData.ProviderDefinition.Id);
@@ -109,8 +100,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         if (ShouldSkipExport(exportJobData))
         {
             context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required.", exportJobData.StreamId);
-            await AddErrorToStreamIngestionLog(context, exportJobData, $"Skipping export for StreamId {exportJobData.StreamId} as provider definition {exportJobData.ProviderDefinition.Id} is not healthy.");
-            return ExportResult.CreateSkipped(ConnectorIsNotHealthyReason);
+            return ExportResult.CreateSkipped("Export is not required");
         }
 
         try
@@ -126,7 +116,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
     private async Task<ExportResult> DoRunInternalAsync(
         ExecutionContext context,
-        IDataLakeJobArgs args,
+        IStorageJobArgs args,
         ExportJobData exportJobData)
     {
         var typeName = GetType().Name;
@@ -293,8 +283,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.Message,
             args.Schedule);
 
-        return ExportResult.CreateSuccess(outputFileName);
-
         async Task<long> writeFileContentsAsync()
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
@@ -354,7 +342,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         return ExportResult.CreateSuccess(outputFilePath);
     }
 
-    public override async Task<bool> CanRunAsync(ExecutionContext context, IDataLakeJobArgs args)
+    public override async Task<bool> CanRunAsync(ExecutionContext context, IStorageJobArgs args)
     {
         if (string.IsNullOrWhiteSpace(args.Message))
         {
@@ -362,7 +350,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return false;
         }
 
-        var model = await _streamRepository.GetStream(new Guid(args.Message));
+        var model = await _streamRepository.GetStream(context, new Guid(args.Message));
 
         if (model?.ConnectorProviderDefinitionId == null)
         {
@@ -377,7 +365,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         ExecutionContext executionContext,
         Guid providerDefinitionId)
     {
-        var providerDefinitionId = exportJobData.ProviderDefinition.Id;
         var componentHealthService = executionContext.ApplicationContext.Container.Resolve<IComponentHealthService>();
         var result = await componentHealthService.GetComponentHealth(executionContext, ComponentArea.Connector, providerDefinitionId);
 
@@ -413,7 +400,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     {
         return await _storageFactory.CreateStorageClient(context, configuration);
     }
-
     private protected virtual bool ShouldSkipExport(ExportJobData exportJobData)
     {
         return false;
@@ -595,7 +581,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.Schedule,
             args.InstanceTime);
 
-        var model = await _streamRepository.GetStream(new Guid(args.Message));
+        var model = await _streamRepository.GetStream(context, new Guid(args.Message));
 
         if (model == null)
         {

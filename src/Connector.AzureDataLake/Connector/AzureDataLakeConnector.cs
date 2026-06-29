@@ -36,7 +36,7 @@ public class AzureDataLakeConnector : StorageConnectorBase
 
     protected override Type ExportJobType => typeof(AzureDataLakeExportEntitiesJob);
 
-    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData, bool shouldLogException)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
         if (configuration is not AzureDataLakeConnectorConfiguration casted)
         {

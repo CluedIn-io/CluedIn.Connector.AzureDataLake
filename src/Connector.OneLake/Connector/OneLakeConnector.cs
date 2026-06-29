@@ -36,7 +36,7 @@ public class OneLakeConnector : StorageConnectorBase
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    protected override async Task<ConnectionVerificationResult> VerifyDataLakeConnection(IDataLakeJobData jobData)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
         if (configuration is not OneLakeConnectorConfiguration casted)
         {
@@ -55,7 +55,7 @@ public class OneLakeConnector : StorageConnectorBase
 
         try
         {
-            return await base.VerifyDataLakeConnection(jobData);
+            return await base.VerifyDataLakeConnection(executionContext, configuration, shouldLogException);
         }
         catch (AuthenticationFailedException ex)
         {
@@ -81,6 +81,7 @@ public class OneLakeConnector : StorageConnectorBase
             {
                 _logger.LogWarning(ex, ArtifactNotFoundErrorMessageFormat, casted.ItemName, casted.ItemType);
             }
+            return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
         catch (Exception ex)
         {
@@ -96,7 +97,7 @@ public class OneLakeConnector : StorageConnectorBase
 
     protected override async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
-        var result = await base.VerifyConnectionInternal(executionContext, jobData, shouldLogException);
+        var result = await base.VerifyConnectionInternal(executionContext, configuration, shouldLogException);
 
         if (result?.Success != true || !configuration.IsStreamCacheEnabled)
         {
