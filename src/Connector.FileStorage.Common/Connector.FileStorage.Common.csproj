@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CluedIn.Connector.FileStorage.Common provides the common functionality to post data to a file based storage</Description>
+    <AssemblyName>CluedIn.Connector.FileStorage.Common</AssemblyName>
+    <RootNamespace>CluedIn.Connector.FileStorage.Common</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <IgnoresAccessChecksTo Include="CluedIn.ComponentHealth" />
+    <IgnoresAccessChecksTo Include="CluedIn.Streams" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Connectors -->
+    <InternalsVisibleTo Include="CluedIn.Connector.DataLake.Common" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureAIStudio" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDatabricks" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake" />
+    <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring" />
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake" />
+    <InternalsVisibleTo Include="CluedIn.Connector.SynapseDataEngineering" />
+    <!-- Unit Tests -->
+    <InternalsVisibleTo Include="CluedIn.Connector.FileStorage.Common.Tests.Unit" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Unit" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Unit" />
+    <!-- Integration Tests -->
+    <InternalsVisibleTo Include="CluedIn.Connector.FileStorage.Common.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.DataLake.Common.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CluedIn.Core" />
+    <PackageReference Include="CluedIn.Streams" />
+    <PackageReference Include="CluedIn.ComponentHealth" />
+    <PackageReference Include="CsvHelper" />
+    <PackageReference Include="IgnoresAccessChecksToGenerator" />
+    <PackageReference Include="NCrontab" />
+    <PackageReference Include="Parquet.Net" />
+  </ItemGroup>
+</Project>
