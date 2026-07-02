@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31912.275
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11612.150
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Connector.AzureDataLake", "src\Connector.AzureDataLake\Connector.AzureDataLake.csproj", "{98AD320B-8415-4605-98A0-3F479F05CA95}"
 EndProject
@@ -9,6 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		Packages.props = Packages.props
 		README.md = README.md
+		runCluedIn.ps1 = runCluedIn.ps1
 		Server.Host.csproj.devonly.xml = Server.Host.csproj.devonly.xml
 	EndProjectSection
 EndProject
@@ -68,7 +69,22 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.DataLake.Common.T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FabricOpenMirroring.Tests.Integration", "test\integration\Connector.FabricOpenMirroring.Tests.Integration\Connector.FabricOpenMirroring.Tests.Integration.csproj", "{8660C31C-9ACD-2C90-8A6C-4E244D469A8E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.DataLake.Common.Tests.Unit", "test\unit\Connector.DataLake.Common.Tests.Unit\Connector.DataLake.Common.Tests.Unit.csproj", "{B49584E9-C4FD-B5B9-9388-B19E425635CA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FileStorage.Common", "src\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj", "{6667221D-5BAA-4071-1684-1425D6C83070}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FileStorage.Common.Tests.Unit", "test\unit\Connector.FileStorage.Common.Tests.Unit\Connector.FileStorage.Common.Tests.Unit.csproj", "{408F3EE8-92AF-B119-889F-A66F5A3CE72D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FileStorage.Common.Tests.Integration", "test\integration\Connector.FileStorage.Common.Tests.Integration\Connector.FileStorage.Common.Tests.Integration.csproj", "{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AmazonS3", "src\Connector.AmazonS3\Connector.AmazonS3.csproj", "{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AmazonS3.Tests.Unit", "test\unit\Connector.AmazonS3.Tests.Unit\Connector.AmazonS3.Tests.Unit.csproj", "{7F845977-5E4D-02A4-36B2-70C510EE0A10}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.AmazonS3.Tests.Integration", "test\integration\Connector.AmazonS3.Tests.Integration\Connector.AmazonS3.Tests.Integration.csproj", "{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}"
+EndProject
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.DataLake.DevHost", "tools\Connector.DataLake.DevHost\Connector.DataLake.DevHost.csproj", "{759D8051-4293-9703-51A2-68EC4EC62FC1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -124,10 +140,34 @@ Global
 		{8660C31C-9ACD-2C90-8A6C-4E244D469A8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8660C31C-9ACD-2C90-8A6C-4E244D469A8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8660C31C-9ACD-2C90-8A6C-4E244D469A8E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B49584E9-C4FD-B5B9-9388-B19E425635CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B49584E9-C4FD-B5B9-9388-B19E425635CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B49584E9-C4FD-B5B9-9388-B19E425635CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B49584E9-C4FD-B5B9-9388-B19E425635CA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6667221D-5BAA-4071-1684-1425D6C83070}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6667221D-5BAA-4071-1684-1425D6C83070}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6667221D-5BAA-4071-1684-1425D6C83070}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6667221D-5BAA-4071-1684-1425D6C83070}.Release|Any CPU.Build.0 = Release|Any CPU
+		{408F3EE8-92AF-B119-889F-A66F5A3CE72D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{408F3EE8-92AF-B119-889F-A66F5A3CE72D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{408F3EE8-92AF-B119-889F-A66F5A3CE72D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{408F3EE8-92AF-B119-889F-A66F5A3CE72D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{759D8051-4293-9703-51A2-68EC4EC62FC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{759D8051-4293-9703-51A2-68EC4EC62FC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{759D8051-4293-9703-51A2-68EC4EC62FC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{759D8051-4293-9703-51A2-68EC4EC62FC1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -151,7 +191,13 @@ Global
 		{73DB768F-CE2C-3FFE-FBC7-40B241C81F25} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
 		{703D64FE-DEEC-4909-A001-D9298C900E8B} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
 		{8660C31C-9ACD-2C90-8A6C-4E244D469A8E} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
-		{B49584E9-C4FD-B5B9-9388-B19E425635CA} = {F5373611-431E-459B-B775-5A31DDEC5B21}
+		{6667221D-5BAA-4071-1684-1425D6C83070} = {5256D9B9-8A1D-480D-A8F0-1A69AFA59B31}
+		{408F3EE8-92AF-B119-889F-A66F5A3CE72D} = {F5373611-431E-459B-B775-5A31DDEC5B21}
+		{5126CD7C-1FC0-BA2B-39B8-B17A48D0386E} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
+		{C1DB7E76-4A01-9EA5-27BC-E1AE3948FD45} = {5256D9B9-8A1D-480D-A8F0-1A69AFA59B31}
+		{7F845977-5E4D-02A4-36B2-70C510EE0A10} = {F5373611-431E-459B-B775-5A31DDEC5B21}
+		{D0C3B7AA-D4EF-7CE1-4336-0568CF8AC9FB} = {9A48CD57-CDE1-454C-AE55-8ABD15908E81}
+		{759D8051-4293-9703-51A2-68EC4EC62FC1} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {E6A866CB-824C-4271-8EA6-053B7FC4B134}

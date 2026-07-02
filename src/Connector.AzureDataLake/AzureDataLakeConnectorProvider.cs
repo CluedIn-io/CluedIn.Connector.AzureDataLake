@@ -1,22 +1,24 @@
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Core;
-using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
+
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Core;
+
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureDataLake;
 
 public class AzureDataLakeConnectorProvider : ConnectorProviderBase<AzureDataLakeConnectorProvider>
 {
     public AzureDataLakeConnectorProvider([NotNull] ApplicationContext appContext,
-        IAzureDataLakeConstants configuration, ILogger<AzureDataLakeConnectorProvider> logger)
+        IAzureDataLakeConfigurationConstants configuration, ILogger<AzureDataLakeConnectorProvider> logger)
         : base(appContext, configuration, logger)
     {
     }
 
     protected override IEnumerable<string> ProviderNameParts => new[]
     {
-        AzureDataLakeConstants.AccountName,
-        AzureDataLakeConstants.FileSystemName,
-        AzureDataLakeConstants.DirectoryName,
+        AzureDataLakeConfigurationConstants.AccountName,
+        AzureDataLakeConfigurationConstants.FileSystemName,
+        AzureDataLakeConfigurationConstants.DirectoryName,
     };
 }

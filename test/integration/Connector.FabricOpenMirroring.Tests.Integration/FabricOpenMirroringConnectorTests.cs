@@ -6,30 +6,30 @@ using System.Threading.Tasks;
 
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
-using Azure.Storage.Files.DataLake.Models;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using Castle.Windsor;
+
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FabricOpenMirroring.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Moq;
 
 using Xunit;
-using Xunit.Abstractions;
-
 using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;
 
-public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirroringConnector, OpenMirroringJobDataFactory, IOpenMirroringConstants>
+public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirroringConnector, OpenMirroringStorageFactory, IOpenMirroringConfigurationConstants>
 {
-    protected override Guid DataLakeProviderId => OpenMirroringConstants.DataLakeProviderId;
+    protected override Guid StorageProviderId => OpenMirroringConfigurationConstants.DataLakeProviderId;
     protected override bool IsFixedFileSystem => true;
 
     public OpenMirroringConnectorTests(ITestOutputHelper testOutputHelper)
@@ -40,13 +40,13 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyConnection_WhenValidCredentials_ReturnSuccess()
     {
-        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
-        var jobData = new OpenMirroringConnectorJobData(configuration);
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.True(result.Success);
@@ -55,14 +55,14 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyConnection_WhenInvalidTenantId_ReturnInvalidCredentialsErrorMessage()
     {
-        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
-        configuration[nameof(OpenMirroringConstants.TenantId)] = "1";
-        var jobData = new OpenMirroringConnectorJobData(configuration);
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.TenantId)] = "1";
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -72,14 +72,14 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyConnection_WhenInvalidClientId_ReturnInvalidCredentialsErrorMessage()
     {
-        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
-        configuration[nameof(OpenMirroringConstants.ClientId)] = "1";
-        var jobData = new OpenMirroringConnectorJobData(configuration);
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.ClientId)] = "1";
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -89,14 +89,14 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyConnection_WhenInvalidClientSecret_ReturnInvalidCredentialsErrorMessage()
     {
-        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
-        configuration[nameof(OpenMirroringConstants.ClientSecret)] = "1";
-        var jobData = new OpenMirroringConnectorJobData(configuration);
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.ClientSecret)] = "1";
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -110,14 +110,14 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [InlineData("  ")]
     public async Task VerifyConnection_WhenWorkspaceNameInvalid_ReturnWorkspaceNameInvalidErrorMessage(string workspaceName)
     {
-        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
-        configuration[nameof(OpenMirroringConstants.WorkspaceName)] = workspaceName;
-        var jobData = new OpenMirroringConnectorJobData(configuration);
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] = workspaceName;
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -127,14 +127,14 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyConnection_WhenWorkspaceNotFound_ReturnWorkspaceNotFoundErrorMessage()
     {
-        var configuration = CreateConfigurationWithStreamCache(DataLakeConstants.OutputFormats.Csv);
-        configuration[nameof(OpenMirroringConstants.WorkspaceName)] = "1";
-        var jobData = new OpenMirroringConnectorJobData(configuration);
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] = "1";
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.Sync);
         var connector = setupResult.ConnectorMock.Object;
-        setupResult.JobDataFactoryMock.Setup(factory => factory.GetConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
-            .Returns(Task.FromResult<IDataLakeJobData>(jobData));
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
         var result = await connector.VerifyConnection(setupResult.Context, configuration);
         Assert.NotNull(result);
         Assert.False(result.Success);
@@ -165,7 +165,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             AssertParquetResultEscaped,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
@@ -177,9 +177,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     jobArgs);
 
                 var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                    executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -187,9 +185,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client);
+                    executeExportArg.SetupContainerResult);
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
                 Assert.Equal(firstDataTime, secondDataTime);
@@ -200,7 +196,10 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanCreateNewFile()
     {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
         var executionCount = 0;
+        var storeDataCount = 0;
         var dateTimeList = new List<DateTimeOffset>
         {
             DefaultCurrentTime,
@@ -208,10 +207,24 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         };
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
-            AssertParquetResultEscapedWithRowMarker,
+            async (setupResult, filePath) =>
+            {
+                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                await base.AssertParquetResult(setupResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+                {
+                    var updated = original.ToList();
+                    updated[0].Columns["__rowMarker__"] = "4";
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 2;
+                    updated[0].Columns["user_age"] = firstChangeUserData.Age.ToString();
+                    return updated;
+                });
+            },
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                executionCount = 0;
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
@@ -225,9 +238,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 executionCount++;
 
                 var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                    executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -235,9 +246,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client,
+                    executeExportArg.SetupContainerResult,
                     filterPaths: paths =>
                     {
                         return paths.Where(path => path.Name != firstPath.Name).ToList();
@@ -254,6 +263,23 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     {
                         return dateTimeList[executionCount];
                     });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount == 0)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+
+                return new[] { initialEntityData, firstChangeEntityData };
             });
     }
 
@@ -271,7 +297,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             AssertParquetResultEscapedWithRowMarker,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
@@ -284,9 +310,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 executionCount++;
 
                 var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                    executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -294,9 +318,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client,
+                    executeExportArg.SetupContainerResult,
                     filterPaths: paths =>
                     {
                         return paths.Where(path => path.Name != firstPath.Name).ToList();
@@ -338,7 +360,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             AssertParquetResultEscapedWithRowMarker,
             async executeExportArg =>
             {
-                var jobArgs = new DataLakeJobArgs
+                var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
@@ -352,9 +374,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 executionCount++;
 
                 var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                    executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -362,9 +382,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client,
+                    executeExportArg.SetupContainerResult,
                     filterPaths: paths =>
                     {
                         return paths.Where(path => path.Name != firstPath.Name).ToList();
@@ -390,13 +408,9 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
             AssertParquetResultEscaped,
-            configureDirectoryName: (jobData, setupResult) =>
-            {
-                return $"{jobData.RootDirectoryPath}/MyTable";
-            },
             configureAuthentication: (dictionary) =>
             {
-                dictionary[nameof(OpenMirroringConstants.TableName)] = "MyTable";
+                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = "MyTable";
             });
     }
 
@@ -405,33 +419,30 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
-            async (fileClient, dataLakeFileSystemClient, setupContainerResult) =>
+            async (setupResult, filePath) =>
             {
-                await AssertParquetResultEscaped(fileClient, dataLakeFileSystemClient, setupContainerResult);
-                var connector = setupContainerResult.ConnectorMock.Object;
-                await connector.ArchiveContainer(setupContainerResult.Context, setupContainerResult.StreamModel);
+                await AssertParquetResultEscaped(setupResult, filePath);
+                var connector = setupResult.ConnectorMock.Object;
+                await connector.ArchiveContainer(setupResult.Context, setupResult.StreamModel);
 
-                var fsClient = dataLakeFileSystemClient.GetDirectoryClient($"{setupContainerResult.DataLakeJobData.RootDirectoryPath}/ToBeArchived");
-                var exists = await fsClient.ExistsAsync();
+                var client = GetDataLakeClient(setupResult);
+                var fsClient = client.GetFileSystemClient(GetFileSystemName(setupResult));
+                var directoryClient = fsClient.GetDirectoryClient($"{setupResult.StorageConfiguration.RootDirectoryPath}/ToBeArchived");
+                var exists = await directoryClient.ExistsAsync();
                 Assert.False(exists);
-            },
-            configureDirectoryName: (jobData, setupResult) =>
-            {
-                return $"{jobData.RootDirectoryPath}/ToBeArchived";
             },
             configureAuthentication: (dictionary) =>
             {
-                dictionary[nameof(OpenMirroringConstants.TableName)] = "ToBeArchived";
+                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = "ToBeArchived";
             });
 
     }
 
     private async Task AssertParquetResultEscapedWithRowMarker(
-        DataLakeFileClient fileClient,
-        DataLakeFileSystemClient fileSystemClient,
-        SetupContainerResult setupContainerResult)
+        SetupContainerResult setupContainerResult,
+        ExportedFilePath filePath)
     {
-        await base.AssertParquetResult(fileClient, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+        await base.AssertParquetResult(setupContainerResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
         {
             var result = original.ToList();
             original.First().Columns["__rowMarker__"] = "4";
@@ -439,53 +450,18 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         });
     }
 
-    private async Task VerifyStoreData_Sync_WithStreamCache(
-        string format,
-        Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
-        Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
-        Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
-        Action<Dictionary<string, object>> configureAuthentication = null,
-        Func<OpenMirroringConnectorJobData, SetupContainerResult, string> configureDirectoryName = null)
+    private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
-        var configuration = CreateConfigurationWithStreamCache(format);
-        configureAuthentication?.Invoke(configuration);
-        var jobData = new OpenMirroringConnectorJobData(configuration);
-
-        var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
-        var connector = setupResult.ConnectorMock.Object;
-
-        var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
-        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
-        var exportJob = CreateExportJob(setupResult);
-
-        var directoryName = configureDirectoryName == null
-            ? $"{jobData.RootDirectoryPath}/{setupResult.StreamModel.Id:N}"
-            : configureDirectoryName(jobData, setupResult);
-        await AssertExportJobOutputFileContents(
-            jobData.FileSystemName,
-            directoryName,
-            setupResult,
-            GetDataLakeClient(jobData),
-            exportJob,
-            assertMethod,
-            executeExport);
-    }
-
-    private protected override DataLakeExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
-    {
-        var logger = new Mock<ILogger<OpenMirroringClient>>();
-        var dataLakeClient = new OpenMirroringClient(logger.Object, setupResult.ApplicationContext, setupResult.DateTimeOffsetProviderMock.Object);
         var exportJob = new OpenMirroringExportEntitiesJob(
             setupResult.ApplicationContext,
             setupResult.StreamRepositoryMock.Object,
-            dataLakeClient,
             setupResult.ConstantsMock.Object,
-            setupResult.JobDataFactoryMock.Object,
+            setupResult.StorageFactoryMock.Object,
             setupResult.DateTimeOffsetProviderMock.Object);
         return exportJob;
     }
 
-    private static DataLakeServiceClient GetDataLakeClient(OpenMirroringConnectorJobData jobData)
+    private static DataLakeServiceClient GetDataLakeClient(OpenMirroringConnectorConfiguration jobData)
     {
         var sharedKeyCredential = new ClientSecretCredential(jobData.TenantId, jobData.ClientId, jobData.ClientSecret);
         return new DataLakeServiceClient(
@@ -493,7 +469,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             sharedKeyCredential);
     }
 
-    private Dictionary<string, object> CreateConfigurationWithoutStreamCache()
+    private protected override Dictionary<string, object> CreateConfigurationWithoutStreamCache()
     {
         var tenantId = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_TENANTID");
         var clientId = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_CLIENTID");
@@ -520,58 +496,75 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         var directoryName = $"xunit-{DateTime.Now.Ticks}";
         return new Dictionary<string, object>()
         {
-            { nameof(OpenMirroringConstants.TenantId), tenantId },
-            { nameof(OpenMirroringConstants.ClientId), clientId },
-            { nameof(OpenMirroringConstants.ClientSecret), clientSecretString },
-            { nameof(OpenMirroringConstants.WorkspaceName), workspaceName },
-            { nameof(OpenMirroringConstants.MirroredDatabaseName), mirroredDatabaseName },
-            { nameof(OpenMirroringConstants.ShouldCreateMirroredDatabase), false },
+            { nameof(OpenMirroringConfigurationConstants.TenantId), tenantId },
+            { nameof(OpenMirroringConfigurationConstants.ClientId), clientId },
+            { nameof(OpenMirroringConfigurationConstants.ClientSecret), clientSecretString },
+            { nameof(OpenMirroringConfigurationConstants.WorkspaceName), workspaceName },
+            { nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName), mirroredDatabaseName },
+            { nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase), false },
         };
-    }
-
-    private Dictionary<string, object> CreateConfigurationWithStreamCache(string format)
-    {
-        var baseConfiguration = CreateConfigurationWithoutStreamCache();
-        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_STREAMCACHE");
-        var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
-        Console.WriteLine(streamCacheConnectionString);
-        Assert.NotNull(streamCacheConnectionString);
-
-        var updatedConfiguration = new Dictionary<string, object>(baseConfiguration)
-        {
-            { nameof(DataLakeConstants.IsStreamCacheEnabled), true },
-            { nameof(DataLakeConstants.StreamCacheConnectionString), streamCacheConnectionString },
-            { nameof(DataLakeConstants.OutputFormat), format },
-            { nameof(DataLakeConstants.UseCurrentTimeForExport), true },
-            { nameof(DataLakeConstants.Schedule), CronSchedules.JobScheduleNames.Hourly },
-            { nameof(DataLakeConstants.ContainerName), "test" },
-        };
-        return updatedConfiguration;
     }
 
     protected override Mock<OpenMirroringConnector> GetConnectorMock(
         ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
-        Mock<IOpenMirroringConstants> constantsMock,
-        Mock<OpenMirroringJobDataFactory> jobDataFactory)
+        Mock<IOpenMirroringConfigurationConstants> constantsMock,
+        Mock<OpenMirroringStorageFactory> jobDataFactory)
     {
-        var logger = new Mock<ILogger<OpenMirroringClient>>();
         var mockConnector = new Mock<OpenMirroringConnector>(
             new Mock<ILogger<OpenMirroringConnector>>().Object,
-            new OpenMirroringClient(logger.Object, applicationContext, mockDateTimeOffsetProvider.Object),
+            applicationContext,
             constantsMock.Object,
             jobDataFactory.Object,
             mockDateTimeOffsetProvider.Object);
         return mockConnector;
     }
 
-    protected override Task<PathItem> WaitForFileToBeCreated(string fileSystemName, string directoryName, DataLakeServiceClient client, Func<IList<PathItem>, IList<PathItem>> filterPaths = null)
+    protected override Mock<OpenMirroringStorageFactory> CreateStorageFactoryMock(
+        WindsorContainer container,
+        ApplicationContext applicationContext,
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
     {
-        return base.WaitForFileToBeCreated(fileSystemName, directoryName, client, filterPaths: (paths) =>
+        var dataFactoryMock = new Mock<OpenMirroringStorageFactory>();
+        dataFactoryMock.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
+            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OpenMirroringStorageClient(NullLogger<OpenMirroringStorageClient>.Instance, data as OpenMirroringConnectorConfiguration,
+                applicationContext,
+                mockDateTimeOffsetProvider.Object)));
+        return dataFactoryMock;
+    }
+
+    private protected override Task<ExportedFilePath> WaitForFileToBeCreated(
+        SetupContainerResult setupContainerResult,
+        Func<IList<ExportedFilePath>, IList<ExportedFilePath>> filterPaths = null,
+        Func<SetupContainerResult, string> getDirectoryName = null)
+    {
+        return base.WaitForFileToBeCreated(setupContainerResult, filterPaths: (paths) =>
         {
-            var metadataFiltered = paths.Where(path => !path.Name.EndsWith("/_metadata.json") && !path.Name.EndsWith("_partnerEvents.json")).ToList();
+            var metadataFiltered = paths.Where(path => !path.Name.EndsWith("_metadata.json") && !path.Name.EndsWith("_partnerEvents.json")).ToList();
             return filterPaths?.Invoke(metadataFiltered) ?? metadataFiltered;
-        });
+        },
+        getDirectoryName);
+    }
+
+    private protected override DataLakeServiceClient GetDataLakeClient(SetupContainerResult setupContainerResult)
+    {
+        return GetDataLakeClient(setupContainerResult.StorageConfiguration as OpenMirroringConnectorConfiguration);
+    }
+
+    private protected override string GetDirectoryName(SetupContainerResult setupContainerResult)
+    {
+        var config = setupContainerResult.StorageConfiguration as OpenMirroringConnectorConfiguration;
+        if (!string.IsNullOrEmpty(config.TableName))
+        {
+            return $"{config.RootDirectoryPath}/{config.TableName}";
+        }
+
+        return $"{config.RootDirectoryPath}/{setupContainerResult.StreamModel.Id:N}";
+    }
+
+    private protected override StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration)
+    {
+        return new OpenMirroringConnectorConfiguration(configuration);
     }
 }
 

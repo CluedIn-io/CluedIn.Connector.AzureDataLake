@@ -1,18 +1,18 @@
-﻿using CluedIn.Connector.DataLake.Common;
-using System.Threading.Tasks;
 using System;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Connectors;
 
 using Microsoft.Extensions.Logging;
-using System.Text.RegularExpressions;
-using System.Linq;
 
 namespace CluedIn.Connector.AzureDataLake.Connector;
 
-public class AzureDataLakeConnector : DataLakeConnector
+public class AzureDataLakeConnector : StorageConnectorBase
 {
     private readonly ILogger<AzureDataLakeConnector> _logger;
     internal static readonly Regex AccountNameRegex = new("^[a-z0-9]+$", RegexOptions.Compiled);
@@ -25,22 +25,22 @@ public class AzureDataLakeConnector : DataLakeConnector
 
     public AzureDataLakeConnector(
         ILogger<AzureDataLakeConnector> logger,
-        AzureDataLakeClient client,
-        IAzureDataLakeConstants constants,
-        AzureDataLakeJobDataFactory dataLakeJobDataFactory,
+        ApplicationContext applicationContext,
+        IAzureDataLakeConfigurationConstants constants,
+        AzureDataLakeStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected override Type ExportJobType => typeof(AzureDataLakeExportEntitiesJob);
 
-    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IDataLakeJobData jobData, bool shouldLogException)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
-        if (jobData is not AzureDataLakeConnectorJobData casted)
+        if (configuration is not AzureDataLakeConnectorConfiguration casted)
         {
-            throw new ArgumentException($"Invalid job data type: {jobData.GetType().Name}. Expected: {nameof(AzureDataLakeConnectorJobData)}.");
+            throw new ArgumentException($"Invalid configuration type: {configuration.GetType().Name}. Expected: {nameof(AzureDataLakeConnectorConfiguration)}.");
         }
 
         if (!IsValidAccountName())
@@ -65,7 +65,7 @@ public class AzureDataLakeConnector : DataLakeConnector
 
         try
         {
-            return await base.VerifyDataLakeConnection(executionContext, jobData, shouldLogException);
+            return await base.VerifyDataLakeConnection(executionContext, configuration, shouldLogException);
         }
         catch (Exception ex)
         {
