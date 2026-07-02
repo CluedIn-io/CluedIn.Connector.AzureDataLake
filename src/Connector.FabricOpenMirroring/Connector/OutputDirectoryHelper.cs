@@ -1,17 +1,17 @@
 using System;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
 internal class OutputDirectoryHelper
 {
-    public static Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset dataTime, string outputFormat)
+    public static Task<string> GetSubDirectory(ExecutionContext executionContext, IStorageConfiguration configuration, Guid streamId, string containerName, DateTimeOffset dataTime, string outputFormat)
     {
-        if (configuration is OpenMirroringConnectorJobData casted &&
+        if (configuration is OpenMirroringConnectorConfiguration casted &&
             !string.IsNullOrWhiteSpace(casted.TableName))
         {
             return PatternHelper.ReplaceNameUsingPatternAsync(

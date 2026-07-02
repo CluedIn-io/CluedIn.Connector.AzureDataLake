@@ -1,0 +1,33 @@
+namespace CluedIn.Connector.FileStorage.Common;
+
+public interface IStorageConfiguration
+{
+    string ContainerName { get; }
+
+    bool IsStreamCacheEnabled { get; }
+
+    bool UseCurrentTimeForExport { get; }
+
+    string FileNamePattern { get; }
+
+    string StreamCacheConnectionString { get; }
+
+    string OutputFormat { get; }
+
+    string Schedule { get; }
+
+    bool ShouldWriteGuidAsString { get; }
+
+    bool ShouldEscapeVocabularyKeys { get; }
+
+    string CustomCron { get; }
+
+    bool IsDeltaMode { get; }
+
+    bool IsOverwriteEnabled { get; }
+
+    bool IsArrayColumnsEnabled { get; }
+
+    string RootDirectoryPath { get; }
+    bool IsSoftDelete { get; }
+}
