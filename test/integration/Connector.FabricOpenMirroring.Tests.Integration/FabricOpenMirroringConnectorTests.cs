@@ -13,9 +13,11 @@ using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Core;
+using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
 using Moq;
@@ -24,6 +26,7 @@ using Xunit;
 using Xunit.Abstractions;
 
 using Encoding = System.Text.Encoding;
+using IOPath = System.IO.Path;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;
 
@@ -158,49 +161,11 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     }
 
     [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndSameDataTime_CanSkip()
+    public async Task VerifyStoreData_Sync_WhenNoRowsToExport_CanSkip()
     {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "parquet",
-            AssertParquetResultEscaped,
-            async executeExportArg =>
-            {
-                var jobArgs = new DataLakeJobArgs
-                {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
-                    Schedule = "0 0/1 * * *",
-                    Message = executeExportArg.StreamId.ToString(),
-                    IsTriggeredFromJobServer = false,
-                };
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
-
-                var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                executeExportArg.Client);
-
-                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
-
-                var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client);
-                var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
-
-                Assert.Equal(firstDataTime, secondDataTime);
-                return secondPath;
-            });
-    }
-
-    [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanCreateNewFile()
-    {
+        var initialUserData = UserData.Default;
         var executionCount = 0;
+        var storeDataCount = 0;
         var dateTimeList = new List<DateTimeOffset>
         {
             DefaultCurrentTime,
@@ -208,9 +173,10 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         };
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
-            AssertParquetResultEscapedWithRowMarker,
+            AssertParquetResultEscaped,
             async executeExportArg =>
             {
+                executionCount = 0;
                 var jobArgs = new DataLakeJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
@@ -230,37 +196,49 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 executeExportArg.Client);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
-                var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.FileSystemName,
-                    executeExportArg.DirectoryName,
-                    executeExportArg.Client,
-                    filterPaths: paths =>
-                    {
-                        return paths.Where(path => path.Name != firstPath.Name).ToList();
-                    });
-                var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
-
-                Assert.NotEqual(firstDataTime, secondDataTime);
-                return secondPath;
+                Assert.False(result.HasExported);
+                Assert.Equal(DataLakeExportEntitiesJobBase.NoRowsReason, result.Reason);
+                return firstPath;
             },
             mockDateTimeOffsetProvider =>
             {
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount == 0)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+
+                return new[] { initialEntityData };
             });
     }
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingJobServer_CanCreateNewFile()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task VerifyStoreData_Sync_WhenRepeatRunAndHasRow_CanCreateNewFile(bool isTriggeredFromJobServer)
     {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
         var executionCount = 0;
+        var storeDataCount = 0;
         var dateTimeList = new List<DateTimeOffset>
         {
             DefaultCurrentTime,
@@ -268,19 +246,34 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         };
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
-            AssertParquetResultEscapedWithRowMarker,
+            async (fileClient, fileSystemClient, setupResult) =>
+            {
+                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                await base.AssertParquetResult(fileClient, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+                {
+                    var updated = original.ToList();
+                    updated[0].Columns["__rowMarker__"] = "4";
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns[DataLakeConstants.PersistVersionKey] = 2;
+                    updated[0].Columns["user_age"] = firstChangeUserData.Age.ToString();
+                    return updated;
+                });
+            },
             async executeExportArg =>
             {
+                executionCount = 0;
                 var jobArgs = new DataLakeJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
-                    Schedule = "0 0/1 * * *",
+                    Schedule = "0 0 1-31 * *",
                     Message = executeExportArg.StreamId.ToString(),
-                    IsTriggeredFromJobServer = false,
+                    IsTriggeredFromJobServer = isTriggeredFromJobServer,
                 };
                 await executeExportArg.ExportJob.DoRunAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
+
                 executionCount++;
 
                 var firstPath = await WaitForFileToBeCreated(
@@ -303,6 +296,8 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     });
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
+                Assert.Equal($"{1:D20}.parquet", IOPath.GetFileName(firstPath.Name));
+                Assert.Equal($"{2:D20}.parquet", IOPath.GetFileName(secondPath.Name));
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
@@ -311,7 +306,76 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
+                    });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount == 0)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+
+                return new[] { initialEntityData, firstChangeEntityData };
+            });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task VerifyStoreData_Sync_WhenRepeatRunAndNoRows_CanSkipBecauseNoRows(bool isTriggeredFromJobServer)
+    {
+        var executionCount = 0;
+        var dateTimeList = new List<DateTimeOffset>
+        {
+            DefaultCurrentTime,
+            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+        };
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            AssertParquetResultEscaped,
+            async executeExportArg =>
+            {
+                var jobArgs = new DataLakeJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = isTriggeredFromJobServer,
+                };
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                executionCount++;
+
+                var firstPath = await WaitForFileToBeCreated(
+                    executeExportArg.FileSystemName,
+                    executeExportArg.DirectoryName,
+                executeExportArg.Client);
+                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(DataLakeExportEntitiesJobBase.NoRowsReason, result.Reason);
+                return firstPath;
+            },
+            mockDateTimeOffsetProvider =>
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                    .Returns(() =>
+                    {
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             });
     }
@@ -327,7 +391,10 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheSubsequentExportHasRowMarker()
     {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
         var executionCount = 0;
+        var storeDataCount = 0;
         var dateTimeList = new List<DateTimeOffset>
         {
             DefaultCurrentTime,
@@ -335,9 +402,23 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         };
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
-            AssertParquetResultEscapedWithRowMarker,
+            async (fileClient, fileSystemClient, setupResult) =>
+            {
+                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                await base.AssertParquetResult(fileClient, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+                {
+                    var updated = original.ToList();
+                    updated[0].Columns["__rowMarker__"] = "4";
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns[DataLakeConstants.PersistVersionKey] = 2;
+                    updated[0].Columns["user_age"] = firstChangeUserData.Age.ToString();
+                    return updated;
+                });
+            },
             async executeExportArg =>
             {
+                executionCount = 0;
                 var jobArgs = new DataLakeJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
@@ -354,7 +435,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 var firstPath = await WaitForFileToBeCreated(
                     executeExportArg.FileSystemName,
                     executeExportArg.DirectoryName,
-                executeExportArg.Client);
+                    executeExportArg.Client);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
                 await executeExportArg.ExportJob.DoRunAsync(
@@ -379,8 +460,25 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount == 0)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+
+                return new[] { initialEntityData, firstChangeEntityData };
             });
     }
 
@@ -398,6 +496,32 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             {
                 dictionary[nameof(OpenMirroringConstants.TableName)] = "MyTable";
             });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WhenNoDataStoredAndNoTableCreated_CanSkip()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            (_, _, _) => Task.CompletedTask,
+            async executeExportArg =>
+            {
+                var jobArgs = new DataLakeJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(DataLakeExportEntitiesJobBase.TableNotFoundReason, result.Reason);
+                return null;
+            },
+            getConnectorEntityData: Array.Empty<ConnectorEntityData>);
     }
 
     [Fact]
@@ -426,6 +550,174 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
 
     }
 
+    [Fact]
+    public async Task VerifyStoreData_Sync_CanHandleMissedExportHistory()
+    {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
+        var secondChangeUserData = initialUserData with { Age = initialUserData.Age + 2 };
+        var thirdChangeUserData = initialUserData with { Age = initialUserData.Age + 3 };
+        var executionCount = 0;
+        var storeDataCount = 0;
+        var dateTimeList = new List<DateTimeOffset>
+        {
+            DefaultCurrentTime,
+            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+            new DateTimeOffset(2024, 8, 22, 4, 16, 0, TimeSpan.FromHours(5)),
+            new DateTimeOffset(2024, 8, 23, 4, 16, 0, TimeSpan.FromHours(5)),
+        };
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            async (fileClient, fileSystemClient, setupResult) =>
+            {
+                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                await base.AssertParquetResult(fileClient, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+                {
+                    var updated = original.ToList();
+                    updated[0].Columns["__rowMarker__"] = "4";
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns[DataLakeConstants.PersistVersionKey] = 4;
+                    updated[0].Columns["user_age"] = thirdChangeUserData.Age.ToString();
+                    return updated;
+                });
+            },
+            async executeExportArg =>
+            {
+                executionCount = 0;
+                var jobArgs = new DataLakeJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0 1-31 * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                executionCount++;
+                var firstPath = await WaitForFileToBeCreated(
+                    executeExportArg.FileSystemName,
+                    executeExportArg.DirectoryName,
+                    executeExportArg.Client);
+                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                executionCount++;
+                var secondPath = await WaitForFileToBeCreated(
+                    executeExportArg.FileSystemName,
+                    executeExportArg.DirectoryName,
+                    executeExportArg.Client,
+                    filterPaths: paths =>
+                    {
+                        return paths.Where(path => path.Name != firstPath.Name).ToList();
+                    });
+                var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
+
+                await DeleteLastHistory(executeExportArg.SetupContainerResult, executeExportArg.StreamId, secondDataTime);
+
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                executionCount++;
+                var thirdPath = await WaitForFileToBeCreated(
+                    executeExportArg.FileSystemName,
+                    executeExportArg.DirectoryName,
+                    executeExportArg.Client,
+                    filterPaths: paths =>
+                    {
+                        return paths.Where(path => path.Name != firstPath.Name && path.Name != secondPath.Name).ToList();
+                    });
+                var thirdDataTime = await GetFileDataTime(executeExportArg, thirdPath);
+
+                await DeleteLastHistory(executeExportArg.SetupContainerResult, executeExportArg.StreamId, thirdDataTime);
+
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                var fourthPath = await WaitForFileToBeCreated(
+                    executeExportArg.FileSystemName,
+                    executeExportArg.DirectoryName,
+                    executeExportArg.Client,
+                    filterPaths: paths =>
+                    {
+                        return paths.Where(path => path.Name != firstPath.Name && path.Name != secondPath.Name && path.Name != thirdPath.Name).ToList();
+                    });
+                var fourthDataTime = await GetFileDataTime(executeExportArg, fourthPath);
+
+
+                TestOutputHelper.WriteLine($"First File: {firstPath.Name}");
+                TestOutputHelper.WriteLine($"Second File: {secondPath.Name}");
+                TestOutputHelper.WriteLine($"Third File: {thirdPath.Name}");
+                TestOutputHelper.WriteLine($"Fourth File: {fourthPath.Name}");
+                Assert.NotEqual(firstDataTime, secondDataTime);
+                Assert.NotEqual(secondDataTime, thirdDataTime);
+                Assert.NotEqual(thirdDataTime, fourthDataTime);
+                Assert.Equal($"{1:D20}.parquet", IOPath.GetFileName(firstPath.Name));
+                Assert.Equal($"{2:D20}.parquet", IOPath.GetFileName(secondPath.Name));
+                Assert.Equal($"{3:D20}.parquet", IOPath.GetFileName(thirdPath.Name));
+                Assert.Equal($"{4:D20}.parquet", IOPath.GetFileName(fourthPath.Name));
+                return fourthPath;
+            },
+            mockDateTimeOffsetProvider =>
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                    .Returns(() =>
+                    {
+                        return dateTimeList[executionCount].ToUniversalTime();
+                    });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount < 3)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+                var secondChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: secondChangeUserData);
+                var thirdChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 4, userData: thirdChangeUserData);
+
+                return new[] { initialEntityData, firstChangeEntityData, secondChangeEntityData, thirdChangeEntityData };
+            });
+    }
+
+    private static async Task DeleteLastHistory(SetupContainerResult setupContainerResult, Guid streamId, DateTimeOffset dataTime)
+    {
+        var connectionString = setupContainerResult.DataLakeJobData.StreamCacheConnectionString;
+        var tableName = DataLakeExportEntitiesJobBase.GetExportHistoryTableName(streamId);
+        var deleteSql = $"""
+                    DELETE FROM
+                        [{tableName}]
+                    WHERE
+                        StreamId = @StreamId
+                        AND DataTime = @DataTime
+                    """;
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+        var command = new SqlCommand(deleteSql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+
+        command.Parameters.Add(new SqlParameter($"@StreamId", streamId));
+        command.Parameters.Add(new SqlParameter($"@DataTime", dataTime));
+
+        var rowsAffected = await command.ExecuteNonQueryAsync();
+        if (rowsAffected != 1)
+        {
+            throw new ApplicationException($"Rows affected for update of is not 1, it is {rowsAffected}.");
+        }
+    }
+
     private async Task AssertParquetResultEscapedWithRowMarker(
         DataLakeFileClient fileClient,
         DataLakeFileSystemClient fileSystemClient,
@@ -445,7 +737,9 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
         Action<Dictionary<string, object>> configureAuthentication = null,
-        Func<OpenMirroringConnectorJobData, SetupContainerResult, string> configureDirectoryName = null)
+        Func<OpenMirroringConnectorJobData, SetupContainerResult, string> configureDirectoryName = null,
+        Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
+        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null)
     {
         var configuration = CreateConfigurationWithStreamCache(format);
         configureAuthentication?.Invoke(configuration);
@@ -454,8 +748,20 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
         var connector = setupResult.ConnectorMock.Object;
 
-        var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
-        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        var connectorEntityData = getConnectorEntityData == null
+            ? [CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added)]
+            : getConnectorEntityData();
+        foreach (var data in connectorEntityData)
+        {
+            if (storeData != null)
+            {
+                await storeData(setupResult, data);
+                continue;
+            }
+
+            await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+            await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+        }
         var exportJob = CreateExportJob(setupResult);
 
         var directoryName = configureDirectoryName == null

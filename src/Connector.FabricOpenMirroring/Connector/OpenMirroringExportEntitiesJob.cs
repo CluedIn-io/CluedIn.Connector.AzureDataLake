@@ -13,6 +13,7 @@ using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
 using CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;
 using CluedIn.Core;
+using CluedIn.Core.Connectors;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
@@ -46,90 +47,112 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
         DateTimeOffsetProvider = dateTimeOffsetProvider;
     }
 
-    protected override async Task<string> GetDefaultOutputFileNameAsync(ExecutionContext context, IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    protected override async Task<string> GetOutputFileNameAsync(
+        ExecutionContext context,
+        ExportJobDataBase exportJobDataBase,
+        bool isInitialExport,
+        LastExportedFile? lastExportedFile,
+        string subDirectory)
     {
-        if (LastExport == null)
+        var outputFormat = exportJobDataBase.OutputFormat;
+        if (isInitialExport)
         {
             return $"{1:D20}.{outputFormat.ToLowerInvariant()}";
         }
 
-        var lastName = Path.GetFileNameWithoutExtension(LastExport.FilePath);
-        var lastCount = int.Parse(lastName);
+        var lastExportedFileName = Path.GetFileNameWithoutExtension(lastExportedFile.FileName);
 
-        // Only increment if previous file is not empty
-        // This is because we are deleting empty files
-        var newCount = LastExport.TotalRows > 0 ? lastCount + 1 : lastCount;
+        var lastCount = long.Parse(lastExportedFileName);
+        var newCount = lastCount + 1;
         return $"{newCount:D20}.{outputFormat.ToLowerInvariant()}";
     }
 
-    private protected override bool ShouldSkipExport(ExportJobData exportJobData)
+    protected override async Task<LastExportedFile?> GetLastExportedFile(
+        ExecutionContext context,
+        SqlConnection connection,
+        ExportJobDataBase exportJobDataBase,
+        string subDirectory)
     {
-        return LastExport?.DataTime == exportJobData.AsOfTime;
+        var lastFile = await base.GetLastExportedFile(context, connection, exportJobDataBase, subDirectory);
+
+        var files = await _dataLakeClient.GetFilesInDirectory(exportJobDataBase.StorageConfiguration, subDirectory) ?? Array.Empty<IConnectorContainer>();
+        var lastSequenceNumberInFabric = -1L;
+        IConnectorContainer? lastFileInFabric = null;
+        foreach (var file in files)
+        {
+            var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(file.Name);
+            if (fileNameWithoutExtension.Length == 20 &&
+                long.TryParse(fileNameWithoutExtension, out var fileNumber) &&
+                lastSequenceNumberInFabric < fileNumber)
+            {
+                lastSequenceNumberInFabric = fileNumber;
+                lastFileInFabric = file;
+            }
+        }
+
+        if (lastFileInFabric == null)
+        {
+            if (lastFile != null)
+            {
+                context.Log.LogWarning("No files found in the output directory '{SubDirectory}' for Stream '{StreamId}', but a last exported file was found in the database. This may indicate that files were deleted from the output directory.", subDirectory, exportJobDataBase.StreamId);
+            }
+
+            return null;
+        }
+
+        var fileMetadata = await _dataLakeClient.GetFilePathProperties(exportJobDataBase.StorageConfiguration, lastFileInFabric.Name, subDirectory);
+        if(fileMetadata == null || !TryGetMetadata(fileMetadata.Metadata, out var exportedFileMetadata))
+        {
+            context.Log.LogError("Failed to get metadata for file '{FileName}' in output directory '{SubDirectory}' for Stream '{StreamId}'.", lastFileInFabric.Name, subDirectory, exportJobDataBase.StreamId);
+            throw new ApplicationException($"Failed to get metadata for file '{lastFileInFabric.Name}' in output directory '{subDirectory}' for Stream '{exportJobDataBase.StreamId}'.");
+        }
+
+        return new LastExportedFile(lastFileInFabric.Name, exportedFileMetadata.DataTime, null);
+    }
+
+    protected override async Task<bool> GetIsInitialExport(
+        ExecutionContext context,
+        ExportJobDataBase exportJobDataBase,
+        LastExportedFile lastExportedFile,
+        string subDirectory)
+    {
+        // if we haven't exported any file yet, then this is definitely the initial export
+        if (lastExportedFile == null)
+        {
+            return true;
+        }
+
+        // Check if _metadata.json file exists in the output directory.
+        // If it doesn't exist, it means this is the first time we are exporting to this directory, then we can consider this as the initial export
+        if (!await _dataLakeClient.FileInPathExists(exportJobDataBase.StorageConfiguration, "_metadata.json", subDirectory))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private protected override async Task<ShouldSkipResult> ShouldSkipExport(ExecutionContext context, ExportJobData exportJobData)
+    {
+        // instead of checking for existence of target file, we check for last exported file
+        if (exportJobData?.LastExportedFile?.DataTime == exportJobData.AsOfTime)
+        {
+            return new ShouldSkipResult(true, ExportedBeforeReason);
+        }
+
+        return new ShouldSkipResult(false, null);
     }
 
     private protected override bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => false;
 
-    private protected override async Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient directoryClient)
+    private protected override async Task InitializeDirectoryAsync(
+        ExecutionContext context,
+        SqlConnection connection,
+        ExportJobData exportJobData,
+        DataLakeDirectoryClient directoryClient)
     {
-        await EnsureMetadataJsonExists(directoryClient);
         await CreatePartnerEventsJsonIfNotExists();
-
-        async Task EnsureMetadataJsonExists(DataLakeDirectoryClient directoryClient)
-        {
-            if (DataLakeConstants.OutputFormats.Csv.Equals(configuration.OutputFormat, StringComparison.OrdinalIgnoreCase))
-            {
-                await EnsureCsvMetadataJsonExists(directoryClient);
-            }
-            else
-            {
-                await EnsureGenericMetadataJsonExists(directoryClient);
-            }
-        }
-
-        async Task EnsureCsvMetadataJsonExists(DataLakeDirectoryClient directoryClient)
-        {
-            var fileClient = directoryClient.GetFileClient("_metadata.json");
-
-            if (IsInitialExport || !await fileClient.ExistsAsync())
-            {
-                await using var outputStream = await fileClient.OpenWriteAsync(true);
-                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
-                    $$"""
-                    {
-                       "keyColumns": ["Id"],
-                       "fileExtension": "csv",
-                       "fileFormat": "csv",
-                       "fileFormatTypeProperties": {
-                           "firstRowAsHeader": true,
-                           "rowSeparator": "\r\n",
-                           "columnSeparator": ",",
-                           "quoteCharacter": "\"",
-                           "escapeCharacter": "\"",
-                           "nullValue": "",
-                           "encoding": "UTF-8"
-                       }
-                    }
-                    """));
-                await outputStream.FlushAsync();
-            }
-        }
-
-        async Task EnsureGenericMetadataJsonExists(DataLakeDirectoryClient directoryClient)
-        {
-            var fileClient = directoryClient.GetFileClient("_metadata.json");
-
-            if (IsInitialExport || !await fileClient.ExistsAsync())
-            {
-                await using var outputStream = await fileClient.OpenWriteAsync(true);
-                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
-                    $$"""
-                {
-                   "keyColumns": ["Id"]
-                }
-                """));
-                await outputStream.FlushAsync();
-            }
-        }
+        await EnsureMetadataJsonExists();
 
         async Task CreatePartnerEventsJsonIfNotExists()
         {
@@ -138,8 +161,9 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                 context.Log.LogDebug("Unable to acquire lock to partner events for ProviderDefinition '{ProviderDefinitionId}'.", exportJobData.ProviderDefinition.Id);
                 return;
             }
-            var landingZoneDirectoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration);
-            var fileClient = landingZoneDirectoryClient.GetFileClient("_partnerEvents.json");
+
+            var client = await _dataLakeClient.EnsureDataLakeDirectoryExist(exportJobData.StorageConfiguration);
+            var fileClient = client.GetFileClient("_partnerEvents.json");
 
             if (!await fileClient.ExistsAsync())
             {
@@ -165,6 +189,63 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
                 await outputStream.FlushAsync();
             }
         }
+
+        async Task EnsureMetadataJsonExists()
+        {
+            if (DataLakeConstants.OutputFormats.Csv.Equals(exportJobData.StorageConfiguration.OutputFormat, StringComparison.OrdinalIgnoreCase))
+            {
+                await EnsureCsvMetadataJsonExists();
+            }
+            else
+            {
+                await EnsureGenericMetadataJsonExists();
+            }
+        }
+
+        async Task EnsureCsvMetadataJsonExists()
+        {
+            var fileClient = directoryClient.GetFileClient("_metadata.json");
+
+            if (exportJobData.LastExportedFile == null || !await fileClient.ExistsAsync())
+            {
+                await using var outputStream = await fileClient.OpenWriteAsync(true);
+                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
+                    $$"""
+                    {
+                       "keyColumns": ["Id"],
+                       "fileExtension": "csv",
+                       "fileFormat": "csv",
+                       "fileFormatTypeProperties": {
+                           "firstRowAsHeader": true,
+                           "rowSeparator": "\r\n",
+                           "columnSeparator": ",",
+                           "quoteCharacter": "\"",
+                           "escapeCharacter": "\"",
+                           "nullValue": "",
+                           "encoding": "UTF-8"
+                       }
+                    }
+                    """));
+                await outputStream.FlushAsync();
+            }
+        }
+
+        async Task EnsureGenericMetadataJsonExists()
+        {
+            var fileClient = directoryClient.GetFileClient("_metadata.json");
+
+            if (exportJobData.LastExportedFile == null || !await fileClient.ExistsAsync())
+            {
+                await using var outputStream = await fileClient.OpenWriteAsync(true);
+                await outputStream.WriteAsync(Encoding.UTF8.GetBytes(
+                    $$"""
+                {
+                   "keyColumns": ["Id"]
+                }
+                """));
+                await outputStream.FlushAsync();
+            }
+        }
     }
 
     private protected override async Task<List<string>> GetFieldNamesAsync(
@@ -177,7 +258,7 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
 
         // We need to make sure DataLakeConstants.ChangeTypeKey is the last field in the list (if we need it)
         var isRemoved = baseFieldNames.Remove(DataLakeConstants.ChangeTypeKey);
-        var isFirstFile = LastExport == null;
+        var isFirstFile = exportJobData.LastExportedFile == null;
 
         if (isRemoved && !isFirstFile)
         {
@@ -187,17 +268,6 @@ internal class OpenMirroringExportEntitiesJob : DataLakeExportEntitiesJobBase
         }
 
         return baseFieldNames;
-    }
-
-    private protected override async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
-    {
-        var subDirectory = await GetSubDirectory(context, configuration, exportJobData);
-        if (!await _dataLakeClient.FileInPathExists(configuration, "_metadata.json", subDirectory))
-        {
-            return null;
-        }
-
-        return await base.GetLastExport(context, connection, configuration, exportJobData);
     }
 
     private protected override Task<string> GetSubDirectory(ExecutionContext executionContext, IDataLakeJobData configuration, ExportJobDataBase exportJobData)

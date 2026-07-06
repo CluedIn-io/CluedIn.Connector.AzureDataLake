@@ -10,6 +10,7 @@ namespace CluedIn.Connector.DataLake.Common;
 public abstract class DataLakeConstants : ConfigurationConstantsBase, IDataLakeConstants
 {
     internal const string ProviderDefinitionIdKey = "__ProviderDefinitionId__";
+    internal const string PersistVersionKey = "PersistVersion";
     internal const string ChangeTypeKey = "__ChangeType__";
 
     public const string ContainerName = nameof(ContainerName);

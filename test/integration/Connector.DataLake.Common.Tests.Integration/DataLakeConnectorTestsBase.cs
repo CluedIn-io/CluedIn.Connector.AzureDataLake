@@ -211,7 +211,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         }
         else
         {
-            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DefaultCurrentTime);
+            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DefaultCurrentTime.ToUniversalTime());
         }
 
         return mockDateTimeOffsetProvider;
@@ -353,7 +353,6 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         try
         {
             var fsClient = client.GetFileSystemClient(fileSystemName);
-            await ModifyHistoryTimeToBeCurrentTime(setupContainerResult);
 
             var executeExportArg = new ExecuteExportArg(
                 context,
@@ -362,17 +361,19 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                 FileSystemName: fileSystemName,
                 DirectoryName: directoryName,
                 client,
-                exportJob);
+                exportJob,
+                setupContainerResult);
 
             var path = executeExport == null
                 ? await DefaultExecuteExport(executeExportArg)
                 : await executeExport(executeExportArg);
 
-            var fileClient = fsClient.GetFileClient(path.Name);
-
-            await assertMethod(fileClient, fsClient, setupContainerResult);
-
-            await fsClient.GetDirectoryClient(directoryName).DeleteIfExistsAsync();
+            if (path != null)
+            {
+                var fileClient = fsClient.GetFileClient(path.Name);
+                await assertMethod(fileClient, fsClient, setupContainerResult);
+                await fsClient.GetDirectoryClient(directoryName).DeleteIfExistsAsync();
+            }
         }
         finally
         {
@@ -427,7 +428,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
         _ = await command.ExecuteNonQueryAsync();
     }
 
-    private protected static async Task ModifyHistoryTimeToBeCurrentTime(SetupContainerResult setupContainerResult)
+    private protected async Task ModifyHistoryTimeToBeCurrentTime(SetupContainerResult setupContainerResult, ConnectorEntityData connectorEntityData)
     {
         var jobData = setupContainerResult.DataLakeJobData;
         var connectionString = jobData.StreamCacheConnectionString;
@@ -445,14 +446,34 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             await EnableHistory(connection, tableName);
             await AssertRowCount(connection, tableName);
         }
-        catch
+        catch (Exception ex)
         {
+            _testOutputHelper.WriteLine(ex.Message + Environment.NewLine + ex.StackTrace);
             await DeleteTable(streamModel.Id, jobData.StreamCacheConnectionString);
+            throw;
         }
+
+        static async Task AssertRowCount(SqlConnection connection, string tableName)
+        {
+            var getCountSql = $"SELECT COUNT(*) FROM [{tableName}]";
+            var sqlCommand = new SqlCommand(getCountSql, connection)
+            {
+                CommandType = CommandType.Text,
+            };
+            var total = (int)await sqlCommand.ExecuteScalarAsync();
+
+            Assert.Equal(1, total);
+        }
+
 
         static async Task EnableHistory(SqlConnection connection, string tableName)
         {
-            var enableHistorySql = $"ALTER TABLE [dbo].[{tableName}] SET (SYSTEM_VERSIONING = ON (HISTORY_TABLE = [dbo].[{tableName}_History], DATA_CONSISTENCY_CHECK = ON));";
+            var enableHistorySql = $"""
+                    ALTER TABLE [dbo].[{tableName}] ADD PERIOD FOR SYSTEM_TIME ([ValidFrom], [ValidTo]);
+                    ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidFrom] ADD HIDDEN;
+                    ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidTo] ADD HIDDEN;
+                    ALTER TABLE [dbo].[{tableName}] SET (SYSTEM_VERSIONING = ON (HISTORY_TABLE = [dbo].[{tableName}_History], DATA_CONSISTENCY_CHECK = ON));
+                    """;
 
             var enableHistoryCommand = new SqlCommand(enableHistorySql, connection)
             {
@@ -475,34 +496,60 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             await disableHistoryCommand.ExecuteNonQueryAsync();
         }
 
-        static async Task AlterHistory(Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider, SqlConnection connection, string tableName)
+        async Task AlterHistory(Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider, SqlConnection connection, string tableName)
         {
-            var alterHistorySql = $"""
-                    UPDATE [dbo].[{tableName}] SET [ValidFrom] = @ValidFrom;
-                    ALTER TABLE [dbo].[{tableName}] ADD PERIOD FOR SYSTEM_TIME ([ValidFrom], [ValidTo]);
-                    ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidFrom] ADD HIDDEN;
-                    ALTER TABLE [dbo].[{tableName}] ALTER COLUMN [ValidTo] ADD HIDDEN;
+
+            var targetTime = mockDateTimeOffsetProvider.Object.GetCurrentUtcTime();
+            var getCurrentValidFromSql = $"""
+                        SELECT
+                            [ValidFrom]
+                        FROM
+                            [dbo].[{tableName}]
+                        WHERE
+                            [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
+                        """;
+            using var getCurrentValidFromCommand = new SqlCommand(getCurrentValidFromSql, connection);
+            getCurrentValidFromCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            var validFrom = await getCurrentValidFromCommand.ExecuteScalarAsync() as DateTime?;
+
+
+            var updateCurrentValidFromToTimeSql = $"""
+                    UPDATE
+                        [dbo].[{tableName}]
+                    SET
+                        [ValidFrom] = @ValidFrom
+                    WHERE
+                        [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey};
                     """;
-            var alterHistoryCommand = new SqlCommand(alterHistorySql, connection)
+            using var updateCurrentValidFromToTimeCommand = new SqlCommand(updateCurrentValidFromToTimeSql, connection)
             {
                 CommandType = CommandType.Text,
             };
-            alterHistoryCommand.Parameters.Add(new SqlParameter("@ValidFrom", mockDateTimeOffsetProvider.Object.GetCurrentUtcTime()));
-            await alterHistoryCommand.ExecuteNonQueryAsync();
-        }
+            updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter("@ValidFrom", targetTime));
+            updateCurrentValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            await updateCurrentValidFromToTimeCommand.ExecuteNonQueryAsync();
 
-        static async Task AssertRowCount(SqlConnection connection, string tableName)
-        {
-            var getCountSql = $"SELECT COUNT(*) FROM [{tableName}]";
-            var sqlCommand = new SqlCommand(getCountSql, connection)
+
+            var updateHistoryValidFromToTimeSql = $"""
+                    UPDATE
+                        [dbo].[{tableName}_History]
+                    SET
+                        [ValidTo] = @TargetValidTo
+                    WHERE
+                        [{DataLakeConstants.IdKey}] = @{DataLakeConstants.IdKey} AND
+                        [ValidTo] = @OriginalValidTo;
+                    """;
+            using var updateHistoryValidFromToTimeCommand = new SqlCommand(updateHistoryValidFromToTimeSql, connection)
             {
                 CommandType = CommandType.Text,
             };
-            var total = (int)await sqlCommand.ExecuteScalarAsync();
-
-            Assert.Equal(1, total);
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@TargetValidTo", targetTime));
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter("@OriginalValidTo", validFrom?.ToString("o")));
+            updateHistoryValidFromToTimeCommand.Parameters.Add(new SqlParameter($"@{DataLakeConstants.IdKey}", connectorEntityData.EntityId));
+            await updateHistoryValidFromToTimeCommand.ExecuteNonQueryAsync();
         }
     }
+
 
     private protected virtual async Task AssertCsvResultUnescaped(DataLakeFileClient fileClient, DataLakeFileSystemClient dataLakeFileSystemClient, SetupContainerResult setupContainerResult)
     {
@@ -625,7 +672,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             { "PersistHash", "etypzcezkiehwq8vw4oqog==" },
             { "PersistVersion", isStringIntegers ? 1.ToString() : 1 },
             { "ProviderDefinitionId", "c444cda8-d9b5-45cc-a82d-fef28e08d55c" },
-            { "Timestamp", "2024-08-21T03:16:00.0000000+05:00" },
+            { "Timestamp", DefaultCurrentTime.ToUniversalTime().ToString("o") },
             { $"user{separator}age", "123" },
             { $"user{separator}dobInDateTime", "2000-01-02T03:04:05" },
             { $"user{separator}dobInDateTimeOffset", "2000-01-02T03:04:05+12:34" },
@@ -870,19 +917,25 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
     protected ITestOutputHelper TestOutputHelper => _testOutputHelper;
     protected static DateTimeOffset DefaultCurrentTime => _defaultCurrentTime;
 
-    public ConnectorEntityData CreateBaseConnectorEntityData(StreamMode streamMode, VersionChangeType versionChangeType)
+    private protected ConnectorEntityData CreateBaseConnectorEntityData(
+        StreamMode streamMode,
+        VersionChangeType versionChangeType,
+        int persistVersion = 1,
+        UserData? userData = null)
     {
-        var dobInDateTime = new DateTime(2000, 01, 02, 03, 04, 05);
-        var dobInDateTimeOffset = new DateTimeOffset(2000, 01, 02, 03, 04, 05, TimeSpan.FromMinutes(12 * 60 + 34));
+        var userDataToUse = userData ?? UserData.Default;
+        var dobInDateTimeOffset = userDataToUse.DobInDateTimeOffset;
+        var dobInDateTime = dobInDateTimeOffset.DateTime;
+
         var data = new ConnectorEntityData(versionChangeType, streamMode,
             Guid.Parse("f55c66dc-7881-55c9-889f-344992e71cb8"),
-            new ConnectorEntityPersistInfo("etypzcezkiehwq8vw4oqog==", 1), null,
+            new ConnectorEntityPersistInfo("etypzcezkiehwq8vw4oqog==", persistVersion), null,
             EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0"),
             "/Person",
             [
-                new ConnectorPropertyData("user.lastName", "Picard",
+                new ConnectorPropertyData("user.lastName", userDataToUse.LastName,
                     new VocabularyKeyConnectorPropertyDataType(new VocabularyKey("user.lastName"))),
-                new ConnectorPropertyData("user.age", "123",
+                new ConnectorPropertyData("user.age", userDataToUse.Age.ToString(),
                     new VocabularyKeyConnectorPropertyDataType(
                         new VocabularyKey("user.age", dataType: VocabularyKeyDataType.Integer)
                         {
@@ -900,7 +953,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
                         {
                             Storage = VocabularyKeyStorage.Typed,
                         })),
-                new ConnectorPropertyData("Name", "Jean Luc Picard",
+                new ConnectorPropertyData("Name", userDataToUse.Name,
                     new EntityPropertyConnectorPropertyDataType(typeof(string))),
             ],
             [EntityCode.FromKey("/Person#Acceptance:7c5591cf-861a-4642-861d-3b02485854a0")],
@@ -918,6 +971,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             ]);
         return data;
     }
+
 
     private protected record SetupContainerResult(
         ExecutionContext Context,
@@ -939,7 +993,21 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TJobDataFac
             string FileSystemName,
             string DirectoryName,
             DataLakeServiceClient Client,
-            DataLakeExportEntitiesJobBase ExportJob);
+            DataLakeExportEntitiesJobBase ExportJob,
+            SetupContainerResult SetupContainerResult);
+
+    private protected record UserData(
+       string Name,
+       string LastName,
+       int Age,
+       DateTimeOffset DobInDateTimeOffset)
+    {
+        public static UserData Default => new UserData(
+            "Jean Luc Picard",
+            "Picard",
+            123,
+            new DateTimeOffset(2000, 01, 02, 03, 04, 05, TimeSpan.FromMinutes(12 * 60 + 34)));
+    };
 
     public class DataRow
     {

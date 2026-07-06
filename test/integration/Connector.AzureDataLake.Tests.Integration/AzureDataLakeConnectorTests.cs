@@ -13,6 +13,7 @@ using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Core;
+using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
@@ -367,7 +368,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
                 };
-                await executeExportArg.ExportJob.DoRunAsync(
+                _ = await executeExportArg.ExportJob.DoRunInternalAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
@@ -377,7 +378,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 executeExportArg.Client);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
+                var secondResult = await executeExportArg.ExportJob.DoRunInternalAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
@@ -388,6 +389,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
                 Assert.Equal(firstDataTime, secondDataTime);
+                Assert.Equal(DataLakeExportEntitiesJobBase.ExportedBeforeReason, secondResult.Reason);
                 return secondPath;
             });
     }
@@ -447,7 +449,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             });
     }
@@ -506,9 +508,35 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WhenNoDataStoredAndNoTableCreated_CanSkip()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            (_, _, _) => Task.CompletedTask,
+            async executeExportArg =>
+            {
+                var jobArgs = new DataLakeJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(DataLakeExportEntitiesJobBase.TableNotFoundReason, result.Reason);
+                return null;
+            },
+            getConnectorEntityData: Array.Empty<ConnectorEntityData>);
     }
 
     [Fact]
@@ -556,7 +584,9 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         Func<DataLakeFileClient, DataLakeFileSystemClient, SetupContainerResult, Task> assertMethod,
         Func<ExecuteExportArg, Task<PathItem>> executeExport = null,
         Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
-        Action<Dictionary<string, object>> configureAuthentication = null)
+        Action<Dictionary<string, object>> configureAuthentication = null,
+        Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
+        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null)
     {
         var configuration = CreateConfigurationWithStreamCache(format);
         configureAuthentication?.Invoke(configuration);
@@ -565,8 +595,20 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         var setupResult = await SetupContainer(jobData, StreamMode.Sync, configureTimeProvider);
         var connector = setupResult.ConnectorMock.Object;
 
-        var data = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added);
-        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        var connectorEntityData = getConnectorEntityData == null
+            ? [CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added)]
+            : getConnectorEntityData();
+        foreach (var data in connectorEntityData)
+        {
+            if (storeData != null)
+            {
+                await storeData(setupResult, data);
+                continue;
+            }
+
+            await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+            await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+        }
         var exportJob = CreateExportJob(setupResult);
 
         await AssertExportJobOutputFileContents(

@@ -27,7 +27,7 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
 
     private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
-        var jobData = exportJobData.DataLakeJobData as OneLakeConnectorJobData;
+        var jobData = exportJobData.StorageConfiguration as OneLakeConnectorJobData;
         if (!jobData.ShouldLoadToTable)
         {
             context.Log.LogDebug("Skipping loading to table as the job data does not require it.");
@@ -47,6 +47,6 @@ internal class OneLakeExportEntitiesJob : DataLakeExportEntitiesJobBase
             exportJobData.StreamModel.ContainerName,
             exportJobData.AsOfTime,
             exportJobData.OutputFormat);
-        await DataLakeClient.LoadToTableAsync(exportJobData.OutputFileName, replacedTableName, exportJobData.DataLakeJobData);
+        await DataLakeClient.LoadToTableAsync(exportJobData.OutputFileName, replacedTableName, exportJobData.StorageConfiguration);
     }
 }

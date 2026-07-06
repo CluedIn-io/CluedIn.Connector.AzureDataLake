@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -39,8 +40,19 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     private const string DataTimeKey = "DataTime";
     private const string InstanceTimeKey = "InstanceTime";
     private const string TemporaryFileSuffix = ".tmp";
+
+    // Status values
+    private const string CompleteStatus = "Complete";
+    private const string FailedStatus = "Failed";
+    private const string SkippedStatus = "Skipped";
+
+    // Export result reasons
     internal static readonly string ConnectorIsNotHealthyReason = "Connector is not healthy";
     internal static readonly string StreamNotStartedReason = "Stream is not started";
+    internal static readonly string ExportedBeforeReason = "Exported before";
+    internal static readonly string NoRowsReason = "No rows to be exported.";
+    internal static readonly string TableNotFoundReason = "Table not found.";
+    internal static readonly string NonOverwritableOutputFileExists = "Output file exists and file cannot be overwritten";
 
     protected DataLakeExportEntitiesJobBase(
         ApplicationContext appContext,
@@ -84,40 +96,48 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return ExportResult.CreateSkipped(StreamNotStartedReason);
         }
 
-        var exportJobData = await GetJobDataAsync(context, args, streamModel, "export");
-        if (exportJobData == null)
-        {
-            return ExportResult.CreateSkipped("Unable to get export data information.");
-        }
 
         if (streamModel.ConnectorProviderDefinitionId == null)
         {
-            context.Log.LogInformation("Skipping export for StreamId {StreamId} as it does not have connector provider definition id.", exportJobData.StreamId);
-            await AddErrorToStreamIngestionLog(context, exportJobData, $"Skipping export for StreamId {exportJobData.StreamId} as it does not have connector provider definition id.");
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as it does not have connector provider definition id.", streamId);
+            await AddErrorToStreamIngestionLog(context, streamModel, $"Skipping export for StreamId {streamId} as it does not have connector provider definition id.");
             return ExportResult.CreateSkipped("Stream does not have connector provider definition id");
         }
 
         if (!await IsConnectorHealthyAsync(context, streamModel.ConnectorProviderDefinitionId.Value))
         {
-            context.Log.LogInformation("Skipping export for StreamId {StreamId} as provider definition {ProviderDefinitionId} is not healthy.", exportJobData.StreamId, exportJobData.ProviderDefinition.Id);
-            await AddErrorToStreamIngestionLog(context, exportJobData, $"Skipping export for StreamId {exportJobData.StreamId} as provider definition {exportJobData.ProviderDefinition.Id} is not healthy.");
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as provider definition {ProviderDefinitionId} is not healthy.", streamId, streamModel.ConnectorProviderDefinitionId);
+            await AddErrorToStreamIngestionLog(context, streamModel, $"Skipping export for StreamId {streamId} as provider definition {streamModel.ConnectorProviderDefinitionId} is not healthy.");
             return ExportResult.CreateSkipped(ConnectorIsNotHealthyReason);
         }
 
-        if (ShouldSkipExport(exportJobData))
+        var exportJobData = await GetJobDataAsync(context, args, streamModel, "export");
+        if (exportJobData == null)
         {
-            context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required.", exportJobData.StreamId);
-            await AddErrorToStreamIngestionLog(context, exportJobData, $"Skipping export for StreamId {exportJobData.StreamId} as provider definition {exportJobData.ProviderDefinition.Id} is not healthy.");
-            return ExportResult.CreateSkipped(ConnectorIsNotHealthyReason);
+            context.Log.LogInformation("Skipping export for StreamId {streamId} because unable to get export data information.", streamId);
+            await AddErrorToStreamIngestionLog(context, streamModel, $"Skipping export for StreamId {streamId} because unable to get export data information.");
+            return ExportResult.CreateSkipped("Unable to get export data information.");
         }
 
         try
         {
-            return await DoRunInternalAsync(context, args, exportJobData);
+            using var transactionScope = new TransactionScope(
+                TransactionScopeOption.Required,
+                _exportTimeout,
+                TransactionScopeAsyncFlowOption.Enabled);
+            await using var connection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
+            await connection.OpenAsync();
+
+            if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"{GetType().Name}_{streamId}", ExportEntitiesLockInMilliseconds))
+            {
+                context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamId);
+                return ExportResult.CreateSkipped("Failed to acquire lock");
+            }
+            return await DoRunInternalAsync(context, args, exportJobData, transactionScope, connection);
         }
         catch (Exception ex)
         {
-            await AddErrorToStreamIngestionLog(context, exportJobData, $"Error exporting for StreamId {exportJobData.StreamId} to file {exportJobData.OutputFileName}.", exception: ex);
+            await AddErrorToStreamIngestionLog(context, streamModel, $"Error exporting for StreamId {exportJobData.StreamId} to file {exportJobData.OutputFileName}.", exception: ex);
             throw;
         }
     }
@@ -125,56 +145,30 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
     private async Task<ExportResult> DoRunInternalAsync(
         ExecutionContext context,
         IDataLakeJobArgs args,
-        ExportJobData exportJobData)
+        ExportJobData exportJobData,
+        TransactionScope transactionScope,
+        SqlConnection connection)
     {
-        var typeName = GetType().Name;
-        var (streamId, streamModel, provider, configuration, asOfTime, outputFormat, outputFileName) = exportJobData;
+        var streamId = exportJobData.StreamId;
+        var streamModel = exportJobData.StreamModel;
+        var provider = exportJobData.ProviderDefinition;
+        var configuration = exportJobData.StorageConfiguration;
+        var asOfTime = exportJobData.AsOfTime;
+        var outputFormat = exportJobData.OutputFormat;
+        var outputFileName = exportJobData.OutputFileName;
 
         var tableName = CacheTableHelper.GetCacheTableName(streamId);
-        using var transactionScope = new TransactionScope(
-            TransactionScopeOption.Required,
-            _exportTimeout,
-            TransactionScopeAsyncFlowOption.Enabled);
-        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
-        await connection.OpenAsync();
-        if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"{typeName}_{streamModel.Id}", ExportEntitiesLockInMilliseconds))
+
+        var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration, exportJobData.SubDirectory);
+
+        var shouldSkipResult = await ShouldSkipExport(context, exportJobData);
+        if (shouldSkipResult.ShouldSkip)
         {
-            context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamModel.Id);
-            return ExportResult.CreateSkipped("Failed to acquire lock");
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required. Reason is {Reason}", exportJobData.StreamId, shouldSkipResult.Reason);
+            await AddInformationToStreamIngestionLogLocal($"Skipping export as it is not required. Reason is {shouldSkipResult.Reason}");
+            return ExportResult.CreateSkipped(shouldSkipResult.Reason);
         }
 
-        var filePathProperties = await _dataLakeClient.GetFilePathProperties(configuration, outputFileName);
-        if (filePathProperties != null)
-        {
-            if (args.IsTriggeredFromJobServer)
-            {
-                context.Log.LogInformation(
-                    "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from job server. Switching to using current time.",
-                    outputFileName,
-                    asOfTime);
-                asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
-                outputFileName = await GetOutputFileNameAsync(context, configuration, streamId, streamModel.ContainerName, asOfTime, outputFormat);
-            }
-            else if (HasExportedFileBefore(streamId, asOfTime, filePathProperties?.Metadata))
-            {
-                context.Log.LogInformation(
-                    "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from {SchedulerType}. Skipping export.",
-                    outputFileName,
-                    asOfTime,
-                    nameof(DataLakeConnectorComponentBase));
-                return ExportResult.CreateSkipped("Exported before");
-            }
-            else
-            {
-                context.Log.LogInformation(
-                    "Output file '{OutputFileName}' exists and will be overwritten.", outputFileName);
-            }
-        }
-
-        var subDirectory = await GetSubDirectory(context, configuration, exportJobData);
-        var directoryClient = await _dataLakeClient.EnsureDataLakeDirectoryExist(configuration, subDirectory);
-        await InitializeDirectoryAsync(context, connection, configuration, exportJobData, directoryClient);
-        var startExportTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
         var exportHistory = new ExportHistory(
             streamId,
             DataTime: asOfTime,
@@ -182,27 +176,51 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             CronSchedule: args.Schedule,
             FilePath: outputFileName,
             FileFormat: outputFormat,
-            StartTime: startExportTime,
+            StartTime: _dateTimeOffsetProvider.GetCurrentUtcTime(),
             EndTime: null,
             TotalRows: null,
             Status: "Starting",
             ExporterHostName: Dns.GetHostName());
-
         await InsertHistory(context, connection, exportHistory);
 
-        var shouldProduceDelta = configuration.IsDeltaMode && LastExport != null;
-        var getDataSql = shouldProduceDelta
-            ? $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}' WHERE ValidFrom > @ValidFrom"
-            : $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
-        var command = new SqlCommand(getDataSql, connection)
+        var shouldProduceDelta = configuration.IsDeltaMode && !exportJobData.IsInitialExport;
+        var validFrom = shouldProduceDelta ? exportJobData.LastExportedFile?.DataTime : null;
+
+        var getDataCommandWithLimit = GetDataSql(connection, asOfTime, tableName, validFrom, limit: 1);
+        var hasData = false;
+        try
         {
-            CommandType = CommandType.Text
-        };
-        if (shouldProduceDelta)
-        {
-            command.Parameters.Add(new SqlParameter("@ValidFrom", LastExport.DataTime));
+            hasData = await HasDataAsync(getDataCommandWithLimit);
         }
-        await using var reader = await command.ExecuteReaderAsync();
+        catch (Exception ex) when (ex is SqlException sqlEx && sqlEx.IsTableNotFoundException())
+        {
+            await UpdateHistoryWithStatus(SkippedStatus);
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required. Reason is {Reason}", exportJobData.StreamId, TableNotFoundReason);
+            await AddInformationToStreamIngestionLogLocal($"Skipping export as it is not required. Reason is {TableNotFoundReason}");
+            return ExportResult.CreateSkipped(TableNotFoundReason);
+        }
+
+        if (!configuration.IsOverwriteEnabled && exportJobData.OutputFileExists)
+        {
+            await UpdateHistoryWithStatus(SkippedStatus);
+            context.Log.LogWarning("Skipping export for StreamId {StreamId} as output file exists. Reason is {Reason}", exportJobData.StreamId, NonOverwritableOutputFileExists);
+            await AddInformationToStreamIngestionLogLocal($"Skipping export as it is not required. Reason is {NonOverwritableOutputFileExists}");
+            return ExportResult.CreateSkipped(NonOverwritableOutputFileExists);
+        }
+
+        if (configuration.IsDeltaMode && !hasData && !GetIsEmptyFileAllowed(exportJobData))
+        {
+            await UpdateHistoryWithStatus(SkippedStatus);
+            context.Log.LogWarning("Skipping export for StreamId {StreamId} as it is not required. Reason is {Reason}", exportJobData.StreamId, NoRowsReason);
+            await AddInformationToStreamIngestionLogLocal($"Skipping export as it is not required. Reason is {NoRowsReason}");
+            return ExportResult.CreateSkipped(NoRowsReason);
+        }
+
+        await InitializeDirectoryAsync(context, connection, exportJobData, directoryClient);
+
+        var getDataCommand = GetDataSql(connection, asOfTime, tableName, validFrom);
+
+        await using var reader = await getDataCommand.ExecuteReaderAsync();
 
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
             .Select(reader.GetName)
@@ -223,11 +241,14 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         {
             temporaryFileClient = directoryClient.GetFileClient(temporaryOutputFileName);
         }
-        catch
+        catch (Exception getTemporaryFileClientException)
         {
-            context.Log.LogInformation(
+            context.Log.LogWarning(
                 "Error creating file client for {TemporaryOutputFileName}.",
                 temporaryOutputFileName);
+            transactionScope.Complete();
+            transactionScope.Dispose();
+            await AddErrorToStreamIngestionLog(context, streamModel, $"Error creating file client for {temporaryOutputFileName}.", exception: getTemporaryFileClientException);
             throw;
         }
 
@@ -263,29 +284,27 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
 
         await reader.CloseAsync();
 
-        var updatedHistory = exportHistory with
-        {
-            TotalRows = totalRows,
-            EndTime = _dateTimeOffsetProvider.GetCurrentUtcTime(),
-            Status = "Complete"
-        };
-        await UpdateHistory(context, connection, updatedHistory);
+        await UpdateHistoryWithStatus(CompleteStatus, totalRows: totalRows);
         transactionScope.Complete();
+        transactionScope.Dispose();
         context.Log.LogInformation(
             "End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.",
-            typeName,
+            GetType().Name,
             args.Message,
             args.Schedule);
 
+        await this.AddInformationToStreamIngestionLog(context, streamModel, $"Exported file {outputFileName} with {totalRows} rows.");
         return ExportResult.CreateSuccess(outputFileName);
 
         async Task<long> writeFileContentsAsync()
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
             var sqlDataWriter = GetSqlDataWriter(outputFormat);
-            await using var outputStream = await temporaryFileClient.OpenWriteExAsync(configuration.IsOverwriteEnabled);
+            // Temporary file should always be allowed to be overwritten
+            // It is only used for the current export job and will be renamed to the final output file name after the export is complete.
+            await using var outputStream = await temporaryFileClient.OpenWriteExAsync(true);
             using var bufferedStream = new DataLakeBufferedWriteStream(outputStream);
-            return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, IsInitialExport, reader);
+            return await sqlDataWriter?.WriteAsync(context, configuration, bufferedStream, fieldNamesToUse, exportJobData.IsInitialExport, reader);
         }
 
         async Task setFilePropertiesAsync()
@@ -335,6 +354,52 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             var targetFileClient = directoryClient.GetFileClient(file);
             await targetFileClient.DeleteIfExistsAsync();
         }
+        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null)
+        {
+            var limitClause = limit.HasValue ? $"TOP ({limit.Value}) " : string.Empty;
+            var getDataSql = validFrom.HasValue
+                ? $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}' WHERE ValidFrom > @ValidFrom"
+                : $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
+            var command = new SqlCommand(getDataSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
+
+            if (validFrom.HasValue)
+            {
+                command.Parameters.Add(new SqlParameter("@ValidFrom", validFrom));
+            }
+
+            return command;
+        }
+
+        static async Task<bool> HasDataAsync(SqlCommand getDataCommandWithLimit)
+        {
+            await using var reader = await getDataCommandWithLimit.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        async Task AddInformationToStreamIngestionLogLocal(string message)
+        {
+            transactionScope.Complete();
+            transactionScope.Dispose();
+            await this.AddInformationToStreamIngestionLog(context, streamModel, message: message);
+        }
+
+        async Task UpdateHistoryWithStatus(string status, long? totalRows = null)
+        {
+            await UpdateHistory(context, connection, exportHistory with
+            {
+                Status = status,
+                TotalRows = totalRows,
+                EndTime = _dateTimeOffsetProvider.GetCurrentUtcTime()
+            });
+        }
     }
 
     public override async Task<bool> CanRunAsync(ExecutionContext context, IDataLakeJobArgs args)
@@ -371,15 +436,41 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return true;
     }
 
-    private async Task AddErrorToStreamIngestionLog(ExecutionContext executionContext, ExportJobData exportJobData, string message, Exception? exception = null)
+    private async Task AddInformationToStreamIngestionLog(
+        ExecutionContext executionContext,
+        StreamModel streamModel,
+        string message)
+    {
+        try
+        {
+            var streamLogService = executionContext.ApplicationContext.Container.Resolve<IStreamLogService>();
+            await streamLogService.StoreHistoryLogEntryAsync(StreamHistoryLogHistoryModel.BuildInformation(
+                    streamId: streamModel.Id,
+                    entityId: null,
+                    exportTargetId: streamModel.ConnectorProviderDefinitionId,
+                    area: StreamHistoryLogAreaEnum.ExportTarget,
+                    changeType: null,
+                    message: message));
+        }
+        catch (Exception ex)
+        {
+            executionContext.Log.LogWarning(ex, "Failed to store stream ingestion history log entry.");
+        }
+    }
+
+    private async Task AddErrorToStreamIngestionLog(
+        ExecutionContext executionContext,
+        StreamModel streamModel,
+        string message,
+        Exception? exception = null)
     {
         try
         {
             var streamLogService = executionContext.ApplicationContext.Container.Resolve<IStreamLogService>();
             await streamLogService.StoreHistoryLogEntryAsync(StreamHistoryLogHistoryModel.BuildError(
-                    streamId: exportJobData.StreamId,
+                    streamId: streamModel.Id,
                     entityId: null,
-                    exportTargetId: exportJobData.ProviderDefinition.Id,
+                    exportTargetId: streamModel.ConnectorProviderDefinitionId,
                     area: StreamHistoryLogAreaEnum.ExportTarget,
                     changeType: null,
                     message: message,
@@ -387,12 +478,23 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         }
         catch (Exception ex)
         {
-            executionContext.Log.LogDebug(ex, "Failed to store stream ingestion history log entry.");
+            executionContext.Log.LogWarning(ex, "Failed to store stream ingestion history log entry.");
         }
     }
-    private protected virtual bool ShouldSkipExport(ExportJobData exportJobData)
+
+    private protected virtual async Task<ShouldSkipResult> ShouldSkipExport(ExecutionContext context, ExportJobData exportJobData)
     {
-        return false;
+        if (exportJobData.OutputFileExists && exportJobData.ExistingFileMatchesExpected)
+        {
+            context.Log.LogInformation(
+                "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from {SchedulerType}. Skipping export.",
+                exportJobData.OutputFileName,
+                exportJobData.AsOfTime,
+                nameof(DataLakeConnectorComponentBase));
+            return new ShouldSkipResult(true, ExportedBeforeReason);
+        }
+
+        return new ShouldSkipResult(false, null);
     }
 
     private protected virtual async Task<List<string>> GetFieldNamesAsync(
@@ -406,10 +508,6 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 : fieldNames.Where(fieldName => fieldName != DataLakeConstants.ChangeTypeKey).ToList();
     }
 
-    private protected ExportHistory LastExport { get; private set; }
-
-    protected virtual bool IsInitialExport => LastExport == null;
-
     private protected virtual bool GetIsEmptyFileAllowed(ExportJobData exportJobData) => true;
 
     private protected virtual Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
@@ -422,7 +520,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return Task.FromResult(string.Empty);
     }
 
-    private protected virtual Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobData exportJobData, DataLakeDirectoryClient client)
+    private protected virtual Task InitializeDirectoryAsync(ExecutionContext context, SqlConnection connection, ExportJobData exportJobData, DataLakeDirectoryClient client)
     {
         return Task.CompletedTask;
     }
@@ -504,21 +602,69 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             provider,
             configuration,
             asOfTime,
-            OutputFormat: outputFormat);
-        var lastExport = await GetLastExport(context, connection, configuration, exportJobDataBase);
-        LastExport = lastExport;
+            OutputFormat: outputFormat,
+            ContainerName: containerName);
 
-        var outputFileName = await GetOutputFileNameAsync(context, configuration, streamId, containerName, asOfTime, outputFormat);
+        var subDirectory = await GetSubDirectory(context, configuration, exportJobDataBase);
 
+        var lastExportedFile = await GetLastExportedFile(context, connection, exportJobDataBase, subDirectory);
 
-        var exportJobData = new ExportJobData(streamId,
+        var isInitialExport = await GetIsInitialExport(context, exportJobDataBase, lastExportedFile, subDirectory);
+        var outputFileName = await GetOutputFileNameAsync(context, exportJobDataBase, isInitialExport, lastExportedFile, subDirectory);
+
+        var outputFileExists = false;
+        var existingFileMatchesExpected = false;
+        var filePathProperties = await _dataLakeClient.GetFilePathProperties(configuration, outputFileName, subDirectory);
+        if (filePathProperties != null)
+        {
+            outputFileExists = true;
+            if (args.IsTriggeredFromJobServer)
+            {
+                context.Log.LogInformation(
+                    "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from job server. Switching to using current time.",
+                    outputFileName,
+                    asOfTime);
+                asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                outputFileName = await GetOutputFileNameAsync(context, exportJobDataBase with { AsOfTime = asOfTime }, isInitialExport, lastExportedFile, subDirectory);
+                outputFileExists = false;
+            }
+            else if (HasExportedFileBefore(streamId, asOfTime, filePathProperties.Metadata))
+            {
+                existingFileMatchesExpected = true;
+            }
+            else
+            {
+                context.Log.LogInformation(
+                    "Output file '{OutputFileName}' exists and will be overwritten.", outputFileName);
+            }
+        }
+        var exportJobData = new ExportJobData(
+            streamId,
             streamModel,
             provider,
             configuration,
             asOfTime,
             OutputFormat: outputFormat,
-            OutputFileName: outputFileName);
+            ContainerName: containerName,
+            OutputFileName: outputFileName,
+            SubDirectory: subDirectory,
+            OutputFileExists: outputFileExists,
+            ExistingFileMatchesExpected: existingFileMatchesExpected,
+            LastExportedFile: lastExportedFile,
+            IsInitialExport: isInitialExport);
         return exportJobData;
+    }
+
+    protected virtual async Task<LastExportedFile?> GetLastExportedFile(ExecutionContext context, SqlConnection connection, ExportJobDataBase exportJobDataBase, string subDirectory)
+    {
+        var lastSuccessHistory = await GetLastSuccessfulExportHistory(context, connection, exportJobDataBase.StreamId);
+        var lastExportedFile = lastSuccessHistory == null ? null : new LastExportedFile(lastSuccessHistory.FilePath, lastSuccessHistory.DataTime, lastSuccessHistory.TotalRows);
+        return lastExportedFile;
+    }
+
+    protected virtual Task<bool> GetIsInitialExport(ExecutionContext context, ExportJobDataBase exportJobDataBase, LastExportedFile? lastExportedFile, string outputDirectoryPath)
+    {
+        return Task.FromResult(lastExportedFile == null);
     }
 
     private Dictionary<string, object> CreateLoggingScope(IDataLakeJobArgs args)
@@ -572,7 +718,13 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             return false;
         }
 
-        var (streamId, streamModel, provider, configuration, asOfTime, outputFormat, outputFileName) = exportJobData;
+        var streamId = exportJobData.StreamId;
+        var streamModel = exportJobData.StreamModel;
+        var provider = exportJobData.ProviderDefinition;
+        var configuration = exportJobData.StorageConfiguration;
+        var asOfTime = exportJobData.AsOfTime;
+        var outputFormat = exportJobData.OutputFormat;
+        var outputFileName = exportJobData.OutputFileName;
 
         if (args.IsTriggeredFromJobServer)
         {
@@ -596,7 +748,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return hasMissed;
     }
 
-    private static bool TryGetMetadata(IDictionary<string, string> metadata, out FileMetadata fileMetadata)
+    protected bool TryGetMetadata(IDictionary<string, string> metadata, out ExportedFileMetadata fileMetadata)
     {
         if(metadata != null
                 && metadata.TryGetValue(StreamIdKey, out var fileStreamIdString)
@@ -604,7 +756,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                 && Guid.TryParse(fileStreamIdString, out var fileStreamId)
                 && DateTimeOffset.TryParse(fileDataTimeString, out var fileDataTime))
         {
-            fileMetadata = new FileMetadata(fileStreamId, fileDataTime);
+            fileMetadata = new ExportedFileMetadata(fileStreamId, fileDataTime);
             return true;
         }
 
@@ -612,21 +764,32 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return false;
     }
 
-    private static bool HasExportedFileBefore(Guid streamId, DateTimeOffset asOfTime, IDictionary<string, string> metadata)
+    private bool HasExportedFileBefore(Guid streamId, DateTimeOffset asOfTime, IDictionary<string, string> metadata)
     {
         return TryGetMetadata(metadata, out var fileMetadata)
                 && fileMetadata.StreamId == streamId
                 && fileMetadata.DataTime == asOfTime;
     }
 
-    protected virtual Task<string> GetOutputFileNameAsync(ExecutionContext context, IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    protected virtual Task<string> GetOutputFileNameAsync(
+        ExecutionContext context,
+        ExportJobDataBase exportJobDataBase,
+        bool isInitialExport,
+        LastExportedFile? lastExportedFile,
+        string outputDirectoryPath)
     {
+        var configuration = exportJobDataBase.StorageConfiguration;
+        var streamId = exportJobDataBase.StreamId;
+        var containerName = exportJobDataBase.ContainerName;
+        var asOfTime = exportJobDataBase.AsOfTime;
+        var outputFormat = exportJobDataBase.OutputFormat;
+
         if (HasCustomFileNamePattern(configuration))
         {
             return PatternHelper.ReplaceNameUsingPatternAsync(context, configuration.FileNamePattern, streamId, containerName, asOfTime, outputFormat);
         }
 
-        return GetDefaultOutputFileNameAsync(context, configuration, streamId, containerName, asOfTime, outputFormat);
+        return GetDefaultOutputFileNameAsync(context, exportJobDataBase);
     }
 
     private static bool HasCustomFileNamePattern(IDataLakeJobData configuration)
@@ -634,12 +797,14 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         return !string.IsNullOrWhiteSpace(configuration.FileNamePattern);
     }
 
-    protected virtual Task<string> GetDefaultOutputFileNameAsync(ExecutionContext context, IDataLakeJobData configuration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    protected virtual Task<string> GetDefaultOutputFileNameAsync(
+        ExecutionContext context,
+        ExportJobDataBase exportJobDataBase)
     {
-        var fileExtension = GetFileExtension(outputFormat);
-        var streamIdFormatted = streamId.ToString(StreamIdDefaultStringFormat);
+        var fileExtension = GetFileExtension(exportJobDataBase.OutputFormat);
+        var streamIdFormatted = exportJobDataBase.StreamId.ToString(StreamIdDefaultStringFormat);
 
-        return Task.FromResult($"{streamIdFormatted}_{asOfTime:yyyyMMddHHmmss}.{fileExtension}");
+        return Task.FromResult($"{streamIdFormatted}_{exportJobDataBase.AsOfTime:yyyyMMddHHmmss}.{fileExtension}");
     }
 
     protected virtual string GetFileExtension(string outputFormat)
@@ -745,9 +910,12 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
             }
         }
     }
-    private protected virtual async Task<ExportHistory> GetLastExport(ExecutionContext context, SqlConnection connection, IDataLakeJobData configuration, ExportJobDataBase exportJobData)
+
+    private protected virtual async Task<ExportHistory> GetLastSuccessfulExportHistory(
+        ExecutionContext context,
+        SqlConnection connection,
+        Guid streamId)
     {
-        var streamId = exportJobData.StreamId;
         var tableName = GetExportHistoryTableName(streamId);
 
         try
@@ -768,6 +936,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                     FROM
                         [{tableName}]
                     WHERE StreamId = @StreamId
+                        AND Status = '{CompleteStatus}'
                     ORDER BY StreamId, DataTime DESC
                     """;
             var command = new SqlCommand(getSql, connection)
@@ -839,7 +1008,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         command.Parameters.Add(new SqlParameter($"@TriggerSource", exportHistory.TriggerSource));
         command.Parameters.Add(new SqlParameter($"@CronSchedule", exportHistory.CronSchedule));
         command.Parameters.Add(new SqlParameter($"@EndTime", exportHistory.EndTime));
-        command.Parameters.Add(new SqlParameter($"@TotalRows", exportHistory.TotalRows));
+        command.Parameters.Add(new SqlParameter($"@TotalRows", (object)exportHistory.TotalRows ?? DBNull.Value));
         command.Parameters.Add(new SqlParameter($"@Status", exportHistory.Status));
 
         var rowsAffected = await command.ExecuteNonQueryAsync();
@@ -880,6 +1049,7 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
                             AND DataTime = @DataTime
                             AND TriggerSource = @TriggerSource
                             AND CronSchedule = @CronSchedule
+                            AND (Status = '{CompleteStatus}' OR Status = '{SkippedStatus}')
                         """;
             var command = new SqlCommand(insertSql, connection)
             {
@@ -922,51 +1092,19 @@ internal abstract class DataLakeExportEntitiesJobBase : DataLakeJobBase
         _ = await command.ExecuteNonQueryAsync();
     }
 
-    private static string GetExportHistoryTableName(Guid streamId)
+    internal static string GetExportHistoryTableName(Guid streamId)
     {
         return CacheTableHelper.GetExportHistoryTableName(streamId) + "_ExportHistory";
     }
 
-    private record FileMetadata(Guid StreamId, DateTimeOffset DataTime);
-    private protected record ExportJobDataBase(
-        Guid StreamId,
-        StreamModel StreamModel,
-        ProviderDefinition ProviderDefinition,
-        IDataLakeJobData DataLakeJobData,
-        DateTimeOffset AsOfTime,
-        string OutputFormat);
+    protected record ExportedFileMetadata(Guid StreamId, DateTimeOffset DataTime);
 
-    private protected record ExportJobData(
-        Guid StreamId,
-        StreamModel StreamModel,
-        ProviderDefinition ProviderDefinition,
-        IDataLakeJobData DataLakeJobData,
-        DateTimeOffset AsOfTime,
-        string OutputFormat,
-        string OutputFileName) : ExportJobDataBase(StreamId,
-        StreamModel,
-        ProviderDefinition,
-        DataLakeJobData,
-        AsOfTime,
-        OutputFormat);
-
-    private protected record ExportHistory(
-        Guid StreamId,
-        DateTimeOffset DataTime,
-        string TriggerSource,
-        string CronSchedule,
-        string FilePath,
-        string FileFormat,
-        DateTimeOffset StartTime,
-        DateTimeOffset? EndTime,
-        long? TotalRows,
-        string Status,
-        string ExporterHostName);
-
-    internal record ExportResult(string? FilePath, string? Reason)
+    internal record ExportResult(string? FilePath, bool HasExported, string? Reason)
     {
-        public static ExportResult CreateSkipped(string reason) => new(null, reason);
+        public static ExportResult CreateSkipped(string reason) => new (null, false, reason);
 
-        public static ExportResult CreateSuccess(string outputFilePath) => new(outputFilePath, null);
+        public static ExportResult CreateSuccess(string outputFilePath) => new(outputFilePath, true, null);
     }
+
+    internal record ShouldSkipResult(bool ShouldSkip, string? Reason);
 }

@@ -37,8 +37,8 @@ internal class ExportTargetEventHandler : IDisposable
         _jobDataFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
         _openMirroringDataLakeClient = openMirroringDataLakeClient ?? throw new ArgumentNullException(nameof(openMirroringDataLakeClient));
 
-        _registerExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<RegisterExportTargetEvent>(ProcessEvent);
-        _updateExportTargetSubscription = applicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
+        _registerExportTargetSubscription = applicationContext.System.Events.SubscribeAsync<RegisterExportTargetEvent>(ProcessEventAsync);
+        _updateExportTargetSubscription = applicationContext.System.Events.SubscribeAsync<UpdateExportTargetEvent>(ProcessEventAsync);
     }
 
     private void ProcessEvent<TEvent>(TEvent eventData)

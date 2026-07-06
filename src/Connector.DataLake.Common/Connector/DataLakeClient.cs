@@ -193,10 +193,12 @@ namespace CluedIn.Connector.DataLake.Common.Connector
             }
 
             var directory = configuration.RootDirectoryPath;
-            if (!string.IsNullOrEmpty(subDirectory))
-                directory = Path.Combine(directory, subDirectory);
 
             var directoryClient = fileSystemClient.GetDirectoryClient(directory);
+            if (!string.IsNullOrWhiteSpace(subDirectory))
+            {
+                directoryClient = directoryClient.GetSubDirectoryClient(subDirectory);
+            }
             if (!await directoryClient.ExistsAsync())
             {
                 return null;
