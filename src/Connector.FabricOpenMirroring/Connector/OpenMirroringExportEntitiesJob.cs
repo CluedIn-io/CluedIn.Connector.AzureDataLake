@@ -44,7 +44,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         ExecutionContext context,
         ExportJobDataBase exportJobDataBase,
         bool isInitialExport,
-        LastExportedFile lastExportedFile,
+        LastExportedFile? lastExportedFile,
         DirectoryPath outputDirectoryPath)
     {
         var outputFormat = exportJobDataBase.OutputFormat;
@@ -67,7 +67,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         IStorageClient storageClient,
         DirectoryPath outputDirectoryPath)
     {
-        var lastFile = base.GetLastExportedFile(context, connection, exportJobDataBase, storageClient, outputDirectoryPath);
+        var lastFile = await base.GetLastExportedFile(context, connection, exportJobDataBase, storageClient, outputDirectoryPath);
 
         var files = await storageClient.GetFilesInDirectoryAsync(outputDirectoryPath);
         var lastSequenceNumberInFabric = -1L;

@@ -48,7 +48,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     internal static readonly string ExportedBeforeReason = "Exported before";
     internal static readonly string NoRowsReason = "No rows to be exported.";
     internal static readonly string TableNotFoundReason = "Table not found.";
-    internal static readonly string NonOvewritableOutputFileExists = "Output file exists and file cannot be overwritten";
+    internal static readonly string NonOverwritableOutputFileExists = "Output file exists and file cannot be overwritten";
 
     protected StorageExportEntitiesJobBase(
         ApplicationContext appContext,
@@ -199,9 +199,9 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         if (!configuration.IsOverwriteEnabled && exportJobData.OutputFileExists)
         {
             await UpdateHistoryWithStatus(SkippedStatus);
-            context.Log.LogWarning("Skipping export for StreamId {StreamId} as output file exists. Reason is {Reason}", exportJobData.StreamId, NonOvewritableOutputFileExists);
-            await AddInformationToStreamIngestionLogLocal($"Skipping export as it is not required. Reason is {NonOvewritableOutputFileExists}");
-            return ExportResult.CreateSkipped(NonOvewritableOutputFileExists);
+            context.Log.LogWarning("Skipping export for StreamId {StreamId} as output file exists. Reason is {Reason}", exportJobData.StreamId, NonOverwritableOutputFileExists);
+            await AddInformationToStreamIngestionLogLocal($"Skipping export as it is not required. Reason is {NonOverwritableOutputFileExists}");
+            return ExportResult.CreateSkipped(NonOverwritableOutputFileExists);
         }
 
         if (configuration.IsDeltaMode && !hasData && !GetIsEmptyFileAllowed(exportJobData))
@@ -355,7 +355,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null)
         {
-            var limitClause = limit.HasValue ? $"TOP ({limit.Value})" : string.Empty;
+            var limitClause = limit.HasValue ? $"TOP ({limit.Value}) " : string.Empty;
             var getDataSql = validFrom.HasValue
                 ? $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}' WHERE ValidFrom > @ValidFrom"
                 : $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
@@ -639,7 +639,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         var outputFileExists = false;
         var existingFileMatchesExpected = false;
-        var fileMetadata = await storageClient.GetFileMetadataAsync(baseDirectoryPath.GetFilePath(outputFileName));
+        var fileMetadata = await storageClient.GetFileMetadataAsync(outputDirectoryPath.GetFilePath(outputFileName));
         if (fileMetadata != null)
         {
             outputFileExists = true;
@@ -681,7 +681,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         return exportJobData;
     }
 
-    protected virtual async Task<LastExportedFile> GetLastExportedFile(ExecutionContext context, SqlConnection connection, ExportJobDataBase exportJobDataBase, IStorageClient storageClient, DirectoryPath outputDirectoryPath)
+    protected virtual async Task<LastExportedFile?> GetLastExportedFile(ExecutionContext context, SqlConnection connection, ExportJobDataBase exportJobDataBase, IStorageClient storageClient, DirectoryPath outputDirectoryPath)
     {
         var lastSuccessHistory = await GetLastSuccessfulExportHistory(context, connection, exportJobDataBase.StreamId);
         var lastExportedFile = lastSuccessHistory == null ? null : new LastExportedFile(lastSuccessHistory.FilePath, lastSuccessHistory.DataTime, lastSuccessHistory.TotalRows);
@@ -690,7 +690,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
     protected virtual Task<bool> GetIsInitialExport(ExecutionContext context, ExportJobDataBase exportJobDataBase, IStorageClient storageClient, LastExportedFile lastExportedFile, DirectoryPath outputDirectoryPath)
     {
-        return Task.FromResult(false);
+        return Task.FromResult(lastExportedFile == null);
     }
 
     private Dictionary<string, object> CreateLoggingScope(IStorageJobArgs args)
@@ -806,7 +806,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         ExecutionContext context,
         ExportJobDataBase exportJobDataBase,
         bool isInitialExport,
-        LastExportedFile lastExportedFile,
+        LastExportedFile? lastExportedFile,
         DirectoryPath outputDirectoryPath)
     {
         var configuration = exportJobDataBase.StorageConfiguration;
