@@ -688,7 +688,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         return lastExportedFile;
     }
 
-    protected virtual Task<bool> GetIsInitialExport(ExecutionContext context, ExportJobDataBase exportJobDataBase, IStorageClient storageClient, LastExportedFile lastExportedFile, DirectoryPath outputDirectoryPath)
+    protected virtual Task<bool> GetIsInitialExport(ExecutionContext context, ExportJobDataBase exportJobDataBase, IStorageClient storageClient, LastExportedFile? lastExportedFile, DirectoryPath outputDirectoryPath)
     {
         return Task.FromResult(lastExportedFile == null);
     }

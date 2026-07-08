@@ -60,7 +60,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         return $"{newCount:D20}.{outputFormat.ToLowerInvariant()}";
     }
 
-    protected override async Task<LastExportedFile> GetLastExportedFile(
+    protected override async Task<LastExportedFile?> GetLastExportedFile(
         ExecutionContext context,
         SqlConnection connection,
         ExportJobDataBase exportJobDataBase,
