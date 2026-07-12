@@ -72,7 +72,14 @@ internal class AzureDataLakeDataMigrator : StorageDataMigrator
             foreach (var organizationProfile in organizationProfiles)
             {
                 var executionContext = _applicationContext.CreateExecutionContext(organizationProfile.Id);
+                // IStreamRepository.GetAllStreams() takes no parameters and returns
+                // IEnumerable<StreamModel> synchronously in CluedIn.Core 4.6.0 - the
+                // ExecutionContext-taking async overload doesn't exist until 4.7.
+#if CLUEDIN_V47
                 var streams = await streamRepository.GetAllStreams(executionContext).ToList();
+#else
+                var streams = streamRepository.GetAllStreams().ToList();
+#endif
 
 
                 foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>

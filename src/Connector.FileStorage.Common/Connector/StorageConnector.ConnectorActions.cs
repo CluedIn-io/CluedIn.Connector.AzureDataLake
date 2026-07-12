@@ -64,7 +64,13 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
 
         var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
 
+        // GetStream(Guid) in CluedIn.Core 4.6.0 - the ExecutionContext-taking overload doesn't
+        // exist until 4.7.
+#if CLUEDIN_V47
         var stream = await streamRepository.GetStream(executionContext, streamModel.Id);
+#else
+        var stream = await streamRepository.GetStream(streamModel.Id);
+#endif
         var shouldShowAction = configuration.IsStreamCacheEnabled // only for streams with cache enabled
             && stream.Mode == StreamMode.Sync // only for sync streams
             && (stream.Status == StreamStatus.Started || stream.Status == StreamStatus.Paused); // only for started or paused streams
