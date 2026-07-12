@@ -4,11 +4,22 @@ parameters:
     displayName: Run Integration Tests
     type: boolean
     default: true
-    
+
   - name: pipelineTemplateRef
     displayName: Pipeline Template Ref
     type: string
-    default: refs/heads/refactor
+    default: refs/heads/feature/option-b-multi-version-packaging
+
+  # Manual, one-off check that this repo still builds and tests cleanly against a CluedIn.Core
+  # version outside multiVersionCluedInTargets below (e.g. a new release, to see if retargeting is
+  # needed) - leave blank for a normal run. Its target framework is auto-detected, not supplied
+  # here. See crawler.build.jobs.yml's probeCluedInVersion parameter for what this does: on a
+  # non-blank value, the entire normal multi-version job graph (including publish) is replaced by a
+  # single build+test job for this version, and nothing is published.
+  - name: probeCluedInVersion
+    displayName: Probe CluedIn Version (leave blank for a normal run)
+    type: string
+    default: ''
 
 trigger:
   branches:
@@ -28,9 +39,6 @@ resources:
       endpoint: 'CluedIn-io'
       ref: ${{ parameters.pipelineTemplateRef }}
 
-pool:
-  vmImage: 'ubuntu-22.04'
-
 variables:
   - name: testFolderPath
     value: '$(Build.SourcesDirectory)/test'
@@ -47,24 +55,37 @@ variables:
 # Serialize all runs for this pipeline; change to 'runLatest' if only the latest queued run should proceed.
 lockBehavior: sequential
 
-steps:
-  - task: UseDotNet@2
-    displayName: Install .NET SDK 6.0
-    inputs:
-      version: 6.0.x
-
-  - task: NuGetAuthenticate@0
-    displayName: 'Authenticate with nuget'
-
-  - template: crawler.build.yml@templates
+# jobs:, not pool:/steps: - crawler.build.jobs.yml is a jobs template, the only one with
+# multi-version support (crawler.build.yml has none). See
+# CluedIn.Enricher.RestApi/azure-pipelines.yml for the calling convention.
+jobs:
+  - template: crawler.build.jobs.yml@templates
     parameters:
+      pool:
+        vmImage: 'ubuntu-22.04'
       githubReleaseInMaster: true
       publicReleaseForMaster: true
+      publishCodeCoverage: true
+      useGitVersionDotNetTool: true
+      publishToDevFeed: true
+      probeCluedInVersion: ${{ parameters.probeCluedInVersion }}
       executeIntegrationTests: ${{ parameters.runIntegrationTests }}
       createIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
       createIntegrationEnvironmentScriptArguments: '-Action SetUp'
       deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
       deleteIntegrationEnvironmentScriptArguments: '-Action TearDown'
-      publishCodeCoverage: true
-      useGitVersionDotNetTool: true
-      publishToDevFeed: true
+      # 4.6.0/4.7.1/4.8.0 are net6.0 (the 4.x line, matching each release branch's own
+      # Packages.props _CluedIn value); 5.0.0-* floats to whatever prerelease is newest in the
+      # develop feed, matching this repo's own Packages.props _CluedIn default. targetFramework is
+      # explicit on every entry, including 5.0.0-* (net10.0 is also this repo's own
+      # Directory.Build.props default), so each target's actual framework is visible here without
+      # cross-referencing Directory.Build.props.
+      multiVersionCluedInTargets:
+        - cluedInVersion: '4.6.0'
+          targetFramework: 'net6.0'
+        - cluedInVersion: '4.7.1'
+          targetFramework: 'net6.0'
+        - cluedInVersion: '4.8.0'
+          targetFramework: 'net6.0'
+        - cluedInVersion: '5.0.0-*'
+          targetFramework: 'net10.0'
