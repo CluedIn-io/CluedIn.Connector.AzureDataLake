@@ -8,7 +8,7 @@ parameters:
   - name: pipelineTemplateRef
     displayName: Pipeline Template Ref
     type: string
-    default: refs/heads/feature/option-b-multi-version-packaging
+    default: refs/heads/feature/multi-version-packaging
 
   # Manual, one-off check that this repo still builds and tests cleanly against a CluedIn.Core
   # version outside multiVersionCluedInTargets below (e.g. a new release, to see if retargeting is
