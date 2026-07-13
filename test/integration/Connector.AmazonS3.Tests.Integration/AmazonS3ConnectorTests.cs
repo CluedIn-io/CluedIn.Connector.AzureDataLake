@@ -26,6 +26,11 @@ using Moq;
 using Newtonsoft.Json;
 
 using Xunit;
+// ITestOutputHelper is in the Xunit namespace itself under xunit.v3 (CLUEDIN_V50), but under
+// Xunit.Abstractions for the xunit v2 tooling the 4.6/4.7/4.8 lines use.
+#if !CLUEDIN_V50
+using Xunit.Abstractions;
+#endif
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 
 namespace CluedIn.Connector.AmazonS3.Tests.Integration;

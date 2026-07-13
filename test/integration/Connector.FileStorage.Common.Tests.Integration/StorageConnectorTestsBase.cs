@@ -43,6 +43,13 @@ using Newtonsoft.Json.Linq;
 using Parquet;
 
 using Xunit;
+// ITestOutputHelper lives in the Xunit namespace itself under xunit.v3 (CLUEDIN_V50, this repo's
+// own default), but under the separate Xunit.Abstractions namespace/package for the xunit v2
+// tooling the 4.6/4.7/4.8 lines use - see test/Directory.Build.props for the corresponding
+// package selection.
+#if !CLUEDIN_V50
+using Xunit.Abstractions;
+#endif
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 

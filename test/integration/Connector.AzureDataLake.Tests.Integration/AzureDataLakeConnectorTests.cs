@@ -25,6 +25,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
+// ITestOutputHelper is in the Xunit namespace itself under xunit.v3 (CLUEDIN_V50), but under
+// Xunit.Abstractions for the xunit v2 tooling the 4.6/4.7/4.8 lines use.
+#if !CLUEDIN_V50
+using Xunit.Abstractions;
+#endif
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
 
