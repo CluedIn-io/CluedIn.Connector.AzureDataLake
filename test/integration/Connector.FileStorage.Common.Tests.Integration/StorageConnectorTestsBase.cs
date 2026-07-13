@@ -363,7 +363,15 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     {
         var streamRepository = new Mock<IStreamRepository>();
         var streamModel = CreateStreamModel(organization, providerDefinitionId, streamMode);
+        // GetStream(Guid) in CluedIn.Core 4.6.0 - the ExecutionContext-taking overload doesn't
+        // exist until 4.7. Mirrors the same guard in UpdateStreamScheduleBase.cs: only one shape
+        // is actually declared on IStreamRepository for a given compiled target, so this can't be
+        // set up unconditionally for both.
+#if CLUEDIN_V47
         streamRepository.Setup(x => x.GetStream(It.IsAny<ExecutionContext>(), streamModel.Id)).ReturnsAsync(streamModel);
+#else
+        streamRepository.Setup(x => x.GetStream(streamModel.Id)).ReturnsAsync(streamModel);
+#endif
         container.Register(Component.For<IStreamRepository>().Instance(streamRepository.Object));
         return (streamModel, streamRepository);
     }
