@@ -33,6 +33,10 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
 
     protected ITestOutputHelper TestOutputHelper => _testOutputHelper;
 
+    // IAsyncLifetime.InitializeAsync/DisposeAsync return ValueTask under xunit.v3 (CLUEDIN_V50,
+    // this repo's own default), but Task under the xunit v2 tooling the 4.6/4.7/4.8 lines use -
+    // a breaking interface change between the two, not just a version-gated package choice.
+#if CLUEDIN_V50
     public ValueTask InitializeAsync()
     {
         _configuration = GetConfiguration();
@@ -57,6 +61,32 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
 
         _s3Client?.Dispose();
     }
+#else
+    public Task InitializeAsync()
+    {
+        _configuration = GetConfiguration();
+        var region = RegionEndpoint.GetBySystemName(_configuration.Region);
+        _s3Client = new AmazonS3Client(_configuration.AccessKey, _configuration.SecretKey, region);
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        foreach (var key in _createdKeys)
+        {
+            try
+            {
+                await _s3Client.DeleteObjectAsync(_configuration.BucketName, key);
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
+        }
+
+        _s3Client?.Dispose();
+    }
+#endif
 
     [Fact]
     public async Task WriteSmallFile_UsesSimplePutObject()
