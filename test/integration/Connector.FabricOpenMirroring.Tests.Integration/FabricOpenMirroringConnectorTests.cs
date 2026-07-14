@@ -410,18 +410,24 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Fact]
     public async Task VerifyStoreData_Sync_WithStreamCacheCanUseTableName()
     {
+        // Per-run-unique, not a fixed literal - RootDirectoryPath is derived from the shared
+        // MirroredDatabaseName env var, so a fixed TableName would resolve to the same real ADLS
+        // directory across every concurrent multi-version CI job.
+        var tableName = $"MyTable-{Guid.NewGuid():N}";
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
             AssertParquetResultEscaped,
             configureAuthentication: (dictionary) =>
             {
-                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = "MyTable";
+                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = tableName;
             });
     }
 
     [Fact]
     public async Task Archive_Sync_CanDeleteDirectoryWhenUseTableName()
     {
+        // Per-run-unique, not a fixed literal - see VerifyStoreData_Sync_WithStreamCacheCanUseTableName.
+        var tableName = $"ToBeArchived-{Guid.NewGuid():N}";
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
             async (setupResult, filePath) =>
@@ -432,13 +438,13 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
 
                 var client = GetDataLakeClient(setupResult);
                 var fsClient = client.GetFileSystemClient(GetFileSystemName(setupResult));
-                var directoryClient = fsClient.GetDirectoryClient($"{setupResult.StorageConfiguration.RootDirectoryPath}/ToBeArchived");
+                var directoryClient = fsClient.GetDirectoryClient($"{setupResult.StorageConfiguration.RootDirectoryPath}/{tableName}");
                 var exists = await directoryClient.ExistsAsync();
                 Assert.False(exists);
             },
             configureAuthentication: (dictionary) =>
             {
-                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = "ToBeArchived";
+                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = tableName;
             });
 
     }
