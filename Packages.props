@@ -11,7 +11,6 @@
     <PackageReference Update="CluedIn.Core" Version="$(_CluedIn)" />
     <PackageReference Update="CluedIn.Streams" Version="$(_CluedIn)" />
     <PackageReference Update="CluedIn.ComponentHealth" Version="$(_CluedIn)" />
-    <PackageReference Update="CluedIn.Core" Version="$(_CluedIn)" />
     <PackageReference Update="NCrontab" Version="3.3.3" />
     <PackageReference Update="Parquet.Net" Version="4.23.5" />
     <PackageReference Update="IgnoresAccessChecksToGenerator" Version="0.8.0" PrivateAssets="All" />
