@@ -39,4 +39,9 @@
     <PackageReference Include="NCrontab" />
     <PackageReference Include="Parquet.Net" />
   </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::VersionLessThanOrEquals('$(_CluedIn)', '4.8.0'))">
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
+    <PackageReference Include="System.Runtime.Caching" />
+  </ItemGroup>
+
 </Project>
