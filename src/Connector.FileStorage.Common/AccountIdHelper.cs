@@ -1,0 +1,11 @@
+using System;
+
+namespace CluedIn.Connector.FileStorage.Common;
+
+internal class AccountIdHelper
+{
+    public static string Generate(Guid providerId, Guid providerDefinitionId)
+    {
+        return $"{providerId}_{providerDefinitionId}";
+    }
+}

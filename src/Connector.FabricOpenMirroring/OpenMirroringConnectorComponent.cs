@@ -1,6 +1,6 @@
-using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Connector.FabricOpenMirroring.EventHandlers;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 
 using ComponentHost;
@@ -12,7 +12,7 @@ namespace CluedIn.Connector.FabricOpenMirroring;
 [Component(nameof(OpenMirroringConnectorComponent), "Providers", ComponentType.Service,
     ServerComponents.ProviderWebApi,
     Components.Server, Components.DataStores, Isolation = ComponentIsolation.NotIsolated)]
-public sealed class OpenMirroringConnectorComponent : DataLakeConnectorComponentBase
+public sealed class OpenMirroringConnectorComponent : StorageConnectorComponentBase
 {
     private ExportTargetEventHandler _exportTargetEventHandler;
     public OpenMirroringConnectorComponent(ComponentInfo componentInfo) : base(componentInfo)
@@ -23,7 +23,7 @@ public sealed class OpenMirroringConnectorComponent : DataLakeConnectorComponent
     /// <summary>Starts this instance.</summary>
     public override void Start()
     {
-        DefaultStartInternal<IOpenMirroringConstants, OpenMirroringJobDataFactory, OpenMirroringExportEntitiesJob>();
+        DefaultStartInternal<IOpenMirroringConfigurationConstants, OpenMirroringStorageFactory, OpenMirroringExportEntitiesJob>();
     }
 
     public const string ComponentName = "FabricOpenMirroring";
@@ -32,12 +32,10 @@ public sealed class OpenMirroringConnectorComponent : DataLakeConnectorComponent
 
     protected override string ShortConnectorComponentName => ComponentName;
 
-    private protected override void SubscribeToEvents(IDataLakeConstants constants, IDataLakeJobDataFactory jobDataFactory, IScheduledJobQueue jobQueue)
+    private protected override void SubscribeToEvents(IStorageConfigurationConstants constants, IStorageFactory storageFactory, IScheduledJobQueue jobQueue)
     {
         var logger = Container.Resolve<ILogger<ExportTargetEventHandler>>();
-        var dateTimeProvider = Container.Resolve<IDateTimeOffsetProvider>();
-        var fabricClient = Container.Resolve<OpenMirroringClient>();
-        _exportTargetEventHandler = new(logger, ApplicationContext, constants, jobDataFactory, fabricClient);
-        base.SubscribeToEvents(constants, jobDataFactory, jobQueue);
+        _exportTargetEventHandler = new(logger, ApplicationContext, constants, storageFactory);
+        base.SubscribeToEvents(constants, storageFactory, jobQueue);
     }
 }

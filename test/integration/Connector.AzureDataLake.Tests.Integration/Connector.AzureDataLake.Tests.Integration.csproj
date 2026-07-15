@@ -6,16 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoFixture.Xunit2" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="coverlet.msbuild" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" />
-    <PackageReference Include="Moq" />
-    <PackageReference Include="ParquetSharp" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Connector.AzureDataLake\Connector.AzureDataLake.csproj" />
     <ProjectReference Include="..\Connector.DataLake.Common.Tests.Integration\Connector.DataLake.Common.Tests.Integration.csproj" />
 
