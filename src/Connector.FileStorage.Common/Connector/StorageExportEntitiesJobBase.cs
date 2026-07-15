@@ -69,13 +69,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.InstanceTime);
 
         var streamId = new Guid(args.Message);
-        // GetStream(Guid) in CluedIn.Core 4.6.0 - the ExecutionContext-taking overload doesn't
-        // exist until 4.7.
-#if CLUEDIN_V47
         var streamModel = await _streamRepository.GetStream(context, streamId);
-#else
-        var streamModel = await _streamRepository.GetStream(streamId);
-#endif
 
         if (streamModel.Status != StreamStatus.Started)
         {
@@ -356,13 +350,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return false;
         }
 
-        // GetStream(Guid) in CluedIn.Core 4.6.0 - the ExecutionContext-taking overload doesn't
-        // exist until 4.7.
-#if CLUEDIN_V47
         var model = await _streamRepository.GetStream(context, new Guid(args.Message));
-#else
-        var model = await _streamRepository.GetStream(new Guid(args.Message));
-#endif
 
         if (model?.ConnectorProviderDefinitionId == null)
         {
@@ -593,13 +581,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.Schedule,
             args.InstanceTime);
 
-        // GetStream(Guid) in CluedIn.Core 4.6.0 - the ExecutionContext-taking overload doesn't
-        // exist until 4.7.
-#if CLUEDIN_V47
         var model = await _streamRepository.GetStream(context, new Guid(args.Message));
-#else
-        var model = await _streamRepository.GetStream(new Guid(args.Message));
-#endif
 
         if (model == null)
         {

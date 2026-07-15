@@ -49,13 +49,7 @@ internal abstract class UpdateStreamScheduleBase
 
         var streamRepository = ApplicationContext.Container.Resolve<IStreamRepository>();
         var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
-        // GetStream(Guid) in CluedIn.Core 4.6.0 - the ExecutionContext-taking overload doesn't
-        // exist until 4.7.
-#if CLUEDIN_V47
         var stream = await streamRepository.GetStream(executionContext, streamId);
-#else
-        var stream = await streamRepository.GetStream(streamId);
-#endif
         if (stream == null)
         {
             return;

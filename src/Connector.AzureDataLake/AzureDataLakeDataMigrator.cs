@@ -72,14 +72,7 @@ internal class AzureDataLakeDataMigrator : StorageDataMigrator
             foreach (var organizationProfile in organizationProfiles)
             {
                 var executionContext = _applicationContext.CreateExecutionContext(organizationProfile.Id);
-                // IStreamRepository.GetAllStreams() takes no parameters and returns
-                // IEnumerable<StreamModel> synchronously in CluedIn.Core 4.6.0 - the
-                // ExecutionContext-taking async overload doesn't exist until 4.7.
-#if CLUEDIN_V47
                 var streams = await streamRepository.GetAllStreams(executionContext).ToList();
-#else
-                var streams = streamRepository.GetAllStreams().ToList();
-#endif
 
 
                 foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>
@@ -90,31 +83,18 @@ internal class AzureDataLakeDataMigrator : StorageDataMigrator
                         if (stream.Mode != StreamMode.EventStream)
                         {
 
-                            // GetStreamMappings(Guid) takes no ExecutionContext, and
-                            // SetupConnector's ExecutionContext parameter is last, not first, in
-                            // CluedIn.Core 4.6.0 - both change shape from 4.7 onward.
-#if CLUEDIN_V47
-                            var dataTypes = (await streamRepository.GetStreamMappings(executionContext, stream.Id))
-                                .Select(x => new DataTypeEntry
-                                {
-                                    Key = x.SourceDataType,
-                                    Type = x.SourceObjectType
-                                }).ToList();
-#else
-                            var dataTypes = (await streamRepository.GetStreamMappings(stream.Id))
-                                .Select(x => new DataTypeEntry
-                                {
-                                    Key = x.SourceDataType,
-                                    Type = x.SourceObjectType
-                                }).ToList();
-#endif
-
                             var model = new SetupConnectorModel
                             {
                                 ConnectorProviderDefinitionId = provider.Id,
                                 Mode = StreamMode.EventStream,
                                 ContainerName = stream.ContainerName,
-                                DataTypes = dataTypes,
+                                DataTypes =
+                                    (await streamRepository.GetStreamMappings(executionContext, stream.Id))
+                                    .Select(x => new DataTypeEntry
+                                    {
+                                        Key = x.SourceDataType,
+                                        Type = x.SourceObjectType
+                                    }).ToList(),
                                 ExistingContainerAction = ExistingContainerActionEnum.Archive,
                                 ExportIncomingEdges = stream.ExportIncomingEdges,
                                 ExportOutgoingEdges = stream.ExportOutgoingEdges,
@@ -123,11 +103,7 @@ internal class AzureDataLakeDataMigrator : StorageDataMigrator
 
                             _logger.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{{StreamName}}' ({{StreamId}})", stream.Name, stream.Id);
 
-#if CLUEDIN_V47
                             await streamRepository.SetupConnector(executionContext, stream.Id, model);
-#else
-                            await streamRepository.SetupConnector(stream.Id, model, executionContext);
-#endif
                         }
                     }
                 }

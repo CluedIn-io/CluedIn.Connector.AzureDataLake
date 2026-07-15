@@ -46,23 +46,13 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
 
         var streamRepository = ApplicationContext.Container.Resolve<IStreamRepository>();
         var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
-        // GetOrganizationStreamsCount/GetOrganizationStreams take the organization Guid directly
-        // in CluedIn.Core 4.6.0 - the ExecutionContext-taking overloads don't exist until 4.7.
-#if CLUEDIN_V47
         var streamsCount = await streamRepository.GetOrganizationStreamsCount(executionContext, filterConnectorProviderDefinitionId: providerDefinitionId);
-#else
-        var streamsCount = await streamRepository.GetOrganizationStreamsCount(organizationId, filterConnectorProviderDefinitionId: providerDefinitionId);
-#endif
         var streamsPerPage = StreamsPerPage;
         var totalPages = (streamsCount + streamsPerPage - 1) / streamsPerPage;
 
         for (var i = 0; i < totalPages; ++i)
         {
-#if CLUEDIN_V47
             var streams = await streamRepository.GetOrganizationStreams(executionContext, i, streamsPerPage, filterConnectorProviderDefinitionId: providerDefinitionId);
-#else
-            var streams = await streamRepository.GetOrganizationStreams(organizationId, i, streamsPerPage, filterConnectorProviderDefinitionId: providerDefinitionId);
-#endif
             foreach (var stream in streams)
             {
                 await UpdateStreamSchedule(executionContext, stream);

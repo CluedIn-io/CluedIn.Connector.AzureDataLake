@@ -26,14 +26,7 @@ internal class StreamsHelper
             foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>
                              x.ProviderId == configurationConstants.ProviderId))
             {
-                // IStreamRepository.GetAllStreams() takes no parameters and returns
-                // IEnumerable<StreamModel> synchronously in CluedIn.Core 4.6.0 - the
-                // ExecutionContext-taking async overload doesn't exist until 4.7.
-#if CLUEDIN_V47
                 var streams = await streamRepository.GetAllStreams(executionContext);
-#else
-                var streams = streamRepository.GetAllStreams();
-#endif
                 foreach (var stream in streams.Where(s => s.ConnectorProviderDefinitionId == provider.Id))
                 {
                     await streamTask(executionContext, provider, stream);
