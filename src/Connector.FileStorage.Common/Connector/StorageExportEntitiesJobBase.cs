@@ -81,7 +81,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.InstanceTime);
 
         var streamId = new Guid(args.Message);
-        var streamModel = await _streamRepository.GetStream(context, streamId);
+        var streamModel = await _streamRepository.GetStreamEx(context, streamId);
 
         if (streamModel.Status != StreamStatus.Started)
         {
@@ -409,7 +409,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return false;
         }
 
-        var model = await _streamRepository.GetStream(context, new Guid(args.Message));
+        var model = await _streamRepository.GetStreamEx(context, new Guid(args.Message));
 
         if (model?.ConnectorProviderDefinitionId == null)
         {
@@ -716,7 +716,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.Schedule,
             args.InstanceTime);
 
-        var model = await _streamRepository.GetStream(context, new Guid(args.Message));
+        var model = await _streamRepository.GetStreamEx(context, new Guid(args.Message));
 
         if (model == null)
         {

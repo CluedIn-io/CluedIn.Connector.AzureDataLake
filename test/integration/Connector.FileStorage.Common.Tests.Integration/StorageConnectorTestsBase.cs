@@ -43,7 +43,6 @@ using Newtonsoft.Json.Linq;
 using Parquet;
 
 using Xunit;
-using Xunit.Abstractions;
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
@@ -364,10 +363,12 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     {
         var streamRepository = new Mock<IStreamRepository>();
         var streamModel = CreateStreamModel(organization, providerDefinitionId, streamMode);
-        streamRepository.Setup(x => x.GetStream(It.IsAny<ExecutionContext>(), streamModel.Id)).ReturnsAsync(streamModel);
+        SetupGetStream(streamRepository, streamModel);
         container.Register(Component.For<IStreamRepository>().Instance(streamRepository.Object));
         return (streamModel, streamRepository);
     }
+
+    private static partial void SetupGetStream(Mock<IStreamRepository> streamRepository, StreamModel streamModel);
 
     private ExecutionContext SetupExecutionContext(ApplicationContext applicationContext, Organization organization)
     {

@@ -1,6 +1,18 @@
 <Project>
+  <PropertyGroup Label="Dependency Versions">
+    <_CluedIn Condition="'$(_CluedIn)' == ''">5.0.0-*</_CluedIn>
+
+    <!-- Gates conditional compilation (#if CLUEDIN_Vxx) for places where a CluedIn.Core API call
+         differs by line. -->
+    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.6.0'))">$(DefineConstants);CLUEDIN_V46</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.7.0'))">$(DefineConstants);CLUEDIN_V47</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.8.0'))">$(DefineConstants);CLUEDIN_V48</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '5.0.0'))">$(DefineConstants);CLUEDIN_V50</DefineConstants>
+  </PropertyGroup>
+
   <PropertyGroup Label="Compilation Metadata">
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == '' AND $([MSBuild]::VersionLessThan('$(_CluedIn)', '5.0.0'))">net6.0</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == '' AND $([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '5.0.0'))">net10.0</TargetFramework>
     <LangVersion>13.0</LangVersion>
   </PropertyGroup>
 
@@ -30,7 +42,7 @@
   </ItemGroup>
 
   <!--
-  We need this to stop build from producing .deps.json files that contains "ReferencedProject.Reference". 
+  We need this to stop build from producing .deps.json files that contains "ReferencedProject.Reference".
   It will cause exceptions in CluedIn Server, saying that the item has already been added (ReferencedProject.dll)
   -->
   <PropertyGroup Label="FixBuildDefault">
