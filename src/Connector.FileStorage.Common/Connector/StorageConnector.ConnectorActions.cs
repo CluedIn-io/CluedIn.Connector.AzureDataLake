@@ -1,0 +1,425 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+
+using CluedIn.Core;
+using CluedIn.Core.Connectors.ExtendedOperations;
+using CluedIn.Core.Events;
+using CluedIn.Core.Jobs;
+using CluedIn.Core.Streams;
+using CluedIn.Core.Streams.Models;
+
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
+
+using Newtonsoft.Json;
+
+using ExecutionContext = CluedIn.Core.ExecutionContext;
+
+namespace CluedIn.Connector.FileStorage.Common.Connector;
+
+public abstract partial class StorageConnectorBase : ICustomActionConnector
+{
+    private const string RunExportActionName = "RunExport";
+    private const string GetStreamCacheRowCountActionName = "GetStreamCacheRowCount";
+    private const string GetEntityActionName = "GetEntity";
+    private const string GetExportHistoryActionName = "GetExportHistory";
+    private const string GetBufferStatusActionName = "GetBufferStatus";
+    private const string GetConnectorVersionActionName = "GetConnectorVersion";
+    private const int MaximumGetBufferTimeOutInMilliseconds = 10_000;
+    private IDisposable _bufferStatusSubscription;
+
+    private void SetupBufferStatusSubscription()
+    {
+        _bufferStatusSubscription = _applicationContext.System.Events.SubscribeAsync<BufferStatusRequestedEvent>(ProcessBufferStatusRequestedEventAsync);
+    }
+
+    private async Task ProcessBufferStatusRequestedEventAsync(BufferStatusRequestedEvent eventData)
+    {
+        await using var executionContext = _applicationContext.CreateExecutionContext(eventData.OrganizationId);
+        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, eventData.ProviderDefinitionId);
+
+        if (_buffer.TryGet(new(eventData.OrganizationId, configuration), out var buffer))
+        {
+            await _applicationContext.System.Events.PublishAsync(new BufferStatusRetrievedEvent
+            {
+                OrganizationId = eventData.OrganizationId,
+                StreamId = eventData.StreamId,
+                ContainerName = eventData.ContainerName,
+                ProviderDefinitionId = eventData.ProviderDefinitionId,
+                Status = await buffer.GetStatus(),
+            });
+        }
+    }
+
+    public virtual async Task<GetConnectorActionsResult> GetActions(
+        ExecutionContext executionContext,
+        IReadOnlyStreamModel streamModel)
+    {
+        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
+        var action = new ConnectorAction(RunExportActionName, "Run Export", "Run export now", [], []);
+
+        var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
+
+        var stream = await streamRepository.GetStreamEx(executionContext, streamModel.Id);
+        var shouldShowAction = configuration.IsStreamCacheEnabled // only for streams with cache enabled
+            && stream.Mode == StreamMode.Sync // only for sync streams
+            && (stream.Status == StreamStatus.Started || stream.Status == StreamStatus.Paused); // only for started or paused streams
+        return new GetConnectorActionsResult(streamModel.Id, shouldShowAction ? [action] : []);
+    }
+
+    public virtual async Task<ExecuteConnectorActionResult> ExecuteAction(
+        ExecutionContext executionContext,
+        IReadOnlyStreamModel streamModel,
+        ExecuteConnectorActionRequest request)
+    {
+        try
+        {
+            if (request.ActionName == RunExportActionName)
+            {
+                return await ExportNow(executionContext, streamModel, request);
+            }
+
+            if (request.ActionName == GetStreamCacheRowCountActionName)
+            {
+                return await GetStreamCacheRowCount(executionContext, streamModel, request);
+            }
+
+            if (request.ActionName == GetEntityActionName)
+            {
+                return await GetEntity(executionContext, streamModel, request);
+            }
+
+            if (request.ActionName == GetExportHistoryActionName)
+            {
+                return await GetExportHistory(executionContext, streamModel, request);
+            }
+
+            if (request.ActionName == GetBufferStatusActionName)
+            {
+                return await GetBufferStatus(executionContext, streamModel, request);
+            }
+
+            if (request.ActionName == GetConnectorVersionActionName)
+            {
+                return GetConnectorVersion(executionContext, streamModel, request);
+            }
+
+            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+            var notFoundResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "Not Found", "Connector", string.Empty);
+            return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, false, false, now, null, [notFoundResult]);
+        }
+        catch (Exception ex)
+        {
+            return GetFailedResult(streamModel, request, ex);
+        }
+    }
+
+    private ExecuteConnectorActionResult GetConnectorVersion(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, ExecuteConnectorActionRequest request)
+    {
+        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        return new ExecuteConnectorActionResult(
+            streamModel.Id,
+            request.ActionName,
+            IsSuccessful: true,
+            IsCompleted: true,
+            StartedAt: start,
+            CompletedAt: start,
+            [
+                new ExtendedOperationResultEntry(
+                    "ConnectorVersion",
+                    ExtendedOperationResultEntryType.String,
+                    GetType().Assembly.FullName,
+                    "Connector",
+                    string.Empty),
+                new ExtendedOperationResultEntry(
+                    "CommonVersion",
+                    ExtendedOperationResultEntryType.String,
+                    typeof(StorageConnectorBase).Assembly.FullName,
+                    "Connector",
+                    string.Empty)
+            ]);
+    }
+
+    private async Task<ExecuteConnectorActionResult> GetBufferStatus(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, ExecuteConnectorActionRequest request)
+    {
+        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var systemEvents = executionContext.ApplicationContext.System.Events;
+        var bufferStatus = new ConcurrentDictionary<string, BufferStatus>();
+        var timeOutInMilliseconds =
+            request?.Parameters?.TryGetValue("TimeOutInMilliseconds", out var timeOutObj) == true &&
+            int.TryParse(timeOutObj?.ToString(), out var parsedTimeOut) && parsedTimeOut > 0
+                ? Math.Min(parsedTimeOut, MaximumGetBufferTimeOutInMilliseconds)
+                : MaximumGetBufferTimeOutInMilliseconds;
+
+        await GetPeersBufferStatus();
+
+        async Task GetPeersBufferStatus()
+        {
+            using var subscription = systemEvents.SubscribeAsync<BufferStatusRetrievedEvent>(retrievedEvent =>
+            {
+                if (retrievedEvent.OrganizationId == executionContext.Organization.Id
+                && retrievedEvent.StreamId == streamModel.Id)
+                {
+                    _ = bufferStatus.AddOrUpdate(retrievedEvent.OriginHost.MachineName, retrievedEvent.Status, (host, oldValue) =>
+                    {
+                        return retrievedEvent.Status;
+                    });
+                }
+
+                return Task.CompletedTask;
+            });
+
+            await systemEvents.PublishAsync(new BufferStatusRequestedEvent
+            {
+                OrganizationId = executionContext.Organization.Id,
+                StreamId = streamModel.Id,
+                ContainerName = streamModel.ContainerName,
+                ProviderDefinitionId = streamModel.ConnectorProviderDefinitionId.Value,
+            });
+
+            await Task.Delay(timeOutInMilliseconds);
+        }
+
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var resultEntries = bufferStatus.Select(kvp => new ExtendedOperationResultEntry(
+            kvp.Key,
+            ExtendedOperationResultEntryType.Json,
+            JsonConvert.SerializeObject(kvp.Value),
+            "Connector",
+            string.Empty))
+            .ToList();
+        return new ExecuteConnectorActionResult(
+            streamModel.Id,
+            request.ActionName,
+            IsSuccessful: true, IsCompleted: true,
+            StartedAt: start,
+            CompletedAt: now, resultEntries);
+    }
+
+    private ExecuteConnectorActionResult GetFailedResult(
+        IReadOnlyStreamModel streamModel,
+        ExecuteConnectorActionRequest request,
+        Exception ex)
+    {
+        _logger.LogError(ex, "Failed to execute action {ActionName} for stream {StreamId}", request.ActionName, streamModel.Id);
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var failedResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, $"Failed: {ex.Message}{Environment.NewLine}{ex.StackTrace}", "Connector", string.Empty);
+        return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: false, IsCompleted: true, now, now, [failedResult]);
+    }
+
+    private async Task<ExecuteConnectorActionResult> ExportNow(
+        ExecutionContext executionContext,
+        IReadOnlyStreamModel streamModel,
+        ExecuteConnectorActionRequest request)
+    {
+        var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var jobArgs = new JobArgs()
+        {
+            OrganizationId = executionContext.Organization.Id.ToString(),
+            Schedule = CronSchedules.NeverCron,
+            Message = streamModel.Id.ToString(),
+        };
+
+        var exportJob = executionContext.ApplicationContext.Container.Resolve(ExportJobType) as StorageExportEntitiesJobBase;
+        if (exportJob == null)
+        {
+            var failedResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "Failed to resolve export job", "Connector", string.Empty);
+            return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: false, IsCompleted: true, startedAt, startedAt, [failedResult]);
+        }
+
+        await exportJob.DoRunAsync(executionContext, new StorageJobArgs(jobArgs, isTriggeredFromJobServer: true, startedAt));
+
+        var successResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "Success", "Connector", string.Empty);
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: true, IsCompleted: true, startedAt, now, [successResult]);
+    }
+
+    private async Task<ExecuteConnectorActionResult> GetStreamCacheRowCount(
+        ExecutionContext executionContext,
+        IReadOnlyStreamModel streamModel,
+        ExecuteConnectorActionRequest request)
+    {
+        var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
+        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
+        await connection.OpenAsync();
+        var streamId = streamModel.Id;
+        var tableName = CacheTableHelper.GetCacheTableName(streamId);
+        var (asOfTime, isCurrentTime) = GetDataTime(request);
+
+        var getDataSql = $"SELECT COUNT(*) FROM [{tableName}] FOR SYSTEM_TIME AS OF @AsOfTime";
+        var command = new SqlCommand(getDataSql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.Add(new SqlParameter("@AsOfTime", asOfTime));
+        var result = await command.ExecuteScalarAsync();
+        var total = Convert.ToInt32(result);
+
+        var successResult = new ExtendedOperationResultEntry(
+            "Total",
+            ExtendedOperationResultEntryType.Json,
+            JsonConvert.SerializeObject(new
+            {
+                Total = total,
+                AsOfTime = asOfTime,
+                IsCurrentTime = isCurrentTime,
+                TableName = tableName,
+                StreamId = streamId,
+                ProviderDefinitionId = providerDefinitionId,
+            }),
+            "Connector",
+            string.Empty);
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: true, IsCompleted: true, startedAt, now, [successResult]);
+    }
+
+    private (DateTimeOffset DataTime, bool IsCurrentTime) GetDataTime(ExecuteConnectorActionRequest request)
+    {
+        if (request.Parameters?.TryGetValue("DataTime", out var asOfTimeObj) == true)
+        {
+            if (asOfTimeObj is DateTimeOffset dateTimeOffset)
+            {
+                return (dateTimeOffset, false);
+            }
+
+            if (asOfTimeObj is string asOfTimeString
+                && DateTimeOffset.TryParse(asOfTimeString, out var parsedAsOfTime))
+            {
+                return (parsedAsOfTime, false);
+            }
+        }
+
+        return (_dateTimeOffsetProvider.GetCurrentUtcTime(), true);
+    }
+
+    private async Task<ExecuteConnectorActionResult> GetEntity(
+        ExecutionContext executionContext,
+        IReadOnlyStreamModel streamModel,
+        ExecuteConnectorActionRequest request)
+    {
+        var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
+        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
+        await connection.OpenAsync();
+        var streamId = streamModel.Id;
+        var tableName = CacheTableHelper.GetCacheTableName(streamId);
+        var (asOfTime, isCurrentTime) = GetDataTime(request);
+
+        if (request.Parameters?.TryGetValue("EntityId", out var entityIdObj) != true
+            || entityIdObj == null
+            || !Guid.TryParse(entityIdObj.ToString(), out var entityId))
+        {
+            var failedResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "EntityId parameter is required and must be a valid GUID", "Connector", string.Empty);
+            return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: false, IsCompleted: true, startedAt, _dateTimeOffsetProvider.GetCurrentUtcTime(), [failedResult]);
+        }
+
+        var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF @AsOfTime WHERE {StorageConfigurationConstants.IdKey} = @{StorageConfigurationConstants.IdKey}";
+        var command = new SqlCommand(getDataSql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        command.Parameters.Add(new SqlParameter("@AsOfTime", asOfTime));
+        command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.IdKey}", entityId));
+        await using var reader = await command.ExecuteReaderAsync();
+
+        var entityData = await reader.ReadAsync()
+            ? Enumerable.Range(0, reader.FieldCount).ToDictionary(reader.GetName, reader.GetValue)
+            : [];
+
+        var successResult = new ExtendedOperationResultEntry(
+            "Entity",
+            ExtendedOperationResultEntryType.Json,
+            JsonConvert.SerializeObject(new
+            {
+                Entity = entityData,
+                AsOfTime = asOfTime,
+                IsCurrentTime = isCurrentTime,
+                TableName = tableName,
+                StreamId = streamId,
+                ProviderDefinitionId = providerDefinitionId,
+            }),
+            "Connector",
+            string.Empty);
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: true, IsCompleted: true, startedAt, now, [successResult]);
+    }
+
+    private async Task<ExecuteConnectorActionResult> GetExportHistory(
+        ExecutionContext executionContext,
+        IReadOnlyStreamModel streamModel,
+        ExecuteConnectorActionRequest request)
+    {
+        var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
+        var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
+        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
+        await connection.OpenAsync();
+        var streamId = streamModel.Id;
+        var tableName = CacheTableHelper.GetExportHistoryTableName(streamId) + "_ExportHistory";
+        var asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
+
+        var getDataSql = $"SELECT TOP (1000) * FROM [{tableName}] ORDER BY StartTime DESC";
+        var command = new SqlCommand(getDataSql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+        await using var reader = await command.ExecuteReaderAsync();
+        var result = new List<Dictionary<string, object>>();
+        while (await reader.ReadAsync())
+        {
+            var entityData = Enumerable.Range(0, reader.FieldCount)
+                .ToDictionary(reader.GetName, reader.GetValue);
+            result.Add(entityData);
+        }
+        var successResult = new ExtendedOperationResultEntry(
+        "ExportHistory",
+        ExtendedOperationResultEntryType.Json,
+        JsonConvert.SerializeObject(new
+        {
+            History = result,
+            AsOfTime = asOfTime,
+            TableName = tableName,
+            StreamId = streamId,
+            ProviderDefinitionId = providerDefinitionId,
+        }),
+        "Connector",
+        string.Empty);
+        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: true, IsCompleted: true, startedAt, now, [successResult]);
+    }
+
+    protected abstract Type ExportJobType { get; }
+}
+
+public class BufferStatusRetrievedEvent : RemoteEvent
+{
+    public Guid OrganizationId { get; set; }
+
+    public Guid StreamId { get; set; }
+
+    public string ContainerName { get; set; }
+
+    public Guid ProviderDefinitionId { get; set; }
+
+    public BufferStatus Status { get; set; }
+
+
+}
+
+public class BufferStatusRequestedEvent : RemoteEvent
+{
+    public Guid OrganizationId { get; set; }
+
+    public Guid StreamId { get; set; }
+
+    public string ContainerName { get; set; }
+
+    public Guid ProviderDefinitionId { get; set; }
+}
