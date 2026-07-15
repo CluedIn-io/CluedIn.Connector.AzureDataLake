@@ -12,7 +12,6 @@ using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Connector.FileStorage.Common.Tests.Integration;
 using Newtonsoft.Json;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace CluedIn.Connector.DataLake.Common.Tests.Integration;
 
