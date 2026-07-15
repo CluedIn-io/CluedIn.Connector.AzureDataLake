@@ -362,7 +362,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;
-        var tableName = CacheTableHelper.GetExportHistoryTableName(streamId);
+        var tableName = CacheTableHelper.GetExportHistoryTableName(streamId) + "_ExportHistory";
         var asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
 
         var getDataSql = $"SELECT TOP (1000) * FROM [{tableName}] ORDER BY StartTime DESC";

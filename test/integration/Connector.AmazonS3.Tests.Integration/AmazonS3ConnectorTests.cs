@@ -346,7 +346,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             },
             configureAuthentication: (values) =>
@@ -404,7 +404,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             },
             configureAuthentication: (values) =>

@@ -362,14 +362,14 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
                 };
-                await executeExportArg.ExportJob.DoRunAsync(
+                _ = await executeExportArg.ExportJob.DoRunInternalAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
                 var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
+                var secondResult = await executeExportArg.ExportJob.DoRunInternalAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
@@ -377,6 +377,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
                 Assert.Equal(firstDataTime, secondDataTime);
+                Assert.Equal(StorageExportEntitiesJobBase.ExportedBeforeReason, secondResult.Reason);
                 return secondPath;
             });
     }
@@ -431,7 +432,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             });
     }
@@ -485,7 +486,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             });
     }
