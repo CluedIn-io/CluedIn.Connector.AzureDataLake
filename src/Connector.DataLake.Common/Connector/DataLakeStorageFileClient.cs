@@ -43,6 +43,11 @@ internal class DataLakeStorageFileClient : IStorageFileClient
         return new FileStorageBufferedWriteStream(outputStream, BufferSize);
     }
 
+    internal async Task<Stream> OpenReadAsync()
+    {
+        return await _fileClient.OpenReadAsync();
+    }
+
     public async Task RenameAsync(FilePath targetPath)
     {
         await _fileClient.RenameAsync(targetPath.FullPath);

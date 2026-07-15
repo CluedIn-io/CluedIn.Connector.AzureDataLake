@@ -10,8 +10,6 @@ using Azure.Storage.Files.DataLake;
 using Castle.Windsor;
 
 using CluedIn.Connector.AzureDataLake.Connector;
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
@@ -60,7 +58,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         }
     }
 
-    private static void DeleteFileSystemIfExists(AzureDataLakeConnectorConfiguration jobData)
+    private void DeleteFileSystemIfExists(AzureDataLakeConnectorConfiguration jobData)
     {
         var client = GetDataLakeClient(jobData);
         client.GetFileSystemClient(jobData.FileSystemName).DeleteIfExists();
@@ -252,6 +250,108 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     public async Task VerifyStoreData_EventStream()
     {
         var configuration = CreateConfigurationWithoutStreamCache();
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+
+        var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
+        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        await AssertImmediateOutputResult(
+            setupResult,
+            assertMethod: async (setupResult, exportedFilePath) =>
+            {
+                await AssertJsonResult(setupResult, exportedFilePath, StreamMode.EventStream, VersionChangeType.Added);
+            });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_EventStream_CanUseAccountKey()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+
+        var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
+        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        await AssertImmediateOutputResult(
+            setupResult,
+            assertMethod: async (setupResult, exportedFilePath) =>
+            {
+                await AssertJsonResult(setupResult, exportedFilePath, StreamMode.EventStream, VersionChangeType.Added);
+            });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_EventStream_CanUseServicePrincipalAndWithoutKeyVault()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        UpdateConfigurationWithServicePrincipalAuthentication(configuration);
+        ;
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+
+        var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
+        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        await AssertImmediateOutputResult(
+            setupResult,
+            assertMethod: async (setupResult, exportedFilePath) =>
+            {
+                await AssertJsonResult(setupResult, exportedFilePath, StreamMode.EventStream, VersionChangeType.Added);
+            });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_EventStream_CanUseServicePrincipalAndWithKeyVault()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        UpdateConfigurationWithServicePrincipalAuthentication(configuration);
+        UpdateConfigurationWithKeyVault(configuration);
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+
+        var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
+        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        await AssertImmediateOutputResult(
+            setupResult,
+            assertMethod: async (setupResult, exportedFilePath) =>
+            {
+                await AssertJsonResult(setupResult, exportedFilePath, StreamMode.EventStream, VersionChangeType.Added);
+            });
+    }
+
+    [Fact(Skip = "Workload identity tests are currently skipped until we setup federation using oidc https://learn.microsoft.com/en-us/graph/api/federatedidentitycredential-post?view=graph-rest-1.0&tabs=http")]
+    public async Task VerifyStoreData_EventStream_CanUseWorkloadIdentityAndWithoutKeyVault()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        UpdateConfigurationWithWorkloadIdentityConfiguration(configuration);
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+        var connector = setupResult.ConnectorMock.Object;
+
+        var data = CreateBaseConnectorEntityData(StreamMode.EventStream, VersionChangeType.Added);
+        await connector.StoreData(setupResult.Context, setupResult.StreamModel, data);
+        await AssertImmediateOutputResult(
+            setupResult,
+            assertMethod: async (setupResult, exportedFilePath) =>
+            {
+                await AssertJsonResult(setupResult, exportedFilePath, StreamMode.EventStream, VersionChangeType.Added);
+            });
+    }
+
+    [Fact(Skip = "Workload identity tests are currently skipped until we setup federation using oidc https://learn.microsoft.com/en-us/graph/api/federatedidentitycredential-post?view=graph-rest-1.0&tabs=http")]
+    public async Task VerifyStoreData_EventStream_CanUseWorkloadIdentityAndWithKeyVault()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        UpdateConfigurationWithWorkloadIdentityConfiguration(configuration);
+        UpdateConfigurationWithKeyVault(configuration);
         var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
@@ -561,7 +661,64 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             });
     }
 
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheUsingSasToken()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultUnescaped,
+            configureAuthentication: (values) =>
+            {
+                var sasToken = SasTokenHelper.CreateSasToken(
+                    values[nameof(AzureDataLakeConfigurationConstants.AccountName)] as string,
+                    values[nameof(AzureDataLakeConfigurationConstants.AccountKey)] as string);
+                values[nameof(AzureDataLakeConfigurationConstants.AccountKey)] = sasToken;
+            });
+    }
 
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheUsingServicePrincipalWithoutKeyVault()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultUnescaped,
+            configureAuthentication: UpdateConfigurationWithServicePrincipalAuthentication);
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheUsingServicePrincipalWithKeyVault()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultUnescaped,
+            configureAuthentication: (values) =>
+            {
+                UpdateConfigurationWithServicePrincipalAuthentication(values);
+                UpdateConfigurationWithKeyVault(values);
+            });
+    }
+
+    [Fact(Skip = "Workload identity tests are currently skipped until we setup federation using oidc https://learn.microsoft.com/en-us/graph/api/federatedidentitycredential-post?view=graph-rest-1.0&tabs=http")]
+    public async Task VerifyStoreData_Sync_WithStreamCacheUsingWorkloadIdentityWithoutKeyVault()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultUnescaped,
+            configureAuthentication: UpdateConfigurationWithWorkloadIdentityConfiguration);
+    }
+
+    [Fact(Skip = "Workload identity tests are currently skipped until we setup federation using oidc https://learn.microsoft.com/en-us/graph/api/federatedidentitycredential-post?view=graph-rest-1.0&tabs=http")]
+    public async Task VerifyStoreData_Sync_WithStreamCacheUsingWorkloadIdentityWithKeyVault()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultUnescaped,
+            configureAuthentication: (values) =>
+            {
+                UpdateConfigurationWithWorkloadIdentityConfiguration(values);
+                UpdateConfigurationWithKeyVault(values);
+            });
+    }
 
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
@@ -580,11 +737,15 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         return GetDataLakeClient(jobData);
     }
 
-    private static DataLakeServiceClient GetDataLakeClient(AzureDataLakeConnectorConfiguration jobData)
+    private DataLakeServiceClient GetDataLakeClient(AzureDataLakeConnectorConfiguration jobData)
     {
+        var configuration = CreateConfigurationWithoutStreamCache();
+
         return new DataLakeServiceClient(
             new Uri($"https://{jobData.AccountName}.dfs.core.windows.net"),
-        new StorageSharedKeyCredential(jobData.AccountName, jobData.AccountKey));
+        new StorageSharedKeyCredential(
+            configuration[nameof(AzureDataLakeConfigurationConstants.AccountName)] as string,
+            configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] as string));
     }
 
     private protected override StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration)
@@ -615,6 +776,33 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             { nameof(AzureDataLakeConfigurationConstants.DirectoryName), directoryName },
         };
     }
+    private static void UpdateConfigurationWithServicePrincipalAuthentication(Dictionary<string, object> configuration)
+    {
+        configuration[nameof(AzureDataLakeConfigurationConstants.AuthenticationMethod)] = AuthenticationMethods.ServicePrincipal.ToString();
+        configuration[nameof(AzureDataLakeConfigurationConstants.TenantId)] = Environment.GetEnvironmentVariable("ADL2_TENANTID");
+        configuration[nameof(AzureDataLakeConfigurationConstants.ClientId)] = Environment.GetEnvironmentVariable("ADL2_CLIENTID");
+        configuration[nameof(AzureDataLakeConfigurationConstants.ClientSecret)] = Environment.GetEnvironmentVariable("ADL2_CLIENTSECRET");
+    }
+
+    private static void UpdateConfigurationWithWorkloadIdentityConfiguration(Dictionary<string, object> configuration)
+    {
+        configuration[nameof(AzureDataLakeConfigurationConstants.AuthenticationMethod)] = AuthenticationMethods.WorkloadIdentity.ToString();
+    }
+
+    private static void UpdateConfigurationWithKeyVault(Dictionary<string, object> configuration)
+    {
+        configuration[nameof(AzureDataLakeConfigurationConstants.UseKeyVault)] = true;
+        configuration[nameof(AzureDataLakeConfigurationConstants.KeyVaultUri)] = Environment.GetEnvironmentVariable("ADL2_KEYVAULTURI");
+        configuration[nameof(AzureDataLakeConfigurationConstants.KeyVaultSecretName)] = Environment.GetEnvironmentVariable("ADL2_KEYVAULTSECRETNAME");
+    }
+
+    protected override Mock<IAzureDataLakeConfigurationConstants> CreateConstantsMock()
+    {
+        var constants = base.CreateConstantsMock();
+        constants.Setup(x => x.WorkloadIdentityAuthenticationMethodEnabledKeyName).Returns("abc");
+        constants.Setup(x => x.WorkloadIdentityAuthenticationMethodEnabledDefaultValue).Returns(false);
+        return constants;
+    }
 
     protected override Mock<AzureDataLakeConnector> GetConnectorMock(
         ApplicationContext applicationContext,
@@ -634,11 +822,17 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     protected override Mock<AzureDataLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<IAzureDataLakeConfigurationConstants> constantsMock)
     {
-        var dataFactoryMock = new Mock<AzureDataLakeStorageFactory>();
+        var dataFactoryMock = new Mock<AzureDataLakeStorageFactory>(constantsMock.Object);
         dataFactoryMock.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
-            .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new DataLakeStorageClient(NullLogger<DataLakeStorageClient>.Instance, data as IDataLakeStorageConfiguration)));
+            .Returns<ExecutionContext, IStorageConfiguration>(
+                (_, data) => Task.FromResult<IStorageClient>(
+                    new AzureDataLakeStorageClient(
+                        NullLogger<AzureDataLakeStorageClient>.Instance,
+                        data as AzureDataLakeConnectorConfiguration,
+                        constantsMock.Object)));
         return dataFactoryMock;
     }
 }

@@ -518,7 +518,8 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     protected override Mock<AmazonS3StorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<IAmazonS3ConfigurationConstants> constantsMock)
     {
         var storageFactory = new Mock<AmazonS3StorageFactory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))

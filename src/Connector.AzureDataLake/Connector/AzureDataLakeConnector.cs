@@ -17,6 +17,7 @@ public class AzureDataLakeConnector : StorageConnectorBase
     private readonly ILogger<AzureDataLakeConnector> _logger;
     internal static readonly Regex AccountNameRegex = new("^[a-z0-9]+$", RegexOptions.Compiled);
     internal static readonly Regex FileSystemNameRegex = new("^(?=.{3,63}$)[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.Compiled);
+    internal const string InvalidAuthenticationMethodErrorMessage = "Invalid authentication method";
     internal const string InvalidAccountNameErrorMessage = "Invalid storage account name. It can only contain numbers and lowercase characters.";
     internal const string InvalidAccountKeyErrorMessage = "Invalid account key. It must be a valid base64 string.";
     internal const string InvalidCredentialsErrorMessage = "Invalid storage account credentials.";
@@ -48,7 +49,12 @@ public class AzureDataLakeConnector : StorageConnectorBase
             return CreateFailedConnectionVerification(InvalidAccountNameErrorMessage);
         }
 
-        if (!IsValidAccountKey())
+        if (!Enum.TryParse<AuthenticationMethods>(casted.AuthenticationMethod, out var authMethod))
+        {
+            return CreateFailedConnectionVerification(InvalidAuthenticationMethodErrorMessage);
+        }
+
+        if (authMethod == AuthenticationMethods.SharedKey && !casted.IsValidAccountKey())
         {
             return CreateFailedConnectionVerification(InvalidAccountKeyErrorMessage);
         }
@@ -81,11 +87,6 @@ public class AzureDataLakeConnector : StorageConnectorBase
             return !string.IsNullOrWhiteSpace(casted.AccountName) && AccountNameRegex.IsMatch(casted.AccountName);
         }
 
-        bool IsValidAccountKey()
-        {
-            return !string.IsNullOrWhiteSpace(casted.AccountKey) && IsBase64String(casted.AccountKey);
-        }
-
         bool IsValidFileSystemName()
         {
             return !string.IsNullOrWhiteSpace(casted.FileSystemName) && FileSystemNameRegex.IsMatch(casted.FileSystemName);
@@ -101,11 +102,5 @@ public class AzureDataLakeConnector : StorageConnectorBase
             var segments = casted.DirectoryName.Split('/');
             return segments.All(segment => segment.Length > 0 && !segment.EndsWith("."));
         }
-    }
-
-    private static bool IsBase64String(string base64)
-    {
-        var buffer = new Span<byte>(new byte[base64.Length]);
-        return Convert.TryFromBase64String(base64, buffer, out _);
     }
 }
