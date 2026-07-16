@@ -26,7 +26,7 @@ internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDispos
             exportEntitiesJobType,
             jobQueue)
     {
-        _subscription = ApplicationContext.System.Events.Local.Subscribe<ChangeStreamStateEvent>(ProcessEvent);
+        _subscription = ApplicationContext.System.Events.SubscribeAsync<ChangeStreamStateEvent>(ProcessEventAsync);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -40,11 +40,6 @@ internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDispos
 
             _disposedValue = true;
         }
-    }
-
-    private void ProcessEvent(ChangeStreamStateEvent eventData)
-    {
-        ProcessEventAsync(eventData).GetAwaiter().GetResult();
     }
 
     private async Task ProcessEventAsync(ChangeStreamStateEvent eventData)
