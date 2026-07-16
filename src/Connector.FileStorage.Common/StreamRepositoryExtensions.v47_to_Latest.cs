@@ -1,4 +1,4 @@
-#if CLUEDIN_V47
+#if CLUEDIN_V47_OR_GREATER
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;

@@ -43,13 +43,6 @@ using Newtonsoft.Json.Linq;
 using Parquet;
 
 using Xunit;
-// ITestOutputHelper lives in the Xunit namespace itself under xunit.v3 (CLUEDIN_V50, this repo's
-// own default), but under the separate Xunit.Abstractions namespace/package for the xunit v2
-// tooling the 4.6/4.7/4.8 lines use - see test/Directory.Build.props for the corresponding
-// package selection.
-#if !CLUEDIN_V50
-using Xunit.Abstractions;
-#endif
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
@@ -455,7 +448,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         }
         else
         {
-            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DefaultCurrentTime);
+            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DefaultCurrentTime.ToUniversalTime());
         }
 
         return mockDateTimeOffsetProvider;
@@ -655,7 +648,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             { "PersistHash", "etypzcezkiehwq8vw4oqog==" },
             { "PersistVersion", isStringIntegers ? 1.ToString() : 1 },
             { "ProviderDefinitionId", "c444cda8-d9b5-45cc-a82d-fef28e08d55c" },
-            { "Timestamp", "2024-08-21T03:16:00.0000000+05:00" },
+            { "Timestamp", DefaultCurrentTime.ToUniversalTime().ToString("o") },
             { $"user{separator}age", "123" },
             { $"user{separator}dobInDateTime", "2000-01-02T03:04:05" },
             { $"user{separator}dobInDateTimeOffset", "2000-01-02T03:04:05+12:34" },
@@ -1110,5 +1103,31 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                 Assert.Equal(StorageExportEntitiesJobBase.StreamNotStartedReason, result.Reason);
                 return null;
             });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WhenNoDataStoredAndNoTableCreated_CanSkip()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            (_, _) => Task.CompletedTask,
+            async executeExportArg =>
+            {
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(StorageExportEntitiesJobBase.TableNotFoundReason, result.Reason);
+                return null;
+            },
+            getConnectorEntityData: Array.Empty<ConnectorEntityData>);
     }
 }

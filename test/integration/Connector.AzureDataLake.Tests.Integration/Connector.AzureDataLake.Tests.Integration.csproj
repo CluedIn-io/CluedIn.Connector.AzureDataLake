@@ -6,10 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ParquetSharp" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Connector.AzureDataLake\Connector.AzureDataLake.csproj" />
     <ProjectReference Include="..\Connector.DataLake.Common.Tests.Integration\Connector.DataLake.Common.Tests.Integration.csproj" />
 

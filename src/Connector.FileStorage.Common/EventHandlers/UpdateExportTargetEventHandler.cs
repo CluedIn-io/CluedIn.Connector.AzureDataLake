@@ -52,7 +52,7 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
 
         for (var i = 0; i < totalPages; ++i)
         {
-            var streams = await streamRepository.GetOrganizationStreamsEx(executionContext, page: i, take: streamsPerPage, providerDefinitionId);
+            var streams = await streamRepository.GetOrganizationStreamsEx(executionContext, page: i, take: streamsPerPage, providerDefinitionId: providerDefinitionId);
             foreach (var stream in streams)
             {
                 await UpdateStreamSchedule(executionContext, stream);

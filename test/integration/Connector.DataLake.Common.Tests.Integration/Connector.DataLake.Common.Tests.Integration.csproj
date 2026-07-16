@@ -8,11 +8,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ParquetSharp" />
-    <PackageReference Include="CsvHelper" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
     <ProjectReference Include="..\Connector.FileStorage.Common.Tests.Integration\Connector.FileStorage.Common.Tests.Integration.csproj" />
   </ItemGroup>

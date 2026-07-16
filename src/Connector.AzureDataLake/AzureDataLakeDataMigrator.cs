@@ -72,7 +72,7 @@ internal class AzureDataLakeDataMigrator : StorageDataMigrator
             foreach (var organizationProfile in organizationProfiles)
             {
                 var executionContext = _applicationContext.CreateExecutionContext(organizationProfile.Id);
-                var streams = await streamRepository.GetAllStreamsEx(executionContext).ToList();
+                var streams = (await streamRepository.GetAllStreamsEx(executionContext)).ToList();
 
                 foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>
                              x.ProviderId == _dataLakeConstants.ProviderId))

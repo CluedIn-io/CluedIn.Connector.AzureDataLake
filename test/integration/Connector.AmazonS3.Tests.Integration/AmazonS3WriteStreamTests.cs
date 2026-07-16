@@ -4,22 +4,17 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
-using Amazon;
 using Amazon.S3;
 
 using CluedIn.Connector.AmazonS3.Connector;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Xunit;
-// ITestOutputHelper is in the Xunit namespace itself under xunit.v3 (CLUEDIN_V50), but under
-// Xunit.Abstractions for the xunit v2 tooling the 4.6/4.7/4.8 lines use.
-#if !CLUEDIN_V50
-using Xunit.Abstractions;
-#endif
 
 namespace CluedIn.Connector.AmazonS3.Tests.Integration;
 
-public class AmazonS3WriteStreamTests : IAsyncLifetime
+public partial class AmazonS3WriteStreamTests : IAsyncLifetime
 {
     protected readonly ITestOutputHelper _testOutputHelper;
     private AmazonS3ConnectorConfiguration _configuration;
@@ -32,61 +27,6 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
     }
 
     protected ITestOutputHelper TestOutputHelper => _testOutputHelper;
-
-    // IAsyncLifetime.InitializeAsync/DisposeAsync return ValueTask under xunit.v3 (CLUEDIN_V50,
-    // this repo's own default), but Task under the xunit v2 tooling the 4.6/4.7/4.8 lines use -
-    // a breaking interface change between the two, not just a version-gated package choice.
-#if CLUEDIN_V50
-    public ValueTask InitializeAsync()
-    {
-        _configuration = GetConfiguration();
-        var region = RegionEndpoint.GetBySystemName(_configuration.Region);
-        _s3Client = new AmazonS3Client(_configuration.AccessKey, _configuration.SecretKey, region);
-        return ValueTask.CompletedTask;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        foreach (var key in _createdKeys)
-        {
-            try
-            {
-                await _s3Client.DeleteObjectAsync(_configuration.BucketName, key);
-            }
-            catch
-            {
-                // best-effort cleanup
-            }
-        }
-
-        _s3Client?.Dispose();
-    }
-#else
-    public Task InitializeAsync()
-    {
-        _configuration = GetConfiguration();
-        var region = RegionEndpoint.GetBySystemName(_configuration.Region);
-        _s3Client = new AmazonS3Client(_configuration.AccessKey, _configuration.SecretKey, region);
-        return Task.CompletedTask;
-    }
-
-    public async Task DisposeAsync()
-    {
-        foreach (var key in _createdKeys)
-        {
-            try
-            {
-                await _s3Client.DeleteObjectAsync(_configuration.BucketName, key);
-            }
-            catch
-            {
-                // best-effort cleanup
-            }
-        }
-
-        _s3Client?.Dispose();
-    }
-#endif
 
     [Fact]
     public async Task WriteSmallFile_UsesSimplePutObject()

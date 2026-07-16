@@ -22,11 +22,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
-// ITestOutputHelper is in the Xunit namespace itself under xunit.v3 (CLUEDIN_V50), but under
-// Xunit.Abstractions for the xunit v2 tooling the 4.6/4.7/4.8 lines use.
-#if !CLUEDIN_V50
-using Xunit.Abstractions;
-#endif
 using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.OneLake.Tests.Integration;
@@ -367,14 +362,14 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
                 };
-                await executeExportArg.ExportJob.DoRunAsync(
+                _ = await executeExportArg.ExportJob.DoRunInternalAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
                 var firstPath = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
 
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
+                var secondResult = await executeExportArg.ExportJob.DoRunInternalAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
 
@@ -382,6 +377,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
                 Assert.Equal(firstDataTime, secondDataTime);
+                Assert.Equal(StorageExportEntitiesJobBase.ExportedBeforeReason, secondResult.Reason);
                 return secondPath;
             });
     }
@@ -436,7 +432,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             });
     }
@@ -490,7 +486,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             });
     }
