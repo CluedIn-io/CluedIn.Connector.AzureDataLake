@@ -5,16 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AutoFixture.Xunit3" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="coverlet.msbuild" />
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio" />
-    <PackageReference Include="Moq" />
-    <PackageReference Include="ParquetSharp" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Connector.OneLake\Connector.OneLake.csproj" />
     <ProjectReference Include="..\Connector.DataLake.Common.Tests.Integration\Connector.DataLake.Common.Tests.Integration.csproj" />
   </ItemGroup>

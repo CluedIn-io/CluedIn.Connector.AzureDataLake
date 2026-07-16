@@ -4,17 +4,17 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 
-using Amazon;
 using Amazon.S3;
 
 using CluedIn.Connector.AmazonS3.Connector;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Xunit;
 
 namespace CluedIn.Connector.AmazonS3.Tests.Integration;
 
-public class AmazonS3WriteStreamTests : IAsyncLifetime
+public partial class AmazonS3WriteStreamTests : IAsyncLifetime
 {
     protected readonly ITestOutputHelper _testOutputHelper;
     private AmazonS3ConnectorConfiguration _configuration;
@@ -27,31 +27,6 @@ public class AmazonS3WriteStreamTests : IAsyncLifetime
     }
 
     protected ITestOutputHelper TestOutputHelper => _testOutputHelper;
-
-    public ValueTask InitializeAsync()
-    {
-        _configuration = GetConfiguration();
-        var region = RegionEndpoint.GetBySystemName(_configuration.Region);
-        _s3Client = new AmazonS3Client(_configuration.AccessKey, _configuration.SecretKey, region);
-        return ValueTask.CompletedTask;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        foreach (var key in _createdKeys)
-        {
-            try
-            {
-                await _s3Client.DeleteObjectAsync(_configuration.BucketName, key);
-            }
-            catch
-            {
-                // best-effort cleanup
-            }
-        }
-
-        _s3Client?.Dispose();
-    }
 
     [Fact]
     public async Task WriteSmallFile_UsesSimplePutObject()

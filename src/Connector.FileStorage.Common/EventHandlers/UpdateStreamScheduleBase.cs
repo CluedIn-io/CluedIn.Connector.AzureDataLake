@@ -49,7 +49,7 @@ internal abstract class UpdateStreamScheduleBase
 
         var streamRepository = ApplicationContext.Container.Resolve<IStreamRepository>();
         var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
-        var stream = await streamRepository.GetStream(executionContext, streamId);
+        var stream = await streamRepository.GetStreamEx(executionContext, streamId);
         if (stream == null)
         {
             return;
