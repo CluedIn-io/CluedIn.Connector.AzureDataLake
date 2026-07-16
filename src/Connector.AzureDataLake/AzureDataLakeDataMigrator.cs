@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.DataStore.Entities;
@@ -14,15 +14,15 @@ using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureDataLake;
 
-internal class AzureDataLakeDataMigrator : DataLakeDataMigrator
+internal class AzureDataLakeDataMigrator : StorageDataMigrator
 {
     public AzureDataLakeDataMigrator(
         ILogger logger,
         ApplicationContext applicationContext,
         DbContextOptions<CluedInEntities> cluedInEntitiesDbContextOptions,
         string componentName,
-        IDataLakeConstants constants,
-        IDataLakeJobDataFactory dataLakeJobDataFactory) : base(logger, applicationContext, cluedInEntitiesDbContextOptions, componentName, constants, dataLakeJobDataFactory)
+        IStorageConfigurationConstants storageConfigurationConstants,
+        IStorageFactory storageFactory) : base(logger, applicationContext, cluedInEntitiesDbContextOptions, componentName, storageConfigurationConstants, storageFactory)
     {
     }
 
@@ -72,8 +72,7 @@ internal class AzureDataLakeDataMigrator : DataLakeDataMigrator
             foreach (var organizationProfile in organizationProfiles)
             {
                 var executionContext = _applicationContext.CreateExecutionContext(organizationProfile.Id);
-                var streams = await streamRepository.GetAllStreams(executionContext).ToList();
-
+                var streams = (await streamRepository.GetAllStreamsEx(executionContext)).ToList();
 
                 foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>
                              x.ProviderId == _dataLakeConstants.ProviderId))
@@ -89,7 +88,7 @@ internal class AzureDataLakeDataMigrator : DataLakeDataMigrator
                                 Mode = StreamMode.EventStream,
                                 ContainerName = stream.ContainerName,
                                 DataTypes =
-                                    (await streamRepository.GetStreamMappings(executionContext, stream.Id))
+                                    (await streamRepository.GetStreamMappingsEx(executionContext, stream.Id))
                                     .Select(x => new DataTypeEntry
                                     {
                                         Key = x.SourceDataType,
@@ -103,7 +102,7 @@ internal class AzureDataLakeDataMigrator : DataLakeDataMigrator
 
                             _logger.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{{StreamName}}' ({{StreamId}})", stream.Name, stream.Id);
 
-                            await streamRepository.SetupConnector(executionContext, stream.Id, model);
+                            await streamRepository.SetupConnectorEx(executionContext, stream.Id, model);
                         }
                     }
                 }

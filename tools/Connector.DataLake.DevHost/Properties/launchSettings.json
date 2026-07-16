@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Start Plugin App": {
+      "commandName": "Executable",
+      "executablePath": "cmd.exe",
+      "commandLineArgs": "/c start pwsh.exe -NoExit -NoProfile -ExecutionPolicy Bypass -File \"$(SolutionDir)runCluedIn.ps1\" -BuildDir $(TargetDir)"
+    }
+  }
+}

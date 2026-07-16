@@ -1,4 +1,4 @@
-using CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
 using CluedIn.Core.Crawling;
 using CluedIn.Core.Providers;
@@ -14,17 +14,17 @@ namespace CluedIn.Connector.FabricOpenMirroring;
 public class OpenMirroringConnectorProvider : ConnectorProviderBase<OpenMirroringConnectorProvider>
 {
     public OpenMirroringConnectorProvider([NotNull] ApplicationContext appContext,
-        IOpenMirroringConstants configuration, ILogger<OpenMirroringConnectorProvider> logger)
+        IOpenMirroringConfigurationConstants configuration, ILogger<OpenMirroringConnectorProvider> logger)
         : base(appContext, configuration, logger)
     {
     }
 
     protected override IEnumerable<string> ProviderNameParts => new[]
     {
-       OpenMirroringConstants.WorkspaceName,
-       OpenMirroringConstants.MirroredDatabaseName,
-       OpenMirroringConstants.ClientId,
-       OpenMirroringConstants.TenantId,
+       OpenMirroringConfigurationConstants.WorkspaceName,
+       OpenMirroringConfigurationConstants.MirroredDatabaseName,
+       OpenMirroringConfigurationConstants.ClientId,
+       OpenMirroringConfigurationConstants.TenantId,
     };
 
     public override async Task<CrawlJobData> GetCrawlJobData(
@@ -34,10 +34,10 @@ public class OpenMirroringConnectorProvider : ConnectorProviderBase<OpenMirrorin
 
         if (data is CrawlJobDataWrapper wrapper)
         {
-            if (!wrapper.Configurations.TryGetValue(nameof(OpenMirroringConstants.MirroredDatabaseName), out var dbName)
+            if (!wrapper.Configurations.TryGetValue(nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName), out var dbName)
                 || (dbName is string dbNameString && string.IsNullOrWhiteSpace(dbNameString)))
             {
-                wrapper.Configurations[nameof(OpenMirroringConstants.MirroredDatabaseName)] = $"CluedIn_ExportTarget_{providerDefinitionId:N}";
+                wrapper.Configurations[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = $"CluedIn_ExportTarget_{providerDefinitionId:N}";
             }
         }
 

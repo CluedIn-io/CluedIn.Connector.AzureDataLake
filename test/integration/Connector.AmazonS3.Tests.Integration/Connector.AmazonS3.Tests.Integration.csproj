@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Connector.AmazonS3\Connector.AmazonS3.csproj" />
+    <ProjectReference Include="..\Connector.FileStorage.Common.Tests.Integration\Connector.FileStorage.Common.Tests.Integration.csproj" />
+  </ItemGroup>
+
+</Project>
