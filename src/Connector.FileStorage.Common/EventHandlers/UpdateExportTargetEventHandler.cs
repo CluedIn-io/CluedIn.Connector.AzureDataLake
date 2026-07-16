@@ -28,13 +28,7 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
             exportEntitiesJobType,
             jobQueue)
     {
-        _subscription = ApplicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
-    }
-
-
-    private void ProcessEvent(UpdateExportTargetEvent eventData)
-    {
-        ProcessEventAsync(eventData).GetAwaiter().GetResult();
+        _subscription = ApplicationContext.System.Events.SubscribeAsync<UpdateExportTargetEvent>(ProcessEventAsync);
     }
 
     private async Task ProcessEventAsync(UpdateExportTargetEvent eventData)
