@@ -22,8 +22,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
-using Xunit.Abstractions;
-
 using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.OneLake.Tests.Integration;

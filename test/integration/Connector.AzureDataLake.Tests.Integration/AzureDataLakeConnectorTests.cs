@@ -25,7 +25,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
-using Xunit.Abstractions;
 
 namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
 

@@ -1,8 +1,4 @@
 <Project>
-  <PropertyGroup Label="Dependency Versions">
-    <_CluedIn>4.8.0</_CluedIn>
-  </PropertyGroup>
-
   <ItemGroup>
     <!--
         Specified versions for dependencies across the solution
@@ -18,20 +14,41 @@
     <PackageReference Update="Parquet.Net" Version="4.23.5" />
     <PackageReference Update="IgnoresAccessChecksToGenerator" Version="0.8.0" PrivateAssets="All" />
   </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::VersionLessThan('$(_CluedIn)', '5.0.0'))">
+    <PackageReference Update="Azure.Identity" Version="1.13.2" />
+  </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '5.0.0'))">
+    <PackageReference Update="Azure.Identity" Version="1.21.0" />
+  </ItemGroup>
 
   <ItemGroup>
     <!--
-        Specified versions for dependencies in test projects
+        Specified versions for dependencies in test projects, common to every target
 
         MUST SPECIFY IN CSPROJ AS <PackageReference Name="<depName>" />
     -->
+    <PackageReference Update="coverlet.msbuild" Version="2.8.0" />
+    <PackageReference Update="Moq" Version="4.13.1" />
+    <PackageReference Update="ParquetSharp" Version="15.0.2.1" />
+  </ItemGroup>
+  <!-- Below CluedIn 5.0.0 (net6.0) - xunit v2 / AutoFixture.Xunit2 / Microsoft.NET.Test.Sdk 16.5.0,
+       the versions the 4.6/4.7/4.8 release lines used for net6.0 before this repo's own tooling
+       moved to net10.0/xunit v3 on develop. The newer xunit.v3/Microsoft Testing Platform-based
+       tooling above does not support net6.0. -->
+  <ItemGroup Condition="$([MSBuild]::VersionLessThan('$(_CluedIn)', '5.0.0'))">
     <PackageReference Update="Microsoft.NET.Test.Sdk" Version="16.5.0" />
     <PackageReference Update="AutoFixture.Xunit2" Version="4.11.0" />
-    <PackageReference Update="coverlet.msbuild" Version="2.8.0" />
     <PackageReference Update="CsvHelper" Version="15.0.0" />
     <PackageReference Update="xunit" Version="2.4.1" />
     <PackageReference Update="xunit.runner.visualstudio" Version="2.4.1" />
-    <PackageReference Update="Moq" Version="4.13.1" />
-    <PackageReference Update="ParquetSharp" Version="15.0.2.1" />
+  </ItemGroup>
+  <!-- CluedIn 5.0.0+ (this repo's own default) - the current xunit.v3/Microsoft Testing
+       Platform-based tooling. -->
+  <ItemGroup Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '5.0.0'))">
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageReference Update="AutoFixture.Xunit3" Version="5.0.0-preview0012" />
+    <PackageReference Update="CsvHelper" Version="33.1.0" />
+    <PackageReference Update="xunit.v3" Version="3.2.2" />
+    <PackageReference Update="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>
 </Project>
