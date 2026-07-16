@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>CluedIn.Connector.DataLake.Common provides the common functionality to post data to DataLake</Description>
     <AssemblyName>CluedIn.Connector.DataLake.Common</AssemblyName>
@@ -19,16 +19,10 @@
     <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
   </ItemGroup>
   <ItemGroup>
-    <IgnoresAccessChecksTo Include="CluedIn.ComponentHealth" />
-    <IgnoresAccessChecksTo Include="CluedIn.Streams" />
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Azure.Storage.Files.DataLake" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Azure.Storage.Files.DataLake" />
-    <PackageReference Include="CluedIn.Core" />
-    <PackageReference Include="CluedIn.Streams" />
-    <PackageReference Include="CsvHelper" />
-    <PackageReference Include="NCrontab" />
-    <PackageReference Include="IgnoresAccessChecksToGenerator" />
-    <PackageReference Include="Parquet.Net" />
+    <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
   </ItemGroup>
 </Project>

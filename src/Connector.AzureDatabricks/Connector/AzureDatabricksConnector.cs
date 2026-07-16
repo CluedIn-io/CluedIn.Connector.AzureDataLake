@@ -1,21 +1,21 @@
-﻿using System;
+using System;
 
-using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.AzureDatabricks.Connector;
 
-public class AzureDatabricksConnector : DataLakeConnector
+public class AzureDatabricksConnector : StorageConnectorBase
 {
     public AzureDatabricksConnector(
         ILogger<AzureDatabricksConnector> logger,
-        AzureDatabricksClient client,
-        IAzureDatabricksConstants constants,
-        AzureDatabricksJobDataFactory dataLakeJobDataFactory,
+        ApplicationContext applicationContext,
+        IAzureDatabricksConfigurationConstants configurationConstants,
+        AzureDatabricksStorageFactory storageFactory,
         IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, client, constants, dataLakeJobDataFactory, dateTimeOffsetProvider)
+        : base(logger, applicationContext, configurationConstants, storageFactory, dateTimeOffsetProvider)
     {
     }
 

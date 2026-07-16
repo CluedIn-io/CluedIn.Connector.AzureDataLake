@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 
-using CluedIn.Connector.DataLake.Common;
-using CluedIn.Connector.DataLake.Common.Connector.SqlDataWriter;
+using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 
 using Microsoft.Data.SqlClient;
 
@@ -11,17 +11,17 @@ namespace CluedIn.Connector.FabricOpenMirroring.Connector.SqlDataWriter;
 
 internal class OpenMirroringParquetSqlDataWriter : ParquetSqlDataWriter
 {
-    protected override DataField GetParquetDataField(string fieldName, Type type, IDataLakeJobData configuration)
+    protected override DataField GetParquetDataField(string fieldName, Type type, IStorageConfiguration configuration)
     {
-        if (fieldName.Equals(DataLakeConstants.ChangeTypeKey, StringComparison.Ordinal))
+        if (fieldName.Equals(StorageConfigurationConstants.ChangeTypeKey, StringComparison.Ordinal))
         {
-            return new DataField(OpenMirroringConstants.RowMarkerKey, typeof(string));
+            return new DataField(OpenMirroringConfigurationConstants.RowMarkerKey, typeof(string));
         }
 
         return base.GetParquetDataField(fieldName, type, configuration);
     }
 
-    protected override object GetValue(string key, SqlDataReader reader, IDataLakeJobData configuration)
+    protected override object GetValue(string key, SqlDataReader reader, IStorageConfiguration configuration)
     {
         var valueFromBase = base.GetValue(key, reader, configuration);
         return ValueHelper.TransformValueForRowMarker(key, valueFromBase);
