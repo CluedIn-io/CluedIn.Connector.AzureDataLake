@@ -1,4 +1,4 @@
-#if !CLUEDIN_V50
+#if !CLUEDIN_V50_OR_GREATER
 using System.Threading.Tasks;
 
 using Amazon;

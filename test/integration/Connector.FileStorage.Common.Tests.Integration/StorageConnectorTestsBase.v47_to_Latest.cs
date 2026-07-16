@@ -1,4 +1,4 @@
-#if CLUEDIN_V47
+#if CLUEDIN_V47_OR_GREATER
 using CluedIn.Core;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;

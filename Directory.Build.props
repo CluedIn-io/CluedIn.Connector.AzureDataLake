@@ -1,13 +1,13 @@
 <Project>
   <PropertyGroup Label="Dependency Versions">
-    <_CluedIn Condition="'$(_CluedIn)' == ''">5.0.0-*</_CluedIn>
+    <_CluedIn Condition="'$(_CluedIn)' == ''">4.8.0</_CluedIn>
 
     <!-- Gates conditional compilation (#if CLUEDIN_Vxx) for places where a CluedIn.Core API call
          differs by line. -->
-    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.6.0'))">$(DefineConstants);CLUEDIN_V46</DefineConstants>
-    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.7.0'))">$(DefineConstants);CLUEDIN_V47</DefineConstants>
-    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.8.0'))">$(DefineConstants);CLUEDIN_V48</DefineConstants>
-    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '5.0.0'))">$(DefineConstants);CLUEDIN_V50</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.6.0'))">$(DefineConstants);CLUEDIN_V46_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.7.0'))">$(DefineConstants);CLUEDIN_V47_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '4.8.0'))">$(DefineConstants);CLUEDIN_V48_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '5.0.0'))">$(DefineConstants);CLUEDIN_V50_OR_GREATER</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Label="Compilation Metadata">
