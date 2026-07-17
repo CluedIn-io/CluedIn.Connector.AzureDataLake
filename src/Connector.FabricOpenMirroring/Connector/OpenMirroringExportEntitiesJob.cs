@@ -48,7 +48,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         DirectoryPath outputDirectoryPath)
     {
         var outputFormat = exportJobDataBase.OutputFormat;
-        if (isInitialExport)
+        if (isInitialExport || lastExportedFile == null)
         {
             return $"{1:D20}.{outputFormat.ToLowerInvariant()}";
         }
@@ -108,7 +108,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
         ExecutionContext context,
         ExportJobDataBase exportJobDataBase,
         IStorageClient storageClient,
-        LastExportedFile lastExportedFile,
+        LastExportedFile? lastExportedFile,
         DirectoryPath outputDirectoryPath)
     {
         // if we haven't exported any file yet, then this is definitely the initial export

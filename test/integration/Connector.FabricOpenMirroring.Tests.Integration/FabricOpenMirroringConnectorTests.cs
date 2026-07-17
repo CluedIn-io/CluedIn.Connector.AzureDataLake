@@ -231,6 +231,60 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public async Task VerifyStoreData_Sync_WhenRepeatRunOfSkippedNoRows_CanSkip(bool isTriggeredFromJobServer)
+    {
+        var executionCount = 0;
+        var dateTimeList = new List<DateTimeOffset>
+        {
+            DefaultCurrentTime,
+            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+        };
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            AssertParquetResultEscaped,
+            async executeExportArg =>
+            {
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = isTriggeredFromJobServer,
+                };
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                executionCount++;
+
+                var firstPath = await WaitForFileToBeCreated(
+                    executeExportArg.SetupContainerResult);
+                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                var lastResult = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                Assert.False(result.HasExported);
+                Assert.Equal(StorageExportEntitiesJobBase.NoRowsReason, result.Reason);
+                Assert.Equal(StorageExportEntitiesJobBase.ExportedBeforeReason, lastResult.Reason);
+                return firstPath;
+            },
+            mockDateTimeOffsetProvider =>
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                    .Returns(() =>
+                    {
+                        return dateTimeList[executionCount].ToUniversalTime();
+                    });
+            });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public async Task VerifyStoreData_Sync_WhenRepeatRunAndHasRow_CanCreateNewFile(bool isTriggeredFromJobServer)
     {
         var initialUserData = UserData.Default;
