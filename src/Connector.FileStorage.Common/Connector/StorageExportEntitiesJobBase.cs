@@ -949,7 +949,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         }
     }
 
-    private protected virtual async Task<ExportHistory> GetLastSuccessfulExportHistory(
+    private protected virtual async Task<ExportHistory?> GetLastSuccessfulExportHistory(
         ExecutionContext context,
         SqlConnection connection,
         Guid streamId)
