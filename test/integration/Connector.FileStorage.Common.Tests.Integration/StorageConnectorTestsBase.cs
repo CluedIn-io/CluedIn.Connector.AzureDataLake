@@ -1132,7 +1132,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     }
 
     [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunOfSkipped_CanSKip()
+    public async Task VerifyStoreData_Sync_WhenRepeatRunOfSkipped_CanSkip()
     {
         await VerifyStoreData_Sync_WithStreamCache(
             "csv",
