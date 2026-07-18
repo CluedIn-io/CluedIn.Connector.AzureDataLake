@@ -258,7 +258,6 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
 
                 var firstPath = await WaitForFileToBeCreated(
                     executeExportArg.SetupContainerResult);
-                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
 
                 var result = await executeExportArg.ExportJob.DoRunInternalAsync(
                     executeExportArg.ExecutionContext,
