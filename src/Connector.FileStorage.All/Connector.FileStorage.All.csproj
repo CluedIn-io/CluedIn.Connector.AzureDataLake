@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>A bundle of FileStorage connectors</Description>
+    <AssemblyName>CluedIn.Connector.FileStorage.All</AssemblyName>
+    <RootNamespace>CluedIn.Connector.FileStorage.All</RootNamespace>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeContentInPack>false</IncludeContentInPack>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.AzureDataLake\Connector.AzureDataLake.csproj" />
+    <ProjectReference Include="..\Connector.OneLake\Connector.OneLake.csproj" />
+    <ProjectReference Include="..\Connector.FabricOpenMirroring\Connector.FabricOpenMirroring.csproj" />
+  </ItemGroup>
+</Project>
