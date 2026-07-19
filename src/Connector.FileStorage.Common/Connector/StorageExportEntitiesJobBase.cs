@@ -157,6 +157,13 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         using var storageClient = await CreateStorageClient(context, configuration);
         await storageClient.CreateDirectoryIfNotExistsAsync(outputDirectoryPath);
 
+        if (await HasExported(context, connection, streamId, asOfTime, GetTriggerSource(args), args.Schedule))
+        {
+            context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required. Reason is {Reason}", exportJobData.StreamId, ExportedBeforeReason);
+            // Not logging to stream ingestion log to prevent spamming
+            return ExportResult.CreateSkipped(ExportedBeforeReason);
+        }
+
         var shouldSkipResult = await ShouldSkipExport(context, exportJobData, storageClient);
         if (shouldSkipResult.ShouldSkip)
         {
@@ -942,7 +949,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         }
     }
 
-    private protected virtual async Task<ExportHistory> GetLastSuccessfulExportHistory(
+    private protected virtual async Task<ExportHistory?> GetLastSuccessfulExportHistory(
         ExecutionContext context,
         SqlConnection connection,
         Guid streamId)
@@ -995,7 +1002,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                 exportHistoryList.Add(history);
             }
 
-            return exportHistoryList.Single();
+            return exportHistoryList.SingleOrDefault();
         }
         catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
         {

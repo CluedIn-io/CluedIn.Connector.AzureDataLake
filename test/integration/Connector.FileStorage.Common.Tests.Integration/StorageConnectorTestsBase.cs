@@ -1130,4 +1130,34 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             },
             getConnectorEntityData: Array.Empty<ConnectorEntityData>);
     }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WhenRepeatRunOfSkipped_CanSkip()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            (_, _) => Task.CompletedTask,
+            async executeExportArg =>
+            {
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                var result2 = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(StorageExportEntitiesJobBase.TableNotFoundReason, result.Reason);
+                Assert.Equal(StorageExportEntitiesJobBase.ExportedBeforeReason, result2.Reason);
+                return null;
+            },
+            getConnectorEntityData: Array.Empty<ConnectorEntityData>);
+    }
 }
