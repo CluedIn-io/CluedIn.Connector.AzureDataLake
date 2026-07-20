@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Connector.AmazonS3\Connector.AmazonS3.csproj" />
     <ProjectReference Include="..\Connector.AzureDataLake\Connector.AzureDataLake.csproj" />
     <ProjectReference Include="..\Connector.OneLake\Connector.OneLake.csproj" />
     <ProjectReference Include="..\Connector.FabricOpenMirroring\Connector.FabricOpenMirroring.csproj" />
