@@ -5,7 +5,6 @@
     <AssemblyName>CluedIn.Connector.FileStorage.All</AssemblyName>
     <RootNamespace>CluedIn.Connector.FileStorage.All</RootNamespace>
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <IncludeContentInPack>false</IncludeContentInPack>
   </PropertyGroup>
 
   <ItemGroup>
