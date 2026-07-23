@@ -58,6 +58,36 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         }
     }
 
+    [Fact]
+    public async Task VerifyConnection_WhenValidSasToken_ReturnsSuccess()
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+
+        var sasToken = SasTokenHelper.CreateSasToken(
+            configuration[nameof(AzureDataLakeConfigurationConstants.AccountName)] as string,
+            configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] as string);
+        configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] = sasToken;
+
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
+
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            setupResult.DateTimeOffsetProviderMock.Setup(x => x.GetCurrentUtcTime()).Returns(DateTimeOffset.UtcNow);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.True(result.Success);
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
+    }
+
     private void DeleteFileSystemIfExists(AzureDataLakeConnectorConfiguration jobData)
     {
         var client = GetDataLakeClient(jobData);
@@ -96,11 +126,12 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         }
     }
 
-    [Fact]
-    public async Task VerifyConnection_WhenInexistentAccountName_ReturnInvalidAccountNameErrorMessage()
+    [Theory]
+    [InlineData("1")]
+    public async Task VerifyConnection_WhenInexistentAccountName_ReturnInvalidAccountNameErrorMessage(string accountName)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
-        configuration[nameof(AzureDataLakeConfigurationConstants.AccountName)] = "1";
+        configuration[nameof(AzureDataLakeConfigurationConstants.AccountName)] = accountName;
         var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         try
@@ -142,6 +173,72 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             Assert.NotNull(result);
             Assert.False(result.Success);
             Assert.Equal(AzureDataLakeConnector.InvalidAccountKeyErrorMessage, result.ErrorMessage);
+
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
+    }
+
+    [Theory]
+    [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2099-07-23T07%3A33%3A38Z&se=2026-07-24T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2000-07-23T07%3A33%3A38Z&se=2000-07-24T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2026-07-22T07%3A33%3A38Z&se=2026-07-23T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=asdf&se=2026-07-23T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2026-07-22T07%3A33%3A38Z&se=asdf&sp=rwdlc&sig=dummysignature")]
+    public async Task VerifyConnection_WhenInvalidSasTokenTime_ReturnInvalidSasTokenErrorMessage(string sasToken)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] = sasToken;
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
+
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.Equal(AzureDataLakeConnector.InvalidSasTokenTimeErrorMessage, result.ErrorMessage);
+
+        }
+        catch
+        {
+            DeleteFileSystemIfExists(jobData);
+            throw;
+        }
+    }
+
+    [Theory]
+    [InlineData("sv=2025-07-05&ss=tqf&srt=co&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=sc&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=so&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=s&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=sc&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=r&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=sc&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rw&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=sc&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwd&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=sc&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdl&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=sc&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=lacp&sig=dummysignature")]
+    public async Task VerifyConnection_WhenInvalidSasTokenPermissions_ReturnInvalidSasTokenPermissionsErrorMessage(string sasToken)
+    {
+        var configuration = CreateConfigurationWithoutStreamCache();
+        configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] = sasToken;
+        var jobData = new AzureDataLakeConnectorConfiguration(configuration);
+
+        try
+        {
+            var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
+            var connector = setupResult.ConnectorMock.Object;
+            setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+                .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+            var result = await connector.VerifyConnection(setupResult.Context, configuration);
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.Equal(AzureDataLakeConnector.InvalidSasTokenPermissionsErrorMessage, result.ErrorMessage);
 
         }
         catch

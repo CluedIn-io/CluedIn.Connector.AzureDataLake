@@ -15,11 +15,14 @@ namespace CluedIn.Connector.AzureDataLake.Connector;
 public class AzureDataLakeConnector : StorageConnectorBase
 {
     private readonly ILogger<AzureDataLakeConnector> _logger;
+    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     internal static readonly Regex AccountNameRegex = new("^[a-z0-9]+$", RegexOptions.Compiled);
     internal static readonly Regex FileSystemNameRegex = new("^(?=.{3,63}$)[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.Compiled);
     internal const string InvalidAuthenticationMethodErrorMessage = "Invalid authentication method";
     internal const string InvalidAccountNameErrorMessage = "Invalid storage account name. It can only contain numbers and lowercase characters.";
-    internal const string InvalidAccountKeyErrorMessage = "Invalid account key. It must be a valid base64 string.";
+    internal const string InvalidAccountKeyErrorMessage = "Invalid account key. It must be a valid base64 string or a valid SAS token.";
+    internal const string InvalidSasTokenTimeErrorMessage = "Invalid SAS token. It must be a valid SAS token, with valid time parameters.";
+    internal const string InvalidSasTokenPermissionsErrorMessage = "Invalid SAS token. It must be a valid SAS token, with valid permissions. Read, Write, Delete, List, and Create Permissions must be present to Containers and Objects in Blob Service";
     internal const string InvalidCredentialsErrorMessage = "Invalid storage account credentials.";
     internal const string InvalidFileSystemNameErrorMessage = "Invalid file system name. Please refer to https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata#container-names for more information";
     internal const string InvalidDirectoryNameErrorMessage = "Invalid directory name. Please refer to https://learn.microsoft.com/en-us/rest/api/storageservices/naming-and-referencing-containers--blobs--and-metadata#directory-names for more information";
@@ -33,6 +36,7 @@ public class AzureDataLakeConnector : StorageConnectorBase
         : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
     }
 
     protected override Type ExportJobType => typeof(AzureDataLakeExportEntitiesJob);
@@ -54,9 +58,26 @@ public class AzureDataLakeConnector : StorageConnectorBase
             return CreateFailedConnectionVerification(InvalidAuthenticationMethodErrorMessage);
         }
 
-        if (authMethod == AuthenticationMethods.SharedKey && !casted.IsValidAccountKey())
+        if (authMethod == AuthenticationMethods.SharedKey)
         {
-            return CreateFailedConnectionVerification(InvalidAccountKeyErrorMessage);
+            if (AzureDataLakeConnectorConfiguration.IsSharedAccessKey(casted.AccountKey))
+            {
+                if (!casted.IsValidSharedKey())
+                {
+                    return CreateFailedConnectionVerification(InvalidAccountKeyErrorMessage);
+                }
+            }
+            else
+            {
+                if (!casted.IsValidSasTokenTime(_dateTimeOffsetProvider))
+                {
+                    return CreateFailedConnectionVerification(InvalidSasTokenTimeErrorMessage);
+                }
+                else if (!casted.IsValidSasTokenPermissions())
+                {
+                    return CreateFailedConnectionVerification(InvalidSasTokenPermissionsErrorMessage);
+                }
+            }
         }
 
         if (!IsValidFileSystemName())

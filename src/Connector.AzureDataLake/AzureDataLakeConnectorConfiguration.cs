@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Web;
 using Azure;
 using Azure.Storage.Files.DataLake;
 using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.FileStorage.Common;
+using CluedIn.Core;
 
 namespace CluedIn.Connector.AzureDataLake;
 
@@ -108,14 +110,91 @@ internal class AzureDataLakeConnectorConfiguration
         return Convert.TryFromBase64String(base64, buffer, out _);
     }
 
-    internal bool IsValidAccountKey()
+    internal bool IsValidSharedKey()
     {
         return !string.IsNullOrWhiteSpace(AccountKey) && IsBase64String(AccountKey);
     }
 
+    internal bool IsValidSasTokenTime(IDateTimeOffsetProvider dateTimeOffsetProvider)
+    {
+        if (string.IsNullOrWhiteSpace(AccountKey))
+        {
+            return false;
+        }
+
+        try
+        {
+            var queryParameters = HttpUtility.ParseQueryString(AccountKey); // Validate the SAS token format
+            var st = queryParameters["st"];
+            var se = queryParameters["se"];
+            if (st == null || se == null)
+            {
+                return false;
+            }
+
+            var isValidStart = DateTimeOffset.TryParse(st, out var parsedStart); // Validate the start time format
+            var isValidEnd = DateTimeOffset.TryParse(se, out var parsedEnd); // Validate the end time format
+
+            var now = dateTimeOffsetProvider.GetCurrentUtcTime();
+            return isValidStart &&
+                isValidEnd &&
+                parsedStart < parsedEnd &&
+                parsedEnd.ToUniversalTime() > now &&
+                parsedStart.ToUniversalTime() <= now;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    internal bool IsValidSasTokenPermissions()
+    {
+        if (string.IsNullOrWhiteSpace(AccountKey))
+        {
+            return false;
+        }
+
+        try
+        {
+            var queryParameters = HttpUtility.ParseQueryString(AccountKey); // Validate the SAS token format
+            var sp = queryParameters["sp"];
+            var ss = queryParameters["ss"];
+            var srt = queryParameters["srt"];
+
+            if (sp ==  null || ss == null || srt == null)
+            {
+                return false;
+            }
+
+            if ("rwdlc".Any(permission => !sp.Contains(permission)))
+            {
+                return false;
+            }
+
+            if (!ss.Contains("b"))
+            {
+                return false;
+            }
+
+            if ("co".Any(resourceType => !srt.Contains(resourceType)))
+            {
+                return false;
+            }
+
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     internal static bool IsSharedAccessKey(string sharedKeyOrSasToken)
     {
-        if (IsBase64String(sharedKeyOrSasToken))
+        // If the string is null, empty, or whitespace, or if it is a valid Base64 string, we consider it a shared access key.
+        // This is to preserve backward compatibility with existing behaviour that only supports shared access keys and not SAS tokens.
+        if (string.IsNullOrWhiteSpace(sharedKeyOrSasToken) || IsBase64String(sharedKeyOrSasToken))
         {
             return true;
         }
