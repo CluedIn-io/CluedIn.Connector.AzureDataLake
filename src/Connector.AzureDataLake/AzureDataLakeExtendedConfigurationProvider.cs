@@ -8,11 +8,10 @@ using System.Threading.Tasks;
 using CluedIn.Core;
 using CluedIn.Core.Configuration;
 using CluedIn.Core.Providers.ExtendedConfiguration;
-using CluedIn.Integration.PrivateServices.Configuration;
 
 namespace CluedIn.Connector.AzureDataLake;
 
-internal class AzureDataLakeExtendedConfigurationProvider : IExtendedConfigurationProvider
+internal partial class AzureDataLakeExtendedConfigurationProvider : IExtendedConfigurationProvider
 {
     private const int DefaultPageSize = 20;
     internal const string DefaultSourceName = "AzureDataLakeExtendedConfigurationProvider";
@@ -78,7 +77,7 @@ internal class AzureDataLakeExtendedConfigurationProvider : IExtendedConfigurati
 
     private ResolveOptionsResponse HandleAuthenticationMethod(ExecutionContext context, IDictionary<string, string> currentValues, ExtendedConfigurationRequest request)
     {
-        var isSaaSDeployment = context.ApplicationContext.System.Configuration.GetIsSaaSDeployment();
+        var isSaaSDeployment = GetIsSaaSDeployment(context);
         var shouldShowWorkloadIdentity = !isSaaSDeployment && _shouldEnableWorkloadIdentity;
         var options = shouldShowWorkloadIdentity
             ? _allAuthenticationMethodsOptions
@@ -91,4 +90,6 @@ internal class AzureDataLakeExtendedConfigurationProvider : IExtendedConfigurati
             Take = DefaultPageSize,
         };
     }
+
+    protected static partial bool GetIsSaaSDeployment(ExecutionContext context);
 }

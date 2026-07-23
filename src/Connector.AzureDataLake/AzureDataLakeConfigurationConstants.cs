@@ -5,9 +5,6 @@ using CluedIn.Core.Providers;
 using System;
 using System.Collections.Generic;
 
-using CluedIn.Integration.PrivateServices.Configuration;
-// ReSharper disable ArgumentsStyleStringLiteral
-
 namespace CluedIn.Connector.AzureDataLake;
 
 public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants, IAzureDataLakeConfigurationConstants
