@@ -61,7 +61,7 @@ steps:
     inputs:
       filePath: './build/integration-test.ps1'
       arguments: '-Action SetUpPreparation'
-    condition: and ( always(), ${{ parameters.runIntegrationTests }}, '') }})
+    condition: and ( always(), ${{ parameters.runIntegrationTests }})
 
   - template: crawler.build.yml@templates
     parameters:
