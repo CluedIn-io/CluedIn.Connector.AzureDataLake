@@ -386,7 +386,6 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     {
         var configuration = CreateConfigurationWithoutStreamCache();
         UpdateConfigurationWithServicePrincipalAuthentication(configuration);
-        ;
         var jobData = new AzureDataLakeConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
