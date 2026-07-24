@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory)]
 	[ValidateNotNullOrEmpty()]
-	[ValidateSet('SetUp','TearDown')]
+	[ValidateSet('SetUp','TearDown','SetUpPreparation')]
 	[string]$Action
 )
 
