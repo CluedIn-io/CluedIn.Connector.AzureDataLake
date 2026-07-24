@@ -56,6 +56,10 @@ steps:
   - task: NuGetAuthenticate@0
     displayName: 'Authenticate with nuget'
 
+  - checkout: self
+    persistCredentials: true
+    fetchDepth: 0
+
   - task: PowerShell@2
     displayName: 'Setup Preparation Integration Test Environment'
     inputs:
