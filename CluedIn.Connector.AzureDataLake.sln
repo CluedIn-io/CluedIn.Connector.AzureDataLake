@@ -12,6 +12,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution items", "Solution 
 		README.md = README.md
 		runCluedIn.ps1 = runCluedIn.ps1
 		Server.Host.csproj.devonly.xml = Server.Host.csproj.devonly.xml
+		test\test.runsettngs = test\test.runsettngs
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{F7C0EE1B-7F6C-4B2E-99AB-3345DA66E5D0}"
@@ -89,6 +90,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{53F71CCA-422F-4BF4-BC98-4029C3C6FA72}"
 	ProjectSection(SolutionItems) = preProject
 		test\Directory.Build.props = test\Directory.Build.props
+		test\test.runsettngs = test\test.runsettngs
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Connector.FileStorage.All", "src\Connector.FileStorage.All\Connector.FileStorage.All.csproj", "{0B47EC62-2C7B-45AB-9867-31466F023AB3}"
