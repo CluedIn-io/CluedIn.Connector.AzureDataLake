@@ -68,24 +68,47 @@ steps:
       publishCodeCoverage: true
       useGitVersionDotNetTool: true
       publishToDevFeed: true
-  # Unit Test
+   # Integration Test
+  - task: PowerShell@2
+    displayName: 'Setup Integration Test Environment'
+    inputs:
+      filePath: ${{ parameters.createIntegrationEnvironmentScriptFilePath }}
+      arguments: ${{ parameters.createIntegrationEnvironmentScriptArguments }}
+    condition: and ( succeeded(), ${{ parameters.runIntegrationTests }})
+  
   - task: DotNetCoreCLI@2
-    displayName: 'Run Unit tests 2'
+    displayName: 'Run Integration tests 2 '
+    condition: and ( succeeded(), ${{ parameters.runIntegrationTests }})
     inputs:
       command: 'test'
-      projects: 'test/unit/**/*.csproj'
-      arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory) /p:CollectCoverage=true /p:Exclude="[xunit.*]*%2c[*.Test]*" --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
-  # Unit Test
+      testRunTitle: 'Integration Tests'
+      nobuild: true
+      projects: 'test/integration/**/*.csproj'
+      arguments: '--configuration $(buildConfiguration) --settings ./test/test.runsettings --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+  
   - task: DotNetCoreCLI@2
-    displayName: 'Run Unit tests 3'
+    displayName: 'Run Integration tests 3'
+    condition: and ( succeeded(), ${{ parameters.runIntegrationTests }})
     inputs:
       command: 'test'
-      projects: 'test/unit/**/*.csproj'
-      arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory) --settings ./test/test.runsettings /p:CollectCoverage=true /p:Exclude="[xunit.*]*%2c[*.Test]*" --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
-  # Unit Test
+      testRunTitle: 'Integration Tests'
+      nobuild: true
+      projects: 'test/integration/**/*.csproj'
+      arguments: '--configuration $(buildConfiguration) --settings --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+  
   - task: DotNetCoreCLI@2
-    displayName: 'Run Unit tests 4'
+    displayName: 'Run Integration tests 4'
+    condition: and ( succeeded(), ${{ parameters.runIntegrationTests }})
     inputs:
       command: 'test'
-      projects: 'test/unit/**/*.csproj'
-      arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)  --settings ./test/test.runsettings /p:CollectCoverage=true /p:Exclude="[xunit.*]*%2c[*.Test]*" --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+      testRunTitle: 'Integration Tests'
+      nobuild: true
+      projects: 'test/integration/**/*.csproj'
+      arguments: '--configuration $(buildConfiguration) --settings  ./test/test.runsettings --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+  
+  - task: PowerShell@2
+    displayName: 'Tear Down Integration Test Environment'
+    inputs:
+      filePath: './build/integration-test.ps1'
+      arguments: '-Action TearDown'
+    condition: and ( always(), ${{ parameters.runIntegrationTests }})
