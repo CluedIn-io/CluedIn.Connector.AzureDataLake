@@ -22,7 +22,7 @@ internal class SasTokenHelper
         var sasBuilder = new AccountSasBuilder()
         {
             ResourceTypes = AccountSasResourceTypes.Container | AccountSasResourceTypes.Object,
-            StartsOn = DateTimeOffset.UtcNow,
+            StartsOn = DateTimeOffset.UtcNow.AddMinutes(-5),
             ExpiresOn = DateTimeOffset.UtcNow.AddHours(1),
             Services = AccountSasServices.Blobs,
             Protocol = SasProtocol.Https,
