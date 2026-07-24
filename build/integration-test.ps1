@@ -4,6 +4,7 @@ param(
 	[ValidateSet('SetUp','TearDown')]
 	[string]$Action
 )
+
 function WaitFor {
 	param(
 		[scriptblock]$Command,
@@ -42,16 +43,19 @@ function Get-ContainerName() {
 	return "datalaketest"
 }
 
-function Run-Setup() {
-	$databaseName = "DataStore.Db.StreamCache"
-	$databaseHost = "localhost"
-	$databaseUser = "sa"
-	$databasePassword = "yourStrong(!)Password"
-	$containerName = (Get-ContainerName)
-	$sqlServerImage = "mcr.microsoft.com/mssql/server:2022-latest"
-	
+$databaseName = "DataStore.Db.StreamCache"
+$databaseHost = "localhost"
+$databaseUser = "sa"
+$databasePassword = "yourStrong(!)Password"
+$containerName = (Get-ContainerName)
+$sqlServerImage = "mcr.microsoft.com/mssql/server:2022-latest"
+
+function Run-SetUpPreparation() {
 	Write-Host "##[command]docker run -d -e `"ACCEPT_EULA=Y`" --name $containerName -p `":1433`" -e `"MSSQL_SA_PASSWORD=$($databasePassword)`" $sqlServerImage"
 	docker run -d -e "ACCEPT_EULA=Y" --name $containerName -p ":1433" -e "MSSQL_SA_PASSWORD=$($databasePassword)" $sqlServerImage
+}
+
+function Run-Setup() {
 	$port = ((docker inspect $containerName | convertfrom-json).NetworkSettings.Ports."1433/tcp" | Where-Object { $_.HostIp -eq '0.0.0.0'}).HostPort
 	$connectionString = "Data Source=$($databaseHost),$($port);Initial Catalog=$($databaseName);User Id=$($databaseUser);Password=$($databasePassword);connection timeout=0;Max Pool Size=200;Pooling=True;Encrypt=false"
 	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
@@ -83,6 +87,11 @@ function Run() {
 		"SetUp" {
 			Write-Host "Performing set up."
 			Run-SetUp
+		}
+		
+		"SetUpPreparation" {
+			Write-Host "Performing set up preparation."
+			Run-SetUpPreparation
 		}
 	}
 }

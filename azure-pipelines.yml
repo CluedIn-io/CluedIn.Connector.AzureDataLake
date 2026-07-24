@@ -56,6 +56,13 @@ steps:
   - task: NuGetAuthenticate@0
     displayName: 'Authenticate with nuget'
 
+  - task: PowerShell@2
+    displayName: 'Setup Preparation Integration Test Environment'
+    inputs:
+      filePath: './build/integration-test.ps1'
+      arguments: '-Action SetUpPreparation'
+    condition: and ( always(), ${{ parameters.runIntegrationTests }}, ${{ ne(parameters.createIntegrationEnvironmentScriptFilePath, '') }})
+
   - template: crawler.build.yml@templates
     parameters:
       githubReleaseInMaster: true
