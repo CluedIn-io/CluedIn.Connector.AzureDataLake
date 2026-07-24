@@ -63,7 +63,7 @@ steps:
   - task: PowerShell@2
     displayName: 'Setup Preparation Integration Test Environment'
     inputs:
-      filePath: './build/integration-test.ps1'
+      filePath: './CluedIn.Connector.AzureDataLake/build/integration-test.ps1'
       arguments: '-Action SetUpPreparation'
     condition: and ( always(), ${{ parameters.runIntegrationTests }})
 
