@@ -58,14 +58,17 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         }
     }
 
-    [Fact]
-    public async Task VerifyConnection_WhenValidSasToken_ReturnsSuccess()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task VerifyConnection_WhenValidSasToken_ReturnsSuccess(bool hasStartTime)
     {
         var configuration = CreateConfigurationWithoutStreamCache();
 
         var sasToken = SasTokenHelper.CreateSasToken(
             configuration[nameof(AzureDataLakeConfigurationConstants.AccountName)] as string,
-            configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] as string);
+            configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] as string,
+            hasStartTime);
         configuration[nameof(AzureDataLakeConfigurationConstants.AccountKey)] = sasToken;
 
         var jobData = new AzureDataLakeConnectorConfiguration(configuration);
@@ -185,6 +188,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     [Theory]
     [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2099-07-23T07%3A33%3A38Z&se=2026-07-24T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
     [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2000-07-23T07%3A33%3A38Z&se=2000-07-24T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&se=2000-07-24T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
     [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2026-07-22T07%3A33%3A38Z&se=2026-07-23T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
     [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=asdf&se=2026-07-23T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
     [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2026-07-22T07%3A33%3A38Z&se=asdf&sp=rwdlc&sig=dummysignature")]
@@ -214,6 +218,9 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
     }
 
     [Theory]
+    [InlineData("sv=2025-07-05&srt=co&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
+    [InlineData("sv=2025-07-05&ss=b&srt=co&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sig=dummysignature")]
     [InlineData("sv=2025-07-05&ss=tqf&srt=co&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
     [InlineData("sv=2025-07-05&ss=b&srt=sc&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]
     [InlineData("sv=2025-07-05&ss=b&srt=so&spr=https&st=2000-01-01T07%3A33%3A38Z&se=2099-12-31T07%3A33%3A38Z&sp=rwdlc&sig=dummysignature")]

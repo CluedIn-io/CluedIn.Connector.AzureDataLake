@@ -7,7 +7,7 @@ namespace CluedIn.Connector.AzureDataLake.Tests.Integration;
 
 internal class SasTokenHelper
 {
-    public static string CreateSasToken(string accountName, string accountKey)
+    public static string CreateSasToken(string accountName, string accountKey, bool hasStartTime = true)
     {
         if (string.IsNullOrWhiteSpace(accountName))
         {
@@ -22,7 +22,7 @@ internal class SasTokenHelper
         var sasBuilder = new AccountSasBuilder()
         {
             ResourceTypes = AccountSasResourceTypes.Container | AccountSasResourceTypes.Object,
-            StartsOn = DateTimeOffset.UtcNow.AddMinutes(-5),
+            StartsOn = hasStartTime ? DateTimeOffset.UtcNow.AddMinutes(-5) : DateTimeOffset.MinValue,
             ExpiresOn = DateTimeOffset.UtcNow.AddHours(1),
             Services = AccountSasServices.Blobs,
             Protocol = SasProtocol.Https,

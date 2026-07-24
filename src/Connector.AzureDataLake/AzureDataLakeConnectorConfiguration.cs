@@ -127,26 +127,33 @@ internal class AzureDataLakeConnectorConfiguration
             var queryParameters = HttpUtility.ParseQueryString(AccountKey); // Validate the SAS token format
             var st = queryParameters["st"];
             var se = queryParameters["se"];
-            if (st == null || se == null)
+
+            // st is optional, but if it is present, it must be a valid DateTimeOffset and less than se. If st is not present, we assume the SAS token is valid.
+            if (se == null)
             {
                 return false;
             }
 
-            var isValidStart = DateTimeOffset.TryParse(st, out var parsedStart); // Validate the start time format
-            var isValidEnd = DateTimeOffset.TryParse(se, out var parsedEnd); // Validate the end time format
-
             var now = dateTimeOffsetProvider.GetCurrentUtcTime();
-            return isValidStart &&
-                isValidEnd &&
-                parsedStart < parsedEnd &&
-                parsedEnd.ToUniversalTime() > now &&
-                parsedStart.ToUniversalTime() <= now;
+            var parsedEnd = DateTimeOffset.MinValue;
+            var isValidEnd = DateTimeOffset.TryParse(se, out parsedEnd) && parsedEnd.ToUniversalTime() > now; // Validate the end time format
+
+            // Validate the start time format
+            // If st is null, we consider it valid.
+            // If st is not null, we check if it is a valid DateTimeOffset, later than the current time and less than se
+            var isValidStart = st == null ||
+                (DateTimeOffset.TryParse(st, out var parsedStart) &&
+                    parsedStart < parsedEnd &&
+                    parsedStart.ToUniversalTime() <= now);
+
+            return isValidStart && isValidEnd;
         }
         catch
         {
             return false;
         }
     }
+
     internal bool IsValidSasTokenPermissions()
     {
         if (string.IsNullOrWhiteSpace(AccountKey))
