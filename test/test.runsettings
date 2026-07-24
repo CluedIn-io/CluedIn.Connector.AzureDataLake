@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RunSettings>
-    <MaxCpuCount>0</MaxCpuCount>
+    <MaxCpuCount>10</MaxCpuCount>
 </RunSettings>
