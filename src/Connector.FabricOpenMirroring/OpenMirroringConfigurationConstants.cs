@@ -35,6 +35,10 @@ public class OpenMirroringConfigurationConstants : StorageConfigurationConstants
 
     protected override string CacheKeyword => "FabricOpenMirroringConnector";
 
+    public string MirroredDatabaseCreationRetryIntervalKeyName => $"Streams.{CacheKeyword}.MirroredDatabaseCreationRetryInterval";
+
+    public int MirroredDatabaseCreationRetryIntervalDefaultValue => 10 * 60 * 1000; // 10 minutes in milliseconds
+
     private static AuthMethods GetOpenMirroringAuthMethods(ApplicationContext applicationContext)
     {
         var controls = new List<Control>

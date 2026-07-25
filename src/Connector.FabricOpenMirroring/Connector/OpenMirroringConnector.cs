@@ -8,11 +8,13 @@ using Azure.Identity;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
-using CluedIn.Core.Connectors;
+using CluedIn.Core.Configuration;
+using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Streams.Models;
 
 using Microsoft.Extensions.Logging;
 
+using Interlocked = System.Threading.Interlocked;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
@@ -22,7 +24,10 @@ public class OpenMirroringConnector : StorageConnectorBase
     internal const string InvalidWorkspaceErrorMessage = "Workspace name cannot be empty.";
     internal const string WorkspaceNotFoundErrorMessageFormat = "Workspace '{0}' is not found.";
     internal const string WorkspaceNotFoundErrorCode = "WorkspaceNotFound";
-
+    internal const string ArtifactNotFoundErrorMessageFormat = "Mirrored Database '{0}' is not found in workspace '{1}'.";
+    internal const string ArtifactNotFoundAndWillBeCreatedErrorMessageFormat = "Mirrored Database '{0}' is not found in workspace '{1}' and will be created automatically.";
+    internal const string ArtifactNotFoundErrorCode = "ArtifactNotFound";
+    private readonly TimeSpan _mirroredDatabaseCreationRetryInterval;
     private readonly ILogger<OpenMirroringConnector> _logger;
     private readonly OpenMirroringStorageFactory _storageStorageFactory;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
@@ -38,6 +43,12 @@ public class OpenMirroringConnector : StorageConnectorBase
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _storageStorageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
         _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+
+        var createDatabaseRetryIntervalMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.MirroredDatabaseCreationRetryIntervalKeyName, constants.MirroredDatabaseCreationRetryIntervalDefaultValue);
+
+        _mirroredDatabaseCreationRetryInterval = createDatabaseRetryIntervalMilliseconds > 0
+            ? TimeSpan.FromMilliseconds(createDatabaseRetryIntervalMilliseconds)
+            : TimeSpan.Zero;
     }
 
     protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
@@ -102,6 +113,44 @@ public class OpenMirroringConnector : StorageConnectorBase
 
             return CreateFailedConnectionVerification(errorMessage, hasException: true);
         }
+        catch (RequestFailedException ex) when (ArtifactNotFoundErrorCode.Equals(ex.ErrorCode))
+        {
+            var canCreate = isHealthCheckVerification && casted.ShouldCreateMirroredDatabase;
+
+            if (canCreate)
+            {
+                // We should only try to create occasionally & not at every minute interval of health check
+                // Should also not try to create user click test connection because the provider definition is not present
+                canCreate = false;
+                var cacheKey = $"OpenMirroringConnector_{executionContext.Organization.Id}_{casted.TenantId}_{casted.WorkspaceName}_{casted.MirroredDatabaseName}";
+                _ = executionContext.ApplicationContext.System.Cache.GetItem(cacheKey, () =>
+                {
+                    canCreate = true;
+                    return false;
+                },
+                cachePolicy: cachePolicy => cachePolicy
+                    .WithAbsoluteExpiration(
+                        _dateTimeOffsetProvider
+                        .GetCurrentUtcTime()
+                        .Add(_mirroredDatabaseCreationRetryInterval)));
+            }
+
+            var format = canCreate ? ArtifactNotFoundAndWillBeCreatedErrorMessageFormat : ArtifactNotFoundErrorMessageFormat;
+            var errorMessage = format.FormatWith(casted.MirroredDatabaseName, casted.WorkspaceName);
+
+            if (shouldLogException)
+            {
+                _logger.LogWarning(ex, format, casted.MirroredDatabaseName, casted.WorkspaceName);
+            }
+
+            if (canCreate)
+            {
+                // Try to create the mirrored database in the background, but don't block the health check
+                _ = Task.Run(() => TryCreateMirroredDatabase(executionContext, casted, client, shouldLogException));
+            }
+
+            return CreateFailedConnectionVerification(errorMessage, hasException: true);
+        }
         catch (Exception ex)
         {
             if (shouldLogException)
@@ -109,6 +158,29 @@ public class OpenMirroringConnector : StorageConnectorBase
                 _logger.LogWarning(ex, "Failed to check if directory exists.");
             }
             return CreateFailedConnectionVerification(ex.Message, hasException: true);
+        }
+
+        static async Task TryCreateMirroredDatabase(ExecutionContext executionContext, OpenMirroringConnectorConfiguration casted, OpenMirroringStorageClient client, bool shouldLogException)
+        {
+            try
+            {
+                var providerDefinitionStore = executionContext.Organization.DataStores.GetDataStore<ProviderDefinition>();
+                if (casted.Configurations.TryGetValue(StorageConfigurationConstants.ProviderDefinitionIdKey, out var providerDefinitionId))
+                {
+                    if (providerDefinitionId is string providerDefinitionIdString && Guid.TryParse(providerDefinitionIdString, out var providerDefinitionGuid))
+                    {
+                        var providerDefinition = await providerDefinitionStore.GetByIdAsync(executionContext, providerDefinitionGuid);
+                        await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinitionGuid, providerDefinition.IsEnabled);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (shouldLogException)
+                {
+                    executionContext.Log.LogWarning(ex, "Failed to create mirrored database.");
+                }
+            }
         }
     }
 

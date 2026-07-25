@@ -99,6 +99,6 @@ internal class ExportTargetEventHandler : IDisposable
 
         var client = await _storageFactory.CreateStorageClient(executionContext, configuration) as OpenMirroringStorageClient;
 
-        await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinition.IsEnabled);
+        await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinition.Id,  providerDefinition.IsEnabled);
     }
 }

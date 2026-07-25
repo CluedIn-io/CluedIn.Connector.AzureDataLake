@@ -7,18 +7,25 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Transactions;
 
 using Azure.Core;
 using Azure.Identity;
+
 using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
 internal class OpenMirroringStorageClient : DataLakeStorageClient
 {
+    private const int MillisecondsBetweenMirroredDatabaseCreationRetries = 30_000;
+    private const int CreateMirroredDatabaseMaximumRetries = 3;
+    private const int CreateMirroredDatabaseLockTimeoutInMilliseconds = 100;
     private readonly ApplicationContext _applicationContext;
     private readonly ILogger<OpenMirroringStorageClient> _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
@@ -52,7 +59,6 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
         var fileSystemClient = await GetFileSystemClientAsync(createIfNotExists: false);
         return fileSystemClient != null;
     }
-
 
     protected override async Task<string> GetStorageUrlAsync()
     {
@@ -121,15 +127,27 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
         return token;
     }
 
-    public virtual async Task UpdateOrCreateMirroredDatabaseAsync(bool isEnabled)
+    public virtual async Task UpdateOrCreateMirroredDatabaseAsync(Guid providerDefinitionId, bool isEnabled)
     {
         if (!_configuration.ShouldCreateMirroredDatabase)
         {
-            _logger.LogDebug("Skipping creation of mirrored database because {Setting} is disabled.", nameof(_configuration.ShouldCreateMirroredDatabase));
+            _logger.LogDebug("Skipping creation of mirrored database '{MirroredDatabaseName}' because {Setting} is disabled.", _configuration.MirroredDatabaseName, nameof(_configuration.ShouldCreateMirroredDatabase));
             return;
         }
 
-        var sharedKeyCredential = new ClientSecretCredential(_configuration.TenantId, _configuration.ClientId, _configuration.ClientSecret);
+        using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+        await using var connection = new SqlConnection(_configuration.StreamCacheConnectionString);
+        await connection.OpenAsync();
+
+
+        if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"CreateMirroredDatabase_{providerDefinitionId}", CreateMirroredDatabaseLockTimeoutInMilliseconds))
+        {
+            _logger.LogInformation("Unable to acquire lock to create mirrored database for ProviderDefinition '{ProviderDefinitionId}'. Skipping creation.", providerDefinitionId);
+            return;
+        }
+
+        _logger.LogInformation("Begin create mirrored database '{MirroredDatabaseName}' for ProviderDefinition '{ProviderDefinitionId}'.", _configuration.MirroredDatabaseName, providerDefinitionId);
+
         var token = await GetToken();
 
         using var httpClient = new HttpClient();
@@ -140,20 +158,45 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
             throw new ApplicationException($"Failed to find workspace using {_configuration.WorkspaceName}.");
         }
 
-        var mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
-        if (mirroredDatabase == null)
+        for (var i = 0; i < CreateMirroredDatabaseMaximumRetries; i++)
         {
-            await CreateMirroredDatabase(httpClient, token, workspace);
-            mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
+            try
+            {
+                await CreateAndSetState();
+                _logger.LogInformation("End create mirrored database '{MirroredDatabaseName}' for ProviderDefinition '{ProviderDefinitionId}'.", _configuration.MirroredDatabaseName, providerDefinitionId);
+                return;
+            }
+            catch (Exception e)
+            {
+                if (i < CreateMirroredDatabaseMaximumRetries - 1)
+                {
+                    _logger.LogWarning(e, "Failed to create or set state for mirrored database '{MirroredDatabaseName}'. Attempt {Attempt} of {MaximumRetries}. Retrying...", _configuration.MirroredDatabaseName, i + 1, CreateMirroredDatabaseMaximumRetries);
+                    await Task.Delay(TimeSpan.FromMilliseconds(MillisecondsBetweenMirroredDatabaseCreationRetries));
+                    continue;
+                }
+
+                _logger.LogError(e, "Failed to create or set state for mirrored database '{MirroredDatabaseName}' after {MaximumRetries} attempts.", _configuration.MirroredDatabaseName, CreateMirroredDatabaseMaximumRetries);
+                throw;
+            }
         }
 
-        if (isEnabled)
+        async Task CreateAndSetState()
         {
-            await StartMirroringAsync(httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
-        }
-        else
-        {
-            await StopMirroringAsync(httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
+            var mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
+            if (mirroredDatabase == null)
+            {
+                await CreateMirroredDatabase(httpClient, token, workspace);
+                mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
+            }
+
+            if (isEnabled)
+            {
+                await StartMirroringAsync(httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
+            }
+            else
+            {
+                await StopMirroringAsync(httpClient, token, mirroredDatabase.WorkspaceId.Value, mirroredDatabase.Id.Value);
+            }
         }
     }
 
@@ -295,7 +338,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
 
     private async Task<MirroredDatabase?> GetMirroredDatabaseAsync(HttpClient httpClient, string token, Guid workspaceId)
     {
-        var mirroredDatabaseName = _configuration.MirroredDatabaseName;
+        var mirroredDatabaseName = _configuration.MirroredDatabaseName.Trim();
         await foreach (var mirroredDatabase in ListMirroredDatabasesAsync())
         {
             if (mirroredDatabase.DisplayName.Equals(mirroredDatabaseName, StringComparison.OrdinalIgnoreCase))
@@ -341,7 +384,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
 
     private async Task<Workspace?> GetWorkspaceAsync(HttpClient httpClient, string token)
     {
-        var workspaceName = _configuration.WorkspaceName;
+        var workspaceName = _configuration.WorkspaceName.Trim();
         _logger.LogDebug("Begin getting workspace from name {WorkspaceName}.", workspaceName);
         await foreach (var workspace in ListWorkspacesAsync())
         {
