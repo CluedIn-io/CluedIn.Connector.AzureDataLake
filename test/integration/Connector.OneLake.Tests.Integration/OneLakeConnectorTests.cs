@@ -615,7 +615,8 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     protected override Mock<OneLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<IOneLakeConfigurationConstants> constantsMock)
     {
         //container.Register(Component.For<OneLakeFactory>().ImplementedBy<OneLakeFactory>().LifestyleSingleton());
         var storageFactory = new Mock<OneLakeStorageFactory>();

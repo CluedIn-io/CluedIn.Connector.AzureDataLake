@@ -6,9 +6,11 @@
         MUST SPECIFY IN CSPROJ AS <PackageReference Name="<depName>" />
     -->
     <PackageReference Update="AWSSDK.S3" Version="4.0.23.3" />
+    <PackageReference Update="Azure.Security.KeyVault.Secrets" Version="4.7.0" />
     <PackageReference Update="Azure.Storage.Files.DataLake" Version="12.22.0" />
     <PackageReference Update="CluedIn.Core" Version="$(_CluedIn)" />
     <PackageReference Update="CluedIn.Streams" Version="$(_CluedIn)" />
+    <PackageReference Update="CluedIn.Integration.PrivateServices" Version="$(_CluedIn)" />
     <PackageReference Update="CluedIn.ComponentHealth" Version="$(_CluedIn)" />
     <PackageReference Update="NCrontab" Version="3.3.3" />
     <PackageReference Update="Parquet.Net" Version="4.23.5" />
