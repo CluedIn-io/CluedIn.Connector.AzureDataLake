@@ -5,5 +5,4 @@ internal interface IAzureServicePrincipalCredentialConfiguration : IDataLakeStor
     string TenantId { get; }
     string ClientId { get; }
     string ClientSecret { get; }
-    string AccountName { get; }
 }
