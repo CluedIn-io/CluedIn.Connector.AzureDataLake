@@ -811,7 +811,8 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     protected override Mock<OpenMirroringStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<IOpenMirroringConfigurationConstants> constantsMock)
     {
         var dataFactoryMock = new Mock<OpenMirroringStorageFactory>();
         dataFactoryMock.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
