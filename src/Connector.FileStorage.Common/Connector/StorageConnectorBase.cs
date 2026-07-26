@@ -1022,14 +1022,6 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             Dictionary<string, Type> DataValueTypes);
         private record Partition(Guid OrganizationId, IStorageConfiguration Configuration);
 
-        protected class FileStorageConnectionVerificationResult : ConnectionVerificationResult
-        {
-            public FileStorageConnectionVerificationResult(bool success, string errorMessage = null, bool hasException = false) : base(success, errorMessage)
-            {
-                HasException = hasException;
-            }
 
-            public bool HasException { get; }
-        }
     }
 }
