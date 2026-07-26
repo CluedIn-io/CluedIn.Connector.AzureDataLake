@@ -142,7 +142,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         SetupConfiguration(configuration);
 
         var constantsMock = CreateConstantsMock();
-        var storageFactoryMock = CreateStorageFactoryMock(container, applicationContext, mockDateTimeOffsetProvider);
+        var storageFactoryMock = CreateStorageFactoryMock(container, applicationContext, mockDateTimeOffsetProvider, constantsMock);
         var connectorMock = GetConnectorMock(applicationContext, mockDateTimeOffsetProvider, constantsMock, storageFactoryMock);
         storageFactoryMock.Setup(x => x.CreateStorageConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<IReadOnlyStreamModel>()))
             .ReturnsAsync(configuration);
@@ -176,7 +176,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     protected abstract Mock<TClientFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider);
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<TConfigurationConstants> constantsMock);
 
     protected virtual StreamModel CreateStreamModel(
         Organization organization,

@@ -7,6 +7,7 @@
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureAIStudio\bin\Debug\net6.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureDatabricks\bin\Debug\net6.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.SynapseDataEngineering\bin\Debug\net6.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.security.keyvault.secrets\4.7.0\lib\netstandard2.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.files.datalake\12.22.0\lib\netstandard2.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.common\12.23.0\lib\netstandard2.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.blobs\12.24.0\lib\netstandard2.0\*.*" />

@@ -7,4 +7,6 @@ internal interface IDataLakeStorageConfiguration : IStorageConfiguration
     string StorageUri { get; }
 
     string FileSystemName { get; }
+
+    string AccountName { get; }
 }
