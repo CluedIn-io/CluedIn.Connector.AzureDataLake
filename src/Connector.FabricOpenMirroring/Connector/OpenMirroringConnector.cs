@@ -144,7 +144,14 @@ public class OpenMirroringConnector : StorageConnectorBase
             if (canCreate)
             {
                 // Try to create the mirrored database in the background, but don't block the health check
-                _ = Task.Run(() => TryCreateMirroredDatabase(executionContext, casted, client, shouldLogException));
+                _ = Task.Run(async () =>
+                {
+                    using var backgroundClient = await _storageStorageFactory.CreateStorageClient(executionContext, casted) as OpenMirroringStorageClient;
+                    if (backgroundClient != null)
+                    {
+                        await TryCreateMirroredDatabase(executionContext, casted, backgroundClient, shouldLogException);
+                    }
+                });
             }
 
             return CreateFailedConnectionVerification(errorMessage, hasException: true);
