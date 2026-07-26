@@ -187,6 +187,10 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
             {
                 await CreateMirroredDatabase(httpClient, token, workspace);
                 mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
+                if (mirroredDatabase == null)
+                {
+                    throw new ApplicationException($"Mirrored database '{_configuration.MirroredDatabaseName}' was not found after creation in workspace '{workspace.Id}'.");
+                }
             }
 
             if (isEnabled)
