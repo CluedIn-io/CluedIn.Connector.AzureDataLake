@@ -14,8 +14,6 @@ using CluedIn.Core.Streams.Models;
 
 using Microsoft.Extensions.Logging;
 
-using Interlocked = System.Threading.Interlocked;
-
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
 public class OpenMirroringConnector : StorageConnectorBase
