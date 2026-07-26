@@ -11,7 +11,7 @@ public interface IOpenMirroringConfigurationConstants : IStorageConfigurationCon
     string MirroredDatabaseCreationRetryIntervalKeyName { get; }
 
     /// <summary>
-    /// Default value for mirrored database creation retry interval in minutes.
+    /// Default value for mirrored database creation retry interval in milliseconds.
     /// </summary>
     int MirroredDatabaseCreationRetryIntervalDefaultValue { get; }
 }
