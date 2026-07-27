@@ -14,6 +14,8 @@ using CluedIn.Core.Streams.Models;
 
 using Microsoft.Extensions.Logging;
 
+using Neo4j.Driver;
+
 namespace CluedIn.Connector.FabricOpenMirroring.Connector;
 
 public class OpenMirroringConnector : StorageConnectorBase
@@ -72,25 +74,28 @@ public class OpenMirroringConnector : StorageConnectorBase
         var shouldTolerateMissingDirectory = !isHealthCheckVerification && casted.ShouldCreateMirroredDatabase;
 
         using var client = await _storageStorageFactory.CreateStorageClient(executionContext, casted) as OpenMirroringStorageClient;
-        if (shouldTolerateMissingDirectory)
-        {
-            if (await client.HasValidWorkspaceAsync())
-            {
-                return SuccessfulConnectionVerification;
-            }
-
-            return CreateFailedConnectionVerification(InvalidWorkspaceErrorMessage);
-        }
 
         try
         {
-            var basePath = await client.GetBaseDirectoryPathAsync();
-            if (await client.DirectoryExistsAsync(basePath))
+            if (shouldTolerateMissingDirectory)
             {
-                return SuccessfulConnectionVerification;
-            }
+                if (await client.HasValidWorkspaceAsync())
+                {
+                    return SuccessfulConnectionVerification;
+                }
 
-            return CreateFailedConnectionVerification($"Directory '{basePath.Path}' is not found");
+                return CreateFailedConnectionVerification(InvalidWorkspaceErrorMessage);
+            }
+            else
+            {
+                var basePath = await client.GetBaseDirectoryPathAsync();
+                if (await client.DirectoryExistsAsync(basePath))
+                {
+                    return SuccessfulConnectionVerification;
+                }
+
+                return CreateFailedConnectionVerification($"Directory '{basePath.Path}' is not found");
+            }
         }
         catch (AuthenticationFailedException ex)
         {
@@ -124,7 +129,7 @@ public class OpenMirroringConnector : StorageConnectorBase
                 _ = executionContext.ApplicationContext.System.Cache.GetItem(cacheKey, () =>
                 {
                     canCreate = true;
-                    return false;
+                    return _dateTimeOffsetProvider.GetCurrentUtcTime().ToString("o");
                 },
                 cachePolicy: cachePolicy => cachePolicy
                     .WithAbsoluteExpiration(
@@ -146,10 +151,11 @@ public class OpenMirroringConnector : StorageConnectorBase
                 // Try to create the mirrored database in the background, but don't block the health check
                 _ = Task.Run(async () =>
                 {
-                    using var backgroundClient = await _storageStorageFactory.CreateStorageClient(executionContext, casted) as OpenMirroringStorageClient;
+                    await using var backgroundExecutionContext = executionContext.ApplicationContext.CreateExecutionContext(executionContext.Organization);
+                    using var backgroundClient = await _storageStorageFactory.CreateStorageClient(backgroundExecutionContext, casted) as OpenMirroringStorageClient;
                     if (backgroundClient != null)
                     {
-                        await TryCreateMirroredDatabase(executionContext, casted, backgroundClient, shouldLogException);
+                        await TryCreateMirroredDatabase(backgroundExecutionContext, casted, backgroundClient, shouldLogException);
                     }
                 });
             }
@@ -175,7 +181,30 @@ public class OpenMirroringConnector : StorageConnectorBase
                     if (providerDefinitionId is string providerDefinitionIdString && Guid.TryParse(providerDefinitionIdString, out var providerDefinitionGuid))
                     {
                         var providerDefinition = await providerDefinitionStore.GetByIdAsync(executionContext, providerDefinitionGuid);
-                        await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinitionGuid, providerDefinition.IsEnabled);
+
+                        if (providerDefinition == null)
+                        {
+                            executionContext.Log.LogWarning("Unable to find provider definition with id '{ProviderDefinitionId}'. Skipping creation.", providerDefinitionGuid);
+                            return;
+                        }
+
+                        if (providerDefinition.ProviderId != OpenMirroringConfigurationConstants.DataLakeProviderId)
+                        {
+                            executionContext.Log.LogWarning("Skipping creating of mirrored database for '{ProviderDefinitionId}' because ProviderId is not '{ProviderId}'.",
+                                providerDefinitionGuid,
+                                OpenMirroringConfigurationConstants.DataLakeProviderId);
+                            return;
+                        }
+
+                        var result = await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinitionGuid, providerDefinition.IsEnabled);
+                        if (result.IsCreated)
+                        {
+                            executionContext.Log.LogInformation("Successfully created mirrored database '{MirroredDatabaseName}' in workspace '{WorkspaceName}'.", casted.MirroredDatabaseName, casted.WorkspaceName);
+                        }
+                        else if (result.IsSkipped)
+                        {
+                            executionContext.Log.LogWarning("Skipped creating mirrored database '{MirroredDatabaseName}' in workspace '{WorkspaceName}'.", casted.MirroredDatabaseName, casted.WorkspaceName);
+                        }
                     }
                 }
             }

@@ -15,6 +15,7 @@ using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
+using CluedIn.Core.Caching;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
@@ -26,6 +27,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 using Xunit;
+
 using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;
@@ -726,18 +728,6 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
 
     }
 
-    private async Task AssertParquetResultEscapedWithRowMarker(
-        SetupContainerResult setupContainerResult,
-        ExportedFilePath filePath)
-    {
-        await base.AssertParquetResult(setupContainerResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
-        {
-            var result = original.ToList();
-            original.First().Columns["__rowMarker__"] = "4";
-            return result;
-        });
-    }
-
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
     {
         var exportJob = new OpenMirroringExportEntitiesJob(
@@ -791,6 +781,14 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             { nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName), mirroredDatabaseName },
             { nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase), false },
         };
+    }
+
+    protected override Mock<IOpenMirroringConfigurationConstants> CreateConstantsMock()
+    {
+        var constants = base.CreateConstantsMock();
+        constants.Setup(x => x.MirroredDatabaseCreationRetryIntervalKeyName).Returns("abc");
+        constants.Setup(x => x.MirroredDatabaseCreationRetryIntervalDefaultValue).Returns(60 * 10 * 1000);
+        return constants;
     }
 
     protected override Mock<OpenMirroringConnector> GetConnectorMock(
@@ -852,6 +850,117 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         }
 
         return $"{config.RootDirectoryPath}/{setupContainerResult.StreamModel.Id:N}";
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenArtifactNotFoundAndShouldCreateMirroredDatabase_ReturnWillBeCreatedMessage()
+    {
+        var nonExistentDatabaseName = $"NonExistent_{Guid.NewGuid():N}";
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = nonExistentDatabaseName;
+        configuration[nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase)] = true;
+        // Adding ProviderDefinitionIdKey makes IsHealthCheckVerification return true
+        configuration[StorageConfigurationConstants.ProviderDefinitionIdKey] = Guid.NewGuid().ToString();
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+
+        var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
+        var expectedMessage = OpenMirroringConnector.ArtifactNotFoundAndWillBeCreatedErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+        Assert.Equal(expectedMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenArtifactNotFoundAndShouldNotCreateMirroredDatabase_ReturnNotFoundMessage()
+    {
+        var nonExistentDatabaseName = $"NonExistent_{Guid.NewGuid():N}";
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = nonExistentDatabaseName;
+        configuration[nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase)] = false;
+        // Adding ProviderDefinitionIdKey makes IsHealthCheckVerification return true
+        configuration[StorageConfigurationConstants.ProviderDefinitionIdKey] = Guid.NewGuid().ToString();
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+
+        var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
+        var expectedMessage = OpenMirroringConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+        Assert.Equal(expectedMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenArtifactNotFoundAndNotHealthCheck_ReturnNotFoundMessage()
+    {
+        var nonExistentDatabaseName = $"NonExistent_{Guid.NewGuid():N}";
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = nonExistentDatabaseName;
+        configuration[nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase)] = false;
+        // Not adding ProviderDefinitionIdKey means IsHealthCheckVerification returns false
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+
+        var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
+        var expectedMessage = OpenMirroringConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+        Assert.Equal(expectedMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenArtifactNotFoundAndShouldCreate_OnlyTriggersCreationOnFirstCallWithinRetryInterval()
+    {
+        var nonExistentDatabaseName = $"NonExistent_{Guid.NewGuid():N}";
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = nonExistentDatabaseName;
+        configuration[nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase)] = true;
+        configuration[StorageConfigurationConstants.ProviderDefinitionIdKey] = Guid.NewGuid().ToString();
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        setupResult.DateTimeOffsetProviderMock.Setup(provider => provider.GetCurrentUtcTime())
+            .Returns(DateTimeOffset.UtcNow);
+
+        var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
+        var willBeCreatedMessage = OpenMirroringConnector.ArtifactNotFoundAndWillBeCreatedErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+        var notFoundMessage = OpenMirroringConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+
+        // First call - should trigger creation (cache miss)
+        var firstResult = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(firstResult);
+        Assert.False(firstResult.Success);
+        Assert.Equal(willBeCreatedMessage, firstResult.ErrorMessage);
+
+        // Second call - should NOT trigger creation (cache hit within retry interval)
+        var secondResult = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(secondResult);
+        Assert.False(secondResult.Success);
+        Assert.Equal(notFoundMessage, secondResult.ErrorMessage);
+
+        // Third call - still within retry interval, should NOT trigger creation
+        var thirdResult = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(thirdResult);
+        Assert.False(thirdResult.Success);
+        Assert.Equal(notFoundMessage, thirdResult.ErrorMessage);
     }
 
     private protected override StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration)
