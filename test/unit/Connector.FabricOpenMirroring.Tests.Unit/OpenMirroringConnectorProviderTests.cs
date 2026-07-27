@@ -14,7 +14,7 @@ using Moq;
 
 using Xunit;
 
-namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;
+namespace CluedIn.Connector.FabricOpenMirroring.Tests.Unit;
 
 public class OpenMirroringConnectorProviderTests
 {
