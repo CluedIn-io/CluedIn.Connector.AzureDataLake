@@ -148,26 +148,7 @@ public class OpenMirroringConnector : StorageConnectorBase
 
             if (canCreate)
             {
-                // Try to create the mirrored database in the background, but don't block the health check
-_ = Task.Run(async () =>
-{
-    try
-    {
-        await using var backgroundExecutionContext = executionContext.ApplicationContext.CreateExecutionContext(executionContext.Organization);
-        using var backgroundClient = await _storageStorageFactory.CreateStorageClient(backgroundExecutionContext, casted) as OpenMirroringStorageClient;
-        if (backgroundClient != null)
-        {
-            await TryCreateMirroredDatabase(backgroundExecutionContext, casted, backgroundClient, shouldLogException);
-        }
-    }
-    catch (Exception taskEx)
-    {
-        if (shouldLogException)
-        {
-            executionContext.Log.LogWarning(taskEx, "Failed to create mirrored database in background task.");
-        }
-    }
-});
+                FireAndForgetMirroredDatabaseCreation(executionContext, casted, shouldLogException);
             }
 
             return CreateFailedConnectionVerification(errorMessage, hasException: true);
@@ -179,6 +160,31 @@ _ = Task.Run(async () =>
                 _logger.LogWarning(ex, "Failed to check if directory exists.");
             }
             return CreateFailedConnectionVerification(ex.Message, hasException: true);
+        }
+
+        void FireAndForgetMirroredDatabaseCreation(ExecutionContext executionContext, OpenMirroringConnectorConfiguration casted, bool shouldLogException)
+        {
+
+            // Try to create the mirrored database in the background, but don't block the health check
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await using var backgroundExecutionContext = executionContext.ApplicationContext.CreateExecutionContext(executionContext.Organization);
+                    using var backgroundClient = await _storageStorageFactory.CreateStorageClient(backgroundExecutionContext, casted) as OpenMirroringStorageClient;
+                    if (backgroundClient != null)
+                    {
+                        await TryCreateMirroredDatabase(backgroundExecutionContext, casted, backgroundClient, shouldLogException);
+                    }
+                }
+                catch (Exception taskEx)
+                {
+                    if (shouldLogException)
+                    {
+                        executionContext.Log.LogWarning(taskEx, "Failed to create mirrored database in background task.");
+                    }
+                }
+            });
         }
 
         static async Task TryCreateMirroredDatabase(ExecutionContext executionContext, OpenMirroringConnectorConfiguration casted, OpenMirroringStorageClient client, bool shouldLogException)

@@ -128,8 +128,8 @@ public class OpenMirroringStorageClientTests
     private OpenMirroringStorageClient CreateClient(OpenMirroringConnectorConfiguration configuration)
     {
         var applicationContext = new ApplicationContext(new Castle.Windsor.WindsorContainer());
-var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
-mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(() => DateTimeOffset.UtcNow);
+        var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
+        mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(() => DateTimeOffset.UtcNow);
 
         return new OpenMirroringStorageClient(
             NullLogger<OpenMirroringStorageClient>.Instance,
@@ -148,14 +148,14 @@ mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(() => DateT
         var workspaceName = workspaceNameOverride ?? Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_WORKSPACENAME");
         var mirroredDatabaseName = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_MIRROREDDATABASENAME");
 
-Assert.NotNull(tenantId);
-Assert.NotNull(clientId);
-Assert.NotNull(clientSecretEncoded);
-Assert.NotNull(workspaceName);
-Assert.NotNull(mirroredDatabaseName);
+        Assert.NotNull(tenantId);
+        Assert.NotNull(clientId);
+        Assert.NotNull(clientSecretEncoded);
+        Assert.NotNull(workspaceName);
+        Assert.NotNull(mirroredDatabaseName);
 
-var clientSecretString = Encoding.UTF8.GetString(Convert.FromBase64String(clientSecretEncoded));
-Assert.False(string.IsNullOrWhiteSpace(clientSecretString));
+        var clientSecretString = Encoding.UTF8.GetString(Convert.FromBase64String(clientSecretEncoded));
+        Assert.False(string.IsNullOrWhiteSpace(clientSecretString));
 
         _testOutputHelper.WriteLine(
             "Using TenantId: '{0}', ClientId: '{1}', WorkspaceName: '{2}', MirroredDatabaseName: '{3}', ShouldCreateMirroredDatabase: '{4}'.",

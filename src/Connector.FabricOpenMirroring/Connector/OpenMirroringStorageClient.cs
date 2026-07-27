@@ -28,6 +28,8 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
     private readonly ILogger<OpenMirroringStorageClient> _logger;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
     private readonly OpenMirroringConnectorConfiguration _configuration;
+    private static readonly TimeSpan CreationPollTimeOut = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan DelayBetweenCreationPolls = TimeSpan.FromSeconds(5);
 private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(TimeSpan.FromMinutes(5)); // Buffer for create/list + start/stop mirroring
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions()
     {
