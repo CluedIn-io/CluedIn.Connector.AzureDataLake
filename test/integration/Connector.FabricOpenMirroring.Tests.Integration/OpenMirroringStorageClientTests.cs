@@ -128,8 +128,8 @@ public class OpenMirroringStorageClientTests
     private OpenMirroringStorageClient CreateClient(OpenMirroringConnectorConfiguration configuration)
     {
         var applicationContext = new ApplicationContext(new Castle.Windsor.WindsorContainer());
-        var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
-        mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DateTimeOffset.UtcNow);
+var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
+mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(() => DateTimeOffset.UtcNow);
 
         return new OpenMirroringStorageClient(
             NullLogger<OpenMirroringStorageClient>.Instance,
