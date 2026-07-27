@@ -27,7 +27,9 @@ public class OneLakeConnectorProvider : ConnectorProviderBase<OneLakeConnectorPr
        OneLakeConfigurationConstants.ItemName,
        OneLakeConfigurationConstants.ClientId,
        OneLakeConfigurationConstants.TenantId,
-    }; public override async Task<CrawlJobData> GetCrawlJobData(
+    };
+
+    public override async Task<CrawlJobData> GetCrawlJobData(
         ProviderUpdateContext context, IDictionary<string, object> configuration, Guid organizationId, Guid userId, Guid providerDefinitionId)
     {
         var data = await base.GetCrawlJobData(context, configuration, organizationId, userId, providerDefinitionId);
