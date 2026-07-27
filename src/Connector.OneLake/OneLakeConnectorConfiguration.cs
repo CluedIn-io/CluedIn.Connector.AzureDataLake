@@ -18,7 +18,7 @@ internal class OneLakeConnectorConfiguration : StorageConfigurationBase, IAzureS
     public string WorkspaceName => GetConfigurationTrimmedStringValue(OneLakeConfigurationConstants.WorkspaceName);
     public string ItemName => GetConfigurationTrimmedStringValue(OneLakeConfigurationConstants.ItemName);
     public string ItemType => Configurations[OneLakeConfigurationConstants.ItemType] as string;
-    public string ItemFolder => GetConfigurationTrimmedStringValue(OneLakeConfigurationConstants.ItemFolder) as string;
+    public string ItemFolder => GetConfigurationTrimmedStringValue(OneLakeConfigurationConstants.ItemFolder);
     public string ClientId => Configurations[OneLakeConfigurationConstants.ClientId] as string;
     public string ClientSecret => Configurations[OneLakeConfigurationConstants.ClientSecret] as string;
     public string TenantId => Configurations[OneLakeConfigurationConstants.TenantId] as string;
