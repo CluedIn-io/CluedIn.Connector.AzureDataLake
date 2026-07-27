@@ -148,13 +148,14 @@ mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(() => DateT
         var workspaceName = workspaceNameOverride ?? Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_WORKSPACENAME");
         var mirroredDatabaseName = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_MIRROREDDATABASENAME");
 
-        var clientSecretString = Encoding.UTF8.GetString(Convert.FromBase64String(clientSecretEncoded));
+Assert.NotNull(tenantId);
+Assert.NotNull(clientId);
+Assert.NotNull(clientSecretEncoded);
+Assert.NotNull(workspaceName);
+Assert.NotNull(mirroredDatabaseName);
 
-        Assert.NotNull(tenantId);
-        Assert.NotNull(clientId);
-        Assert.NotNull(clientSecretString);
-        Assert.NotNull(workspaceName);
-        Assert.NotNull(mirroredDatabaseName);
+var clientSecretString = Encoding.UTF8.GetString(Convert.FromBase64String(clientSecretEncoded));
+Assert.False(string.IsNullOrWhiteSpace(clientSecretString));
 
         _testOutputHelper.WriteLine(
             "Using TenantId: '{0}', ClientId: '{1}', WorkspaceName: '{2}', MirroredDatabaseName: '{3}', ShouldCreateMirroredDatabase: '{4}'.",
