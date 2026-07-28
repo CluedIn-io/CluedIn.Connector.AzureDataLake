@@ -24,7 +24,7 @@ public class AzureDataLakeConnectorProvider : ConnectorProviderBase<AzureDataLak
         // Add default authentication method if not provided
         if (!configuration.ContainsKey(AzureDataLakeConfigurationConstants.AuthenticationMethod))
         {
-            configuration.Add(AzureDataLakeConfigurationConstants.AuthenticationMethod, AuthenticationMethods.AccessKeyOrSasToken.ToString());
+            configuration.Add(AzureDataLakeConfigurationConstants.AuthenticationMethod, AuthenticationMethods.SharedKey.ToString());
         }
     }
 

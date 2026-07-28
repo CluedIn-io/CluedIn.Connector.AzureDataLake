@@ -58,7 +58,7 @@ public class AzureDataLakeConnector : StorageConnectorBase
             return CreateFailedConnectionVerification(InvalidAuthenticationMethodErrorMessage);
         }
 
-        if (authMethod == AuthenticationMethods.AccessKeyOrSasToken)
+        if (authMethod == AuthenticationMethods.SharedKey)
         {
             if (AzureDataLakeConnectorConfiguration.IsSharedAccessKey(casted.AccountKey))
             {

@@ -39,7 +39,7 @@ internal class AzureDataLakeStorageClient : DataLakeStorageClient
         // Determine the authentication method based on the configuration
         var hasParsedAuthenticationMethod = Enum.TryParse<AuthenticationMethods>(_storageConfiguration.AuthenticationMethod, out var authenticationMethod);
 
-        if (!hasParsedAuthenticationMethod || authenticationMethod == AuthenticationMethods.AccessKeyOrSasToken)
+        if (!hasParsedAuthenticationMethod || authenticationMethod == AuthenticationMethods.SharedKey)
         {
             return await GetDataLakeServiceClientAsync((IAzureSharedKeyCredentialConfiguration)_storageConfiguration);
         }
