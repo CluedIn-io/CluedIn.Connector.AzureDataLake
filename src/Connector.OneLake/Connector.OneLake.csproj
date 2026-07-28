@@ -6,6 +6,7 @@
     <IsCluedInServerComponent>true</IsCluedInServerComponent>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Unit" />
     <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Integration" />
   </ItemGroup>
   <ItemGroup>

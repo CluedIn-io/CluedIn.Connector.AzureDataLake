@@ -522,6 +522,20 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
     }
 
     [Fact]
+    public async Task VerifyStoreData_Sync_WithSpaceInFolderPath_CanWrite()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            AssertCsvResultEscaped,
+            configureAuthentication: (values) =>
+            {
+                values.Add(nameof(OneLakeConfigurationConstants.ShouldEscapeVocabularyKeys), true);
+                values.Add(nameof(OneLakeConfigurationConstants.ShouldWriteGuidAsString), true);
+                values[nameof(OneLakeConfigurationConstants.ItemFolder)] = "Files/Path With Space/Test Folder";
+            });
+    }
+
+    [Fact]
     public async Task VerifyStoreData_Sync_WithWorkspaceLevelPrivateLinkCanWrite()
     {
         await VerifyStoreData_Sync_WithStreamCache(
