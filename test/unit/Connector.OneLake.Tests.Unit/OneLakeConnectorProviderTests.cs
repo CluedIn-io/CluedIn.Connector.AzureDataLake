@@ -60,6 +60,7 @@ public class OneLakeConnectorProviderTests
     [Theory]
     [InlineData("  MyItem  ", "MyItem")]
     [InlineData("MyItem", "MyItem")]
+    [InlineData(" ", "")]
     public async Task GetCrawlJobData_TrimsItemName(string input, string expected)
     {
         var configuration = new Dictionary<string, object>
@@ -79,6 +80,7 @@ public class OneLakeConnectorProviderTests
     [InlineData("  My Folder  ", "My Folder")]
     [InlineData("folder", "folder")]
     [InlineData(" folder with spaces ", "folder with spaces")]
+    [InlineData(" ", "")]
     public async Task GetCrawlJobData_TrimsItemFolder(string input, string expected)
     {
         var configuration = new Dictionary<string, object>
