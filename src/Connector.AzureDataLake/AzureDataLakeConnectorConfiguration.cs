@@ -29,7 +29,7 @@ internal class AzureDataLakeConnectorConfiguration
 
     public virtual string FileSystemName => GetConfigurationValue(AzureDataLakeConfigurationConstants.FileSystemName) as string;
 
-    public string AuthenticationMethod => GetConfigurationValue(AzureDataLakeConfigurationConstants.AuthenticationMethod) as string ?? AuthenticationMethods.SharedKey.ToString();
+    public string AuthenticationMethod => GetConfigurationValue(AzureDataLakeConfigurationConstants.AuthenticationMethod) as string ?? AuthenticationMethods.AccessKeyOrSasToken.ToString();
 
     // ISharedKeyCredentialConfiguration implementation
     public string AccountKey => GetConfigurationValue(AzureDataLakeConfigurationConstants.AccountKey) as string;

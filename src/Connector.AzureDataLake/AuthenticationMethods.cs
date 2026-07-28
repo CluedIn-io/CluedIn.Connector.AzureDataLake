@@ -4,8 +4,8 @@ namespace CluedIn.Connector.AzureDataLake;
 
 internal enum AuthenticationMethods
 {
-    [Display(Name = "Shared Access Key")]
-    SharedKey = 1,
+    [Display(Name = "Access Key or Shared Access Signature Token")]
+    AccessKeyOrSasToken = 1,
 
     [Display(Name = "Service Principal")]
     ServicePrincipal = 2,

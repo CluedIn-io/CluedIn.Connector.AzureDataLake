@@ -51,7 +51,7 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
         {
             Name = AuthenticationMethod,
             Operator = ControlDependencyOperator.NotEquals,
-            Value = AuthenticationMethods.SharedKey.ToString(),
+            Value = AuthenticationMethods.AccessKeyOrSasToken.ToString(),
             UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
         };
         var nonEmptyAuthenticationMethodDependency = new ControlDisplayDependency
@@ -64,7 +64,7 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
         {
             Name = AuthenticationMethod,
             Operator = ControlDependencyOperator.Equals,
-            Value = AuthenticationMethods.SharedKey.ToString(),
+            Value = AuthenticationMethods.AccessKeyOrSasToken.ToString(),
             UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
         };
         var servicePrincipalDependency = new ControlDisplayDependency
@@ -117,7 +117,7 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
             new ()
             {
                 Name = AccountKey,
-                DisplayName = "Account Key or Shared Access Signature Token",
+                DisplayName = "Access Key or Shared Access Signature Token",
                 Type = "password",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -171,7 +171,7 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
             new ()
             {
                 Name = UseKeyVault,
-                DisplayName = "Load Account Key or Shared Access Signature Token from Azure Key Vault Secret",
+                DisplayName = "Load Access Key or Shared Access Signature Token from Azure Key Vault Secret",
                 Type = "checkbox",
                 IsRequired = false,
                 ValidationRules = [],
