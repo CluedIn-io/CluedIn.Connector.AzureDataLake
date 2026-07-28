@@ -15,8 +15,8 @@ internal class OpenMirroringConnectorConfiguration : StorageConfigurationBase, I
     {
     }
 
-    public string WorkspaceName => GetConfigurationValue(OpenMirroringConfigurationConstants.WorkspaceName) as string;
-    public string MirroredDatabaseName => GetConfigurationValue(OpenMirroringConfigurationConstants.MirroredDatabaseName) as string ?? string.Empty;
+    public string WorkspaceName => GetConfigurationTrimmedStringValue(OpenMirroringConfigurationConstants.WorkspaceName) as string;
+    public string MirroredDatabaseName => GetConfigurationTrimmedStringValue(OpenMirroringConfigurationConstants.MirroredDatabaseName) as string ?? string.Empty;
     public string ClientId => GetConfigurationValue(OpenMirroringConfigurationConstants.ClientId) as string;
     public string ClientSecret => GetConfigurationValue(OpenMirroringConfigurationConstants.ClientSecret) as string;
     public string TenantId => GetConfigurationValue(OpenMirroringConfigurationConstants.TenantId) as string;

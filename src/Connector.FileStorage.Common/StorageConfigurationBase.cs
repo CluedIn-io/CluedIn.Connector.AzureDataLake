@@ -83,4 +83,14 @@ internal abstract class StorageConfigurationBase : CrawlJobDataWrapper, IStorage
         }
         return null;
     }
+
+    protected string GetConfigurationTrimmedStringValue(string key)
+    {
+        if (Configurations.TryGetValue(key, out var value))
+        {
+            return (value as string)?.Trim();
+        }
+
+        return null;
+    }
 }

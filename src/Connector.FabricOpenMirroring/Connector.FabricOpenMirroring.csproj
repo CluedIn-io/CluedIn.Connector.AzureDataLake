@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Integration" />
+    <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Unit" />
   </ItemGroup>
   <ItemGroup>
     <None Remove="Resources\fabricOpenMirroring.svg" />
