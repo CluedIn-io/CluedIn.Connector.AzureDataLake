@@ -81,13 +81,6 @@ public class OneLakeConfigurationConstants : StorageConfigurationConstants, IOne
                 DisplayName = "Item Folder",
                 Type = "input",
                 IsRequired = true,
-                ValidationRules = new List<Dictionary<string, string>>()
-                {
-                    new() {
-                        { "regex", "\\s" },
-                        { "message", "Spaces are not allowed" }
-                    }
-                },
             },
             new ()
             {
