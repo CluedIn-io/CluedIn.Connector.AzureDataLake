@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -12,6 +13,7 @@ using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Moq;
@@ -49,34 +51,50 @@ public class OpenMirroringStorageClientTests
     public async Task UpdateOrCreateMirroredDatabaseAsync_WhenEnabled_CreatesAndStartsMirroring()
     {
         // Arrange
-        var configuration = CreateConfiguration(shouldCreateMirroredDatabase: true);
+        var mirredDatabaseName = $"DB_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}_{Guid.NewGuid():N}";
+        var configuration = CreateConfiguration(shouldCreateMirroredDatabase: true, mirroredDatabaseNameOverride: mirredDatabaseName);
         var client = CreateClient(configuration);
         var providerDefinitionId = Guid.NewGuid();
 
-        // Act
-        var result = await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinitionId, isEnabled: true);
+        try
+        {
+            // Act
+            var result = await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinitionId, isEnabled: true);
 
-        // Assert
-        Assert.False(result.IsSkipped);
-        Assert.True(result.IsCreated);
-        Assert.True(result.IsEnabled);
+            // Assert
+            Assert.False(result.IsSkipped);
+            Assert.True(result.IsCreated);
+            Assert.True(result.IsEnabled);
+        }
+        finally
+        {
+            await client.DeleteMirroredDatabaseAsync();
+        }
     }
 
     [Fact]
     public async Task UpdateOrCreateMirroredDatabaseAsync_WhenDisabled_CreatesAndStopsMirroring()
     {
         // Arrange
-        var configuration = CreateConfiguration(shouldCreateMirroredDatabase: true);
+        var mirredDatabaseName = $"DB_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}_{Guid.NewGuid():N}";
+        var configuration = CreateConfiguration(shouldCreateMirroredDatabase: true, mirroredDatabaseNameOverride: mirredDatabaseName);
         var client = CreateClient(configuration);
         var providerDefinitionId = Guid.NewGuid();
 
-        // Act
-        var result = await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinitionId, isEnabled: false);
+        try
+        {
+            // Act
+            var result = await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinitionId, isEnabled: false);
 
-        // Assert
-        Assert.False(result.IsSkipped);
-        Assert.True(result.IsCreated);
-        Assert.False(result.IsEnabled);
+            // Assert
+            Assert.False(result.IsSkipped);
+            Assert.True(result.IsCreated);
+            Assert.False(result.IsEnabled);
+        }
+        finally
+        {
+            await client.DeleteMirroredDatabaseAsync();
+        }
     }
 
     [Fact]
@@ -140,13 +158,14 @@ public class OpenMirroringStorageClientTests
 
     private OpenMirroringConnectorConfiguration CreateConfiguration(
         bool shouldCreateMirroredDatabase,
-        string workspaceNameOverride = null)
+        string workspaceNameOverride = null,
+        string mirroredDatabaseNameOverride = null)
     {
         var tenantId = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_TENANTID");
         var clientId = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_CLIENTID");
         var clientSecretEncoded = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_CLIENTSECRET");
         var workspaceName = workspaceNameOverride ?? Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_WORKSPACENAME");
-        var mirroredDatabaseName = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_MIRROREDDATABASENAME");
+        var mirroredDatabaseName = mirroredDatabaseNameOverride ?? Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_MIRROREDDATABASENAME");
 
         Assert.NotNull(tenantId);
         Assert.NotNull(clientId);
