@@ -11,6 +11,13 @@ To learn more about CluedIn, [contact the team](https://www.cluedin.com/discover
 
 
 ## Development
+Copy the devonly.runsettings.template file to devonly.runsettings file.
+Update the environment variables in the files in order to be able to run the integration tests
+
+Copying the file alone doesn't make anything load it - it has to be passed to VSTest explicitly:
+- **CLI**: `dotnet test <project.csproj> --settings devonly.runsettings`
+- **Visual Studio**: Test > Configure Run Settings > Select Solution Wide runsettings File, then pick `devonly.runsettings`
+- **VS Code / other IDEs**: check your test runner extension's settings for a "run settings file" / `--settings` option and point it at `devonly.runsettings`
 
 ### Parquet File Output
 
