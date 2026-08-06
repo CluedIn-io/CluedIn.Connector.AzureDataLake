@@ -49,7 +49,7 @@ public class OpenMirroringStorageClientTests
     public async Task UpdateOrCreateMirroredDatabaseAsync_WhenEnabled_CreatesAndStartsMirroring()
     {
         // Arrange
-        var configuration = CreateConfiguration(shouldCreateMirroredDatabase: true);
+        var configuration = CreateConfiguration(shouldCreateMirroredDatabase: true, mirroredDatabaseNameOverride: $"DB_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}_{Guid.NewGuid():N}");
         var client = CreateClient(configuration);
         var providerDefinitionId = Guid.NewGuid();
 
@@ -66,7 +66,7 @@ public class OpenMirroringStorageClientTests
     public async Task UpdateOrCreateMirroredDatabaseAsync_WhenDisabled_CreatesAndStopsMirroring()
     {
         // Arrange
-        var configuration = CreateConfiguration(shouldCreateMirroredDatabase: true);
+        var configuration = CreateConfiguration(shouldCreateMirroredDatabase: true, mirroredDatabaseNameOverride: $"DB_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}_{Guid.NewGuid():N}");
         var client = CreateClient(configuration);
         var providerDefinitionId = Guid.NewGuid();
 
@@ -140,13 +140,14 @@ public class OpenMirroringStorageClientTests
 
     private OpenMirroringConnectorConfiguration CreateConfiguration(
         bool shouldCreateMirroredDatabase,
-        string workspaceNameOverride = null)
+        string workspaceNameOverride = null,
+        string mirroredDatabaseNameOverride = null)
     {
         var tenantId = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_TENANTID");
         var clientId = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_CLIENTID");
         var clientSecretEncoded = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_CLIENTSECRET");
         var workspaceName = workspaceNameOverride ?? Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_WORKSPACENAME");
-        var mirroredDatabaseName = Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_MIRROREDDATABASENAME");
+        var mirroredDatabaseName = mirroredDatabaseNameOverride ?? Environment.GetEnvironmentVariable("FABRICOPENMIRRORING_MIRROREDDATABASENAME");
 
         Assert.NotNull(tenantId);
         Assert.NotNull(clientId);
