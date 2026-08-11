@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup Label="Dependency Versions">
-    <_CluedIn Condition="'$(_CluedIn)' == ''">4.6.0</_CluedIn>
+    <_CluedIn Condition="'$(_CluedIn)' == ''">5.0.0</_CluedIn>
 
     <!-- Gates conditional compilation (#if CLUEDIN_Vxx) for places where a CluedIn.Core API call
          differs by line. -->
