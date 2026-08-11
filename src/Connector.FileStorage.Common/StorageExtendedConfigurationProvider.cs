@@ -10,7 +10,7 @@ namespace CluedIn.Connector.FileStorage.Common;
 
 internal class FileStorageExtendedConfigurationProvider : IExtendedConfigurationProvider
 {
-    internal const string DefaultSourceName = "DataLakeExtendedConfigurationProvider";
+    internal const string DefaultSourceName = "FileStorageExtendedConfigurationProvider";
     internal const string ReducedFormatsSourceName = $"{DefaultSourceName}_ReducedFormats";
     internal const string CustomCronScheduleName = StorageConfigurationConstants.CustomCronScheduleName;
     private const int DefaultPageSize = 20;

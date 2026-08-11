@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
+using Azure.Core;
 using Azure.Identity;
-using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 using Azure.Storage.Files.DataLake.Models;
 
@@ -272,22 +272,33 @@ internal class DataLakeStorageClient : IStorageClient
 
     protected virtual async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync()
     {
-        switch (_storageConfiguration)
+        if (_storageConfiguration is IAzureServicePrincipalCredentialConfiguration servicePrincipalCredential)
         {
-            case IAzureSharedKeyCredentialConfiguration sharedKeyCredential:
-                return new DataLakeServiceClient(
-                            new Uri(await GetStorageUrlAsync()),
-                            new StorageSharedKeyCredential(sharedKeyCredential.AccountName, sharedKeyCredential.AccountKey));
-            case IAzureServicePrincipalCredentialConfiguration servicePrincipalCredential:
-                {
-                    var dataLakeServiceClient = new DataLakeServiceClient(
-                        new Uri(await GetStorageUrlAsync()),
-                        new ClientSecretCredential(servicePrincipalCredential.TenantId, servicePrincipalCredential.ClientId, servicePrincipalCredential.ClientSecret));
-                    return dataLakeServiceClient;
-                }
-            default:
-                throw new NotSupportedException($"Unable to create datalake service client from type {_storageConfiguration.GetType()}");
+            return await GetDataLakeServiceClientAsync(servicePrincipalCredential);
         }
+
+        throw new NotSupportedException($"Unable to create datalake service client from type {_storageConfiguration.GetType()}");
+    }
+
+    protected Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(IAzureServicePrincipalCredentialConfiguration servicePrincipalCredential)
+    {
+        var tokenCredential = GetTokenCredential(servicePrincipalCredential);
+        return GetDataLakeServiceClientAsync(tokenCredential);
+    }
+
+    protected async Task<DataLakeServiceClient> GetDataLakeServiceClientAsync(TokenCredential tokenCredential)
+    {
+        return new DataLakeServiceClient(
+                new Uri(await GetStorageUrlAsync()),
+                tokenCredential);
+    }
+
+    protected static TokenCredential GetTokenCredential(IAzureServicePrincipalCredentialConfiguration servicePrincipalCredential)
+    {
+        return new ClientSecretCredential(
+                servicePrincipalCredential.TenantId,
+                servicePrincipalCredential.ClientId,
+                servicePrincipalCredential.ClientSecret);
     }
 
     protected virtual Task<string> GetStorageUrlAsync()

@@ -6,6 +6,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="coverlet.msbuild" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Moq" />
+  </ItemGroup>
+  <!-- CluedIn 5.0.0+ (this repo's own default) - the current xunit.v3/Microsoft Testing
+       Platform-based tooling. See Packages.props for the corresponding version pins. -->
+  <ItemGroup Condition="$([MSBuild]::VersionGreaterThanOrEquals('$(_CluedIn)', '5.0.0'))">
+    <PackageReference Include="AutoFixture.Xunit3" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <!-- Below CluedIn 5.0.0 (net6.0) - the xunit v2 / AutoFixture.Xunit2 packages the 4.6/4.7/4.8
+       release lines used - see Packages.props for the corresponding version pins. -->
+  <ItemGroup Condition="$([MSBuild]::VersionLessThan('$(_CluedIn)', '5.0.0'))">
+    <Using Include="Xunit.Abstractions" />
+    <PackageReference Include="AutoFixture.Xunit2" />
+    <PackageReference Include="xunit" />
   </ItemGroup>
 </Project>

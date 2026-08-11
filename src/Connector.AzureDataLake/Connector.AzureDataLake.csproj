@@ -16,6 +16,14 @@
     <EmbeddedResource Include="Resources\azuredatalake.svg" />
   </ItemGroup>
   <ItemGroup>
+    <IgnoresAccessChecksTo Include="CluedIn.Integration.PrivateServices" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="IgnoresAccessChecksToGenerator" />
+    <PackageReference Include="CluedIn.Integration.PrivateServices" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
   </ItemGroup>
 </Project>

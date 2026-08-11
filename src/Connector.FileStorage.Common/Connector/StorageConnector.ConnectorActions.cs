@@ -64,7 +64,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
 
         var streamRepository = executionContext.ApplicationContext.Container.Resolve<IStreamRepository>();
 
-        var stream = await streamRepository.GetStream(executionContext, streamModel.Id);
+        var stream = await streamRepository.GetStreamEx(executionContext, streamModel.Id);
         var shouldShowAction = configuration.IsStreamCacheEnabled // only for streams with cache enabled
             && stream.Mode == StreamMode.Sync // only for sync streams
             && (stream.Status == StreamStatus.Started || stream.Status == StreamStatus.Paused); // only for started or paused streams
@@ -362,7 +362,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;
-        var tableName = CacheTableHelper.GetExportHistoryTableName(streamId);
+        var tableName = CacheTableHelper.GetExportHistoryTableName(streamId) + "_ExportHistory";
         var asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
 
         var getDataSql = $"SELECT TOP (1000) * FROM [{tableName}] ORDER BY StartTime DESC";

@@ -22,6 +22,8 @@
     <InternalsVisibleTo Include="CluedIn.Connector.FileStorage.Common.Tests.Unit" />
     <InternalsVisibleTo Include="CluedIn.Connector.AmazonS3.Tests.Unit" />
     <InternalsVisibleTo Include="CluedIn.Connector.AzureDataLake.Tests.Unit" />
+    <InternalsVisibleTo Include="CluedIn.Connector.FabricOpenMirroring.Tests.Unit" />
+    <InternalsVisibleTo Include="CluedIn.Connector.OneLake.Tests.Unit" />
     <!-- Integration Tests -->
     <InternalsVisibleTo Include="CluedIn.Connector.FileStorage.Common.Tests.Integration" />
     <InternalsVisibleTo Include="CluedIn.Connector.DataLake.Common.Tests.Integration" />
@@ -39,4 +41,5 @@
     <PackageReference Include="NCrontab" />
     <PackageReference Include="Parquet.Net" />
   </ItemGroup>
+
 </Project>
