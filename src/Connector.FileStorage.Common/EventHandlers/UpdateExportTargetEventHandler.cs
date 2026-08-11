@@ -28,13 +28,7 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
             exportEntitiesJobType,
             jobQueue)
     {
-        _subscription = ApplicationContext.System.Events.Local.Subscribe<UpdateExportTargetEvent>(ProcessEvent);
-    }
-
-
-    private void ProcessEvent(UpdateExportTargetEvent eventData)
-    {
-        ProcessEventAsync(eventData).GetAwaiter().GetResult();
+        _subscription = ApplicationContext.System.Events.SubscribeAsync<UpdateExportTargetEvent>(ProcessEventAsync);
     }
 
     private async Task ProcessEventAsync(UpdateExportTargetEvent eventData)
@@ -46,13 +40,13 @@ internal class UpdateExportTargetEventHandler : UpdateStreamScheduleBase, IDispo
 
         var streamRepository = ApplicationContext.Container.Resolve<IStreamRepository>();
         var executionContext = ApplicationContext.CreateExecutionContext(organizationId);
-        var streamsCount = await streamRepository.GetOrganizationStreamsCount(executionContext, filterConnectorProviderDefinitionId: providerDefinitionId);
+        var streamsCount = await streamRepository.GetOrganizationStreamsCountEx(executionContext, providerDefinitionId);
         var streamsPerPage = StreamsPerPage;
         var totalPages = (streamsCount + streamsPerPage - 1) / streamsPerPage;
 
         for (var i = 0; i < totalPages; ++i)
         {
-            var streams = await streamRepository.GetOrganizationStreams(executionContext, i, streamsPerPage, filterConnectorProviderDefinitionId: providerDefinitionId);
+            var streams = await streamRepository.GetOrganizationStreamsEx(executionContext, page: i, take: streamsPerPage, providerDefinitionId: providerDefinitionId);
             foreach (var stream in streams)
             {
                 await UpdateStreamSchedule(executionContext, stream);

@@ -4,7 +4,6 @@ using CluedIn.Core.Providers;
 
 using System;
 using System.Collections.Generic;
-// ReSharper disable ArgumentsStyleStringLiteral
 
 namespace CluedIn.Connector.AzureDataLake;
 
@@ -13,11 +12,26 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
     internal static readonly Guid DataLakeProviderId = Guid.Parse("F6178E19-7168-449C-B4B6-F9810E86C1C2");
 
     public const string AccountName = nameof(AccountName);
-    public const string AccountKey = nameof(AccountKey);
     public const string FileSystemName = nameof(FileSystemName);
     public const string DirectoryName = nameof(DirectoryName);
 
-     public AzureDataLakeConfigurationConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
+    // Shared Key Authentication
+    public const string AccountKey = nameof(AccountKey);
+
+    // Service Principal Authentication
+    public const string TenantId = nameof(TenantId);
+    public const string ClientId = nameof(ClientId);
+    public const string ClientSecret = nameof(ClientSecret);
+
+    // Selectable Credential Method Authentication
+    public const string AuthenticationMethod = nameof(AuthenticationMethod);
+
+    // Key Vault Secret
+    public const string UseKeyVault = nameof(UseKeyVault);
+    public const string KeyVaultUri = nameof(KeyVaultUri);
+    public const string KeyVaultSecretName = nameof(KeyVaultSecretName);
+
+    public AzureDataLakeConfigurationConstants(ApplicationContext applicationContext) : base(DataLakeProviderId,
         providerName: "Azure DataLake Connector",
         componentName: "AzureDataLakeConnector",
         icon: "Resources.azuredatalake.svg",
@@ -33,6 +47,47 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
 
     private static AuthMethods GetAzureDataLakeAuthMethods(ApplicationContext applicationContext)
     {
+        var nonSharedAccessKeyDependency = new ControlDisplayDependency
+        {
+            Name = AuthenticationMethod,
+            Operator = ControlDependencyOperator.NotEquals,
+            Value = AuthenticationMethods.AccessKeyOrSasToken.ToString(),
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
+        var nonEmptyAuthenticationMethodDependency = new ControlDisplayDependency
+        {
+            Name = AuthenticationMethod,
+            Operator = ControlDependencyOperator.Exists,
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
+        var useSharedAccessKeyDependency = new ControlDisplayDependency
+        {
+            Name = AuthenticationMethod,
+            Operator = ControlDependencyOperator.Equals,
+            Value = AuthenticationMethods.AccessKeyOrSasToken.ToString(),
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
+        var servicePrincipalDependency = new ControlDisplayDependency
+        {
+            Name = AuthenticationMethod,
+            Operator = ControlDependencyOperator.Equals,
+            Value = AuthenticationMethods.ServicePrincipal.ToString(),
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
+        var workloadIdentityDependency = new ControlDisplayDependency
+        {
+            Name = AuthenticationMethod,
+            Operator = ControlDependencyOperator.Equals,
+            Value = AuthenticationMethods.WorkloadIdentity.ToString(),
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
+        var useKeyVaultDependency = new ControlDisplayDependency
+        {
+            Name = UseKeyVault,
+            Operator = ControlDependencyOperator.Equals,
+            Value = true.ToString().ToLowerInvariant(),
+            UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+        };
         var controls = new List<Control>
         {
             new ()
@@ -51,8 +106,18 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
             },
             new ()
             {
+                Name = AuthenticationMethod,
+                DisplayName = "Authentication Method",
+                Type = "option",
+                IsRequired = true,
+                SourceType = ControlSourceType.Dynamic,
+                Source = AzureDataLakeExtendedConfigurationProvider.AuthenticationSchemeSourceName,
+                DisplayDependencies = [],
+            },
+            new ()
+            {
                 Name = AccountKey,
-                DisplayName = "Account Key",
+                DisplayName = "Access Key or Shared Access Signature Token",
                 Type = "password",
                 IsRequired = true,
                 ValidationRules = new List<Dictionary<string, string>>()
@@ -62,6 +127,85 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
                         { "message", "Spaces are not allowed" }
                     }
                 },
+                DisplayDependencies = [useSharedAccessKeyDependency],
+            },
+            new ()
+            {
+                Name = TenantId,
+                DisplayName = "Tenant Id",
+                Type = "text",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
+                DisplayDependencies = [nonSharedAccessKeyDependency, servicePrincipalDependency],
+            },
+            new ()
+            {
+                Name = ClientId,
+                DisplayName = "Client Id",
+                Type = "text",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
+                DisplayDependencies = [nonSharedAccessKeyDependency, servicePrincipalDependency],
+            },
+            new ()
+            {
+                Name = ClientSecret,
+                DisplayName = "Client Secret",
+                Type = "password",
+                IsRequired = true,
+                ValidationRules = [],
+                DisplayDependencies = [nonSharedAccessKeyDependency, servicePrincipalDependency],
+            },
+            new ()
+            {
+                Name = UseKeyVault,
+                DisplayName = "Load Access Key or Shared Access Signature Token from Azure Key Vault Secret",
+                Type = "checkbox",
+                IsRequired = false,
+                ValidationRules = [],
+                DisplayDependencies = [nonSharedAccessKeyDependency, nonEmptyAuthenticationMethodDependency],
+            },
+            new ()
+            {
+                Name = KeyVaultUri,
+                DisplayName = "Azure Key Vault URI",
+                Type = "text",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
+                DisplayDependencies = [nonSharedAccessKeyDependency, useKeyVaultDependency],
+            },
+            new ()
+            {
+                Name = KeyVaultSecretName,
+                DisplayName = "Azure Key Vault Secret Name",
+                Type = "text",
+                IsRequired = true,
+                ValidationRules = new List<Dictionary<string, string>>()
+                {
+                    new() {
+                        { "regex", "\\s" },
+                        { "message", "Spaces are not allowed" }
+                    }
+                },
+                DisplayDependencies = [nonSharedAccessKeyDependency, useKeyVaultDependency],
             },
             new ()
             {
@@ -145,4 +289,8 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
             Token = controls
         };
     }
+
+    public string WorkloadIdentityAuthenticationMethodEnabledKeyName => $"Streams.{CacheKeyword}.WorkloadIdentityAuthenticationMethodEnabled";
+
+    public bool WorkloadIdentityAuthenticationMethodEnabledDefaultValue => false;
 }

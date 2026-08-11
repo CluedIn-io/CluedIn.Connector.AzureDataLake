@@ -9,21 +9,25 @@ using Azure.Storage.Files.DataLake;
 
 using Castle.Windsor;
 
+using CluedIn.Connector.DataLake.Common;
 using CluedIn.Connector.DataLake.Common.Tests.Integration;
 using CluedIn.Connector.FabricOpenMirroring.Connector;
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
+using CluedIn.Core.Caching;
+using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Streams.Models;
 
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Moq;
 
 using Xunit;
-using Xunit.Abstractions;
+
 using Encoding = System.Text.Encoding;
 
 namespace CluedIn.Connector.FabricOpenMirroring.Tests.Integration;
@@ -159,8 +163,84 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     }
 
     [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndSameDataTime_CanSkip()
+    public async Task VerifyStoreData_Sync_WhenNoRowsToExport_CanSkip()
     {
+        var initialUserData = UserData.Default;
+        var executionCount = 0;
+        var storeDataCount = 0;
+        var dateTimeList = new List<DateTimeOffset>
+        {
+            DefaultCurrentTime,
+            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+        };
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            AssertParquetResultEscaped,
+            async executeExportArg =>
+            {
+                executionCount = 0;
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0 1-31 * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                executionCount++;
+
+                var firstPath = await WaitForFileToBeCreated(
+                    executeExportArg.SetupContainerResult);
+
+                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(StorageExportEntitiesJobBase.NoRowsReason, result.Reason);
+                return firstPath;
+            },
+            mockDateTimeOffsetProvider =>
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                    .Returns(() =>
+                    {
+                        return dateTimeList[executionCount].ToUniversalTime();
+                    });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount == 0)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+
+                return new[] { initialEntityData };
+            });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task VerifyStoreData_Sync_WhenRepeatRunOfSkippedNoRows_CanSkip(bool isTriggeredFromJobServer)
+    {
+        var executionCount = 0;
+        var dateTimeList = new List<DateTimeOffset>
+        {
+            DefaultCurrentTime,
+            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+        };
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
             AssertParquetResultEscaped,
@@ -171,11 +251,83 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
-                    IsTriggeredFromJobServer = false,
+                    IsTriggeredFromJobServer = isTriggeredFromJobServer,
                 };
                 await executeExportArg.ExportJob.DoRunAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
+                executionCount++;
+
+                var firstPath = await WaitForFileToBeCreated(
+                    executeExportArg.SetupContainerResult);
+
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                var lastResult = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                Assert.False(result.HasExported);
+                Assert.Equal(StorageExportEntitiesJobBase.NoRowsReason, result.Reason);
+                Assert.Equal(StorageExportEntitiesJobBase.ExportedBeforeReason, lastResult.Reason);
+                return firstPath;
+            },
+            mockDateTimeOffsetProvider =>
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                    .Returns(() =>
+                    {
+                        return dateTimeList[executionCount].ToUniversalTime();
+                    });
+            });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task VerifyStoreData_Sync_WhenRepeatRunAndHasRow_CanCreateNewFile(bool isTriggeredFromJobServer)
+    {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
+        var executionCount = 0;
+        var storeDataCount = 0;
+        var dateTimeList = new List<DateTimeOffset>
+        {
+            DefaultCurrentTime,
+            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+        };
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            async (setupResult, filePath) =>
+            {
+                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                await base.AssertParquetResult(setupResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+                {
+                    var updated = original.ToList();
+                    updated[0].Columns["__rowMarker__"] = "4";
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 2;
+                    updated[0].Columns["user_age"] = firstChangeUserData.Age.ToString();
+                    return updated;
+                });
+            },
+            async executeExportArg =>
+            {
+                executionCount = 0;
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0 1-31 * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = isTriggeredFromJobServer,
+                };
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                executionCount++;
 
                 var firstPath = await WaitForFileToBeCreated(
                     executeExportArg.SetupContainerResult);
@@ -186,16 +338,105 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     jobArgs);
 
                 var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.SetupContainerResult);
+                    executeExportArg.SetupContainerResult,
+                    filterPaths: paths =>
+                    {
+                        return paths.Where(path => path.Name != firstPath.Name).ToList();
+                    });
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
-                Assert.Equal(firstDataTime, secondDataTime);
+                Assert.Equal($"{1:D20}.parquet", firstPath.Name);
+                Assert.Equal($"{2:D20}.parquet", secondPath.Name);
+                Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
+            },
+            mockDateTimeOffsetProvider =>
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                    .Returns(() =>
+                    {
+                        return dateTimeList[executionCount].ToUniversalTime();
+                    });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount == 0)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+
+                return new[] { initialEntityData, firstChangeEntityData };
+            });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task VerifyStoreData_Sync_WhenRepeatRunAndNoRows_CanSkipBecauseNoRows(bool isTriggeredFromJobServer)
+    {
+        var executionCount = 0;
+        var dateTimeList = new List<DateTimeOffset>
+        {
+            DefaultCurrentTime,
+            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+        };
+        await VerifyStoreData_Sync_WithStreamCache(
+            "parquet",
+            AssertParquetResultEscaped,
+            async executeExportArg =>
+            {
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = isTriggeredFromJobServer,
+                };
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                executionCount++;
+
+                var firstPath = await WaitForFileToBeCreated(
+                    executeExportArg.SetupContainerResult);
+                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(StorageExportEntitiesJobBase.NoRowsReason, result.Reason);
+                return firstPath;
+            },
+            mockDateTimeOffsetProvider =>
+            {
+                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                    .Returns(() =>
+                    {
+                        return dateTimeList[executionCount].ToUniversalTime();
+                    });
             });
     }
 
     [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingInternalSchedulerAndDifferentDataTime_CanCreateNewFile()
+    public async Task VerifyStoreData_Sync_WithStreamCacheFirstExportNoRowMarker()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "pArQuet",
+            AssertParquetResultEscaped);
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WithStreamCacheSubsequentExportHasRowMarker()
     {
         var initialUserData = UserData.Default;
         var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
@@ -262,7 +503,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
             },
             storeData: async (setupResult, data) =>
@@ -285,82 +526,56 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     }
 
     [Fact]
-    public async Task VerifyStoreData_Sync_WhenRepeatRunAndFileExistsUsingJobServer_CanCreateNewFile()
+    public async Task VerifyStoreData_Sync_WithStreamCacheCanUseTableName()
     {
-        var executionCount = 0;
-        var dateTimeList = new List<DateTimeOffset>
-        {
-            DefaultCurrentTime,
-            new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
-        };
+        // Per-run-unique, not a fixed literal - RootDirectoryPath is derived from the shared
+        // MirroredDatabaseName env var, so a fixed TableName would resolve to the same real ADLS
+        // directory across every concurrent multi-version CI job.
+        var tableName = $"MyTable-{Guid.NewGuid():N}";
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
-            AssertParquetResultEscapedWithRowMarker,
-            async executeExportArg =>
+            AssertParquetResultEscaped,
+            configureAuthentication: (dictionary) =>
             {
-                var jobArgs = new StorageJobArgs
-                {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
-                    Schedule = "0 0/1 * * *",
-                    Message = executeExportArg.StreamId.ToString(),
-                    IsTriggeredFromJobServer = false,
-                };
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
-                executionCount++;
-
-                var firstPath = await WaitForFileToBeCreated(
-                    executeExportArg.SetupContainerResult);
-
-                var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
-                await executeExportArg.ExportJob.DoRunAsync(
-                    executeExportArg.ExecutionContext,
-                    jobArgs);
-
-                var secondPath = await WaitForFileToBeCreated(
-                    executeExportArg.SetupContainerResult,
-                    filterPaths: paths =>
-                    {
-                        return paths.Where(path => path.Name != firstPath.Name).ToList();
-                    });
-                var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
-
-                Assert.NotEqual(firstDataTime, secondDataTime);
-                return secondPath;
-            },
-            mockDateTimeOffsetProvider =>
-            {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
-                    .Returns(() =>
-                    {
-                        return dateTimeList[executionCount];
-                    });
+                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = tableName;
             });
     }
 
     [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheFirstExportNoRowMarker()
+    public async Task VerifyStoreData_Sync_CanHandleMissedExportHistory()
     {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "pArQuet",
-            AssertParquetResultEscaped);
-    }
-
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheSubsequentExportHasRowMarker()
-    {
+        var initialUserData = UserData.Default;
+        var firstChangeUserData = initialUserData with { Age = initialUserData.Age + 1 };
+        var secondChangeUserData = initialUserData with { Age = initialUserData.Age + 2 };
+        var thirdChangeUserData = initialUserData with { Age = initialUserData.Age + 3 };
         var executionCount = 0;
+        var storeDataCount = 0;
         var dateTimeList = new List<DateTimeOffset>
         {
             DefaultCurrentTime,
             new DateTimeOffset(2024, 8, 21, 4, 16, 0, TimeSpan.FromHours(5)),
+            new DateTimeOffset(2024, 8, 22, 4, 16, 0, TimeSpan.FromHours(5)),
+            new DateTimeOffset(2024, 8, 23, 4, 16, 0, TimeSpan.FromHours(5)),
         };
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
-            AssertParquetResultEscapedWithRowMarker,
+            async (setupResult, filePath) =>
+            {
+                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                await base.AssertParquetResult(setupResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
+                {
+                    var updated = original.ToList();
+                    updated[0].Columns["__rowMarker__"] = "4";
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 4;
+                    updated[0].Columns["user_age"] = thirdChangeUserData.Age.ToString();
+                    return updated;
+                });
+            },
             async executeExportArg =>
             {
+                executionCount = 0;
                 var jobArgs = new StorageJobArgs
                 {
                     OrganizationId = executeExportArg.Organization.Id.ToString(),
@@ -371,17 +586,15 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 await executeExportArg.ExportJob.DoRunAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
-
                 executionCount++;
-
                 var firstPath = await WaitForFileToBeCreated(
                     executeExportArg.SetupContainerResult);
-
                 var firstDataTime = await GetFileDataTime(executeExportArg, firstPath);
+
                 await executeExportArg.ExportJob.DoRunAsync(
                     executeExportArg.ExecutionContext,
                     jobArgs);
-
+                executionCount++;
                 var secondPath = await WaitForFileToBeCreated(
                     executeExportArg.SetupContainerResult,
                     filterPaths: paths =>
@@ -390,34 +603,110 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                     });
                 var secondDataTime = await GetFileDataTime(executeExportArg, secondPath);
 
+                await DeleteLastHistory(executeExportArg.SetupContainerResult, executeExportArg.StreamId, secondDataTime);
+
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                executionCount++;
+                var thirdPath = await WaitForFileToBeCreated(
+                    executeExportArg.SetupContainerResult,
+                    filterPaths: paths =>
+                    {
+                        return paths.Where(path => path.Name != firstPath.Name && path.Name != secondPath.Name).ToList();
+                    });
+                var thirdDataTime = await GetFileDataTime(executeExportArg, thirdPath);
+
+                await DeleteLastHistory(executeExportArg.SetupContainerResult, executeExportArg.StreamId, thirdDataTime);
+
+                await executeExportArg.ExportJob.DoRunAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                var fourthPath = await WaitForFileToBeCreated(
+                    executeExportArg.SetupContainerResult,
+                    filterPaths: paths =>
+                    {
+                        return paths.Where(path => path.Name != firstPath.Name && path.Name != secondPath.Name && path.Name != thirdPath.Name).ToList();
+                    });
+                var fourthDataTime = await GetFileDataTime(executeExportArg, fourthPath);
+
+
+                TestOutputHelper.WriteLine($"First File: {firstPath.DirectoryPath}, {firstPath.Name}");
+                TestOutputHelper.WriteLine($"Second File: {secondPath.DirectoryPath}, {secondPath.Name}");
+                TestOutputHelper.WriteLine($"Third File: {thirdPath.DirectoryPath}, {thirdPath.Name}");
+                TestOutputHelper.WriteLine($"Fourth File: {fourthPath.DirectoryPath}, {fourthPath.Name}");
                 Assert.NotEqual(firstDataTime, secondDataTime);
-                return secondPath;
+                Assert.NotEqual(secondDataTime, thirdDataTime);
+                Assert.NotEqual(thirdDataTime, fourthDataTime);
+                Assert.Equal($"{1:D20}.parquet", firstPath.Name);
+                Assert.Equal($"{2:D20}.parquet", secondPath.Name);
+                Assert.Equal($"{3:D20}.parquet", thirdPath.Name);
+                Assert.Equal($"{4:D20}.parquet", fourthPath.Name);
+                return fourthPath;
             },
             mockDateTimeOffsetProvider =>
             {
                 mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
                     .Returns(() =>
                     {
-                        return dateTimeList[executionCount];
+                        return dateTimeList[executionCount].ToUniversalTime();
                     });
+            },
+            storeData: async (setupResult, data) =>
+            {
+                await setupResult.ConnectorMock.Object.StoreData(setupResult.Context, setupResult.StreamModel, data);
+                await ModifyHistoryTimeToBeCurrentTime(setupResult, data);
+                if (storeDataCount < 3)
+                {
+                    executionCount++;
+                }
+                storeDataCount++;
+            },
+            getConnectorEntityData: () =>
+            {
+                var initialEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Added, persistVersion: 1, userData: initialUserData);
+                var firstChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 2, userData: firstChangeUserData);
+                var secondChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 3, userData: secondChangeUserData);
+                var thirdChangeEntityData = CreateBaseConnectorEntityData(StreamMode.Sync, VersionChangeType.Changed, persistVersion: 4, userData: thirdChangeUserData);
+
+                return new[] { initialEntityData, firstChangeEntityData, secondChangeEntityData, thirdChangeEntityData };
             });
     }
 
-    [Fact]
-    public async Task VerifyStoreData_Sync_WithStreamCacheCanUseTableName()
+    private static async Task DeleteLastHistory(SetupContainerResult setupContainerResult, Guid streamId, DateTimeOffset dataTime)
     {
-        await VerifyStoreData_Sync_WithStreamCache(
-            "parquet",
-            AssertParquetResultEscaped,
-            configureAuthentication: (dictionary) =>
-            {
-                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = "MyTable";
-            });
+        var jobData = setupContainerResult.StorageConfiguration;
+        var connectionString = setupContainerResult.StorageConfiguration.StreamCacheConnectionString;
+        var tableName = StorageExportEntitiesJobBase.GetExportHistoryTableName(streamId);
+        var deleteSql = $"""
+                    DELETE FROM
+                        [{tableName}]
+                    WHERE
+                        StreamId = @StreamId
+                        AND DataTime = @DataTime
+                    """;
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+        var command = new SqlCommand(deleteSql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+
+        command.Parameters.Add(new SqlParameter($"@StreamId", streamId));
+        command.Parameters.Add(new SqlParameter($"@DataTime", dataTime));
+
+        var rowsAffected = await command.ExecuteNonQueryAsync();
+        if (rowsAffected != 1)
+        {
+            throw new ApplicationException($"Rows affected for update of is not 1, it is {rowsAffected}.");
+        }
     }
 
     [Fact]
     public async Task Archive_Sync_CanDeleteDirectoryWhenUseTableName()
     {
+        // Per-run-unique, not a fixed literal - see VerifyStoreData_Sync_WithStreamCacheCanUseTableName.
+        var tableName = $"ToBeArchived-{Guid.NewGuid():N}";
         await VerifyStoreData_Sync_WithStreamCache(
             "parquet",
             async (setupResult, filePath) =>
@@ -428,27 +717,15 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
 
                 var client = GetDataLakeClient(setupResult);
                 var fsClient = client.GetFileSystemClient(GetFileSystemName(setupResult));
-                var directoryClient = fsClient.GetDirectoryClient($"{setupResult.StorageConfiguration.RootDirectoryPath}/ToBeArchived");
+                var directoryClient = fsClient.GetDirectoryClient($"{setupResult.StorageConfiguration.RootDirectoryPath}/{tableName}");
                 var exists = await directoryClient.ExistsAsync();
                 Assert.False(exists);
             },
             configureAuthentication: (dictionary) =>
             {
-                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = "ToBeArchived";
+                dictionary[nameof(OpenMirroringConfigurationConstants.TableName)] = tableName;
             });
 
-    }
-
-    private async Task AssertParquetResultEscapedWithRowMarker(
-        SetupContainerResult setupContainerResult,
-        ExportedFilePath filePath)
-    {
-        await base.AssertParquetResult(setupContainerResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
-        {
-            var result = original.ToList();
-            original.First().Columns["__rowMarker__"] = "4";
-            return result;
-        });
     }
 
     private protected override StorageExportEntitiesJobBase CreateExportJob(SetupContainerResult setupResult)
@@ -506,6 +783,14 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         };
     }
 
+    protected override Mock<IOpenMirroringConfigurationConstants> CreateConstantsMock()
+    {
+        var constants = base.CreateConstantsMock();
+        constants.Setup(x => x.MirroredDatabaseCreationRetryIntervalKeyName).Returns("abc");
+        constants.Setup(x => x.MirroredDatabaseCreationRetryIntervalDefaultValue).Returns(60 * 10 * 1000);
+        return constants;
+    }
+
     protected override Mock<OpenMirroringConnector> GetConnectorMock(
         ApplicationContext applicationContext,
         Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
@@ -524,7 +809,8 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     protected override Mock<OpenMirroringStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider)
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<IOpenMirroringConfigurationConstants> constantsMock)
     {
         var dataFactoryMock = new Mock<OpenMirroringStorageFactory>();
         dataFactoryMock.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
@@ -541,7 +827,10 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
     {
         return base.WaitForFileToBeCreated(setupContainerResult, filterPaths: (paths) =>
         {
-            var metadataFiltered = paths.Where(path => !path.Name.EndsWith("_metadata.json") && !path.Name.EndsWith("_partnerEvents.json")).ToList();
+            var metadataFiltered = paths.Where(path =>
+            !path.Name.EndsWith("_metadata.json") &&
+            !path.Name.EndsWith("_partnerEvents.json") &&
+            !path.Name.EndsWith("_FilesReadyToDeleteInfo.json")).ToList();
             return filterPaths?.Invoke(metadataFiltered) ?? metadataFiltered;
         },
         getDirectoryName);
@@ -561,6 +850,117 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         }
 
         return $"{config.RootDirectoryPath}/{setupContainerResult.StreamModel.Id:N}";
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenArtifactNotFoundAndShouldCreateMirroredDatabase_ReturnWillBeCreatedMessage()
+    {
+        var nonExistentDatabaseName = $"NonExistent_{Guid.NewGuid():N}";
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = nonExistentDatabaseName;
+        configuration[nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase)] = true;
+        // Adding ProviderDefinitionIdKey makes IsHealthCheckVerification return true
+        configuration[StorageConfigurationConstants.ProviderDefinitionIdKey] = Guid.NewGuid().ToString();
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+
+        var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
+        var expectedMessage = OpenMirroringConnector.ArtifactNotFoundAndWillBeCreatedErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+        Assert.Equal(expectedMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenArtifactNotFoundAndShouldNotCreateMirroredDatabase_ReturnNotFoundMessage()
+    {
+        var nonExistentDatabaseName = $"NonExistent_{Guid.NewGuid():N}";
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = nonExistentDatabaseName;
+        configuration[nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase)] = false;
+        // Adding ProviderDefinitionIdKey makes IsHealthCheckVerification return true
+        configuration[StorageConfigurationConstants.ProviderDefinitionIdKey] = Guid.NewGuid().ToString();
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+
+        var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
+        var expectedMessage = OpenMirroringConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+        Assert.Equal(expectedMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenArtifactNotFoundAndNotHealthCheck_ReturnNotFoundMessage()
+    {
+        var nonExistentDatabaseName = $"NonExistent_{Guid.NewGuid():N}";
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = nonExistentDatabaseName;
+        configuration[nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase)] = false;
+        // Not adding ProviderDefinitionIdKey means IsHealthCheckVerification returns false
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        var result = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+
+        var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
+        var expectedMessage = OpenMirroringConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+        Assert.Equal(expectedMessage, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task VerifyConnection_WhenArtifactNotFoundAndShouldCreate_OnlyTriggersCreationOnFirstCallWithinRetryInterval()
+    {
+        var nonExistentDatabaseName = $"NonExistent_{Guid.NewGuid():N}";
+        var configuration = CreateConfigurationWithStreamCache(StorageConfigurationConstants.OutputFormats.Csv);
+        configuration[nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName)] = nonExistentDatabaseName;
+        configuration[nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase)] = true;
+        configuration[StorageConfigurationConstants.ProviderDefinitionIdKey] = Guid.NewGuid().ToString();
+        var jobData = new OpenMirroringConnectorConfiguration(configuration);
+
+        var setupResult = await SetupContainer(jobData, StreamMode.Sync);
+        var connector = setupResult.ConnectorMock.Object;
+        setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
+            .Returns(Task.FromResult<IStorageConfiguration>(jobData));
+        setupResult.DateTimeOffsetProviderMock.Setup(provider => provider.GetCurrentUtcTime())
+            .Returns(DateTimeOffset.UtcNow);
+
+        var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
+        var willBeCreatedMessage = OpenMirroringConnector.ArtifactNotFoundAndWillBeCreatedErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+        var notFoundMessage = OpenMirroringConnector.ArtifactNotFoundErrorMessageFormat.FormatWith(nonExistentDatabaseName, workspaceName);
+
+        // First call - should trigger creation (cache miss)
+        var firstResult = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(firstResult);
+        Assert.False(firstResult.Success);
+        Assert.Equal(willBeCreatedMessage, firstResult.ErrorMessage);
+
+        // Second call - should NOT trigger creation (cache hit within retry interval)
+        var secondResult = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(secondResult);
+        Assert.False(secondResult.Success);
+        Assert.Equal(notFoundMessage, secondResult.ErrorMessage);
+
+        // Third call - still within retry interval, should NOT trigger creation
+        var thirdResult = await connector.VerifyConnection(setupResult.Context, configuration);
+        Assert.NotNull(thirdResult);
+        Assert.False(thirdResult.Success);
+        Assert.Equal(notFoundMessage, thirdResult.ErrorMessage);
     }
 
     private protected override StorageConfigurationBase CreateStorageConfiguration(Dictionary<string, object> configuration)

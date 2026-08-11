@@ -1,7 +1,8 @@
-namespace CluedIn.Connector.DataLake.Common;
+using CluedIn.Connector.DataLake.Common;
+
+namespace CluedIn.Connector.AzureDataLake;
 
 internal interface IAzureSharedKeyCredentialConfiguration : IDataLakeStorageConfiguration
 {
-    string AccountName { get; }
     string AccountKey { get; }
 }

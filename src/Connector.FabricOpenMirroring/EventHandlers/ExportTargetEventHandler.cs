@@ -34,8 +34,8 @@ internal class ExportTargetEventHandler : IDisposable
         _configurationConstants = constants ?? throw new ArgumentNullException(nameof(constants));
         _storageFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
 
-        _registerExportTargetSubscription = applicationContext.System.Events.Local.SubscribeAsync<RegisterExportTargetEvent>(ProcessEventAsync);
-        _updateExportTargetSubscription = applicationContext.System.Events.Local.SubscribeAsync<UpdateExportTargetEvent>(ProcessEventAsync);
+        _registerExportTargetSubscription = applicationContext.System.Events.SubscribeAsync<RegisterExportTargetEvent>(ProcessEventAsync);
+        _updateExportTargetSubscription = applicationContext.System.Events.SubscribeAsync<UpdateExportTargetEvent>(ProcessEventAsync);
     }
 
     private async Task ProcessEventAsync<TEvent>(TEvent eventData)
@@ -99,6 +99,6 @@ internal class ExportTargetEventHandler : IDisposable
 
         var client = await _storageFactory.CreateStorageClient(executionContext, configuration) as OpenMirroringStorageClient;
 
-        await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinition.IsEnabled);
+        await client.UpdateOrCreateMirroredDatabaseAsync(providerDefinition.Id, providerDefinition.IsEnabled);
     }
 }

@@ -72,8 +72,7 @@ internal class AzureDataLakeDataMigrator : StorageDataMigrator
             foreach (var organizationProfile in organizationProfiles)
             {
                 var executionContext = _applicationContext.CreateExecutionContext(organizationProfile.Id);
-                var streams = await streamRepository.GetAllStreams(executionContext).ToList();
-
+                var streams = (await streamRepository.GetAllStreamsEx(executionContext)).ToList();
 
                 foreach (var provider in executionContext.Organization.Providers.AllProviderDefinitions.Where(x =>
                              x.ProviderId == _dataLakeConstants.ProviderId))
@@ -89,7 +88,7 @@ internal class AzureDataLakeDataMigrator : StorageDataMigrator
                                 Mode = StreamMode.EventStream,
                                 ContainerName = stream.ContainerName,
                                 DataTypes =
-                                    (await streamRepository.GetStreamMappings(executionContext, stream.Id))
+                                    (await streamRepository.GetStreamMappingsEx(executionContext, stream.Id))
                                     .Select(x => new DataTypeEntry
                                     {
                                         Key = x.SourceDataType,
@@ -103,7 +102,7 @@ internal class AzureDataLakeDataMigrator : StorageDataMigrator
 
                             _logger.LogInformation($"Setting {nameof(StreamMode.EventStream)} for stream '{{StreamName}}' ({{StreamId}})", stream.Name, stream.Id);
 
-                            await streamRepository.SetupConnector(executionContext, stream.Id, model);
+                            await streamRepository.SetupConnectorEx(executionContext, stream.Id, model);
                         }
                     }
                 }

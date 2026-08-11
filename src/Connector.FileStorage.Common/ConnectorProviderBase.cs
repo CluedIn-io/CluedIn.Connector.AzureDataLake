@@ -46,7 +46,7 @@ namespace CluedIn.Connector.FileStorage.Common
         /// <summary>
         ///     Usually called first from Crawler methods. Don't have much impact.
         /// </summary>
-        public override Task<CrawlJobData> GetCrawlJobData(
+        public override async Task<CrawlJobData> GetCrawlJobData(
             ProviderUpdateContext context,
             IDictionary<string, object> configuration,
             Guid organizationId,
@@ -56,11 +56,18 @@ namespace CluedIn.Connector.FileStorage.Common
             // WARNING: The log output can contain sensitive information
             _logger.LogDebug($"GetCrawlJobData config input: {JsonConvert.SerializeObject(configuration)}");
 
+            await TransformConfigurationAsync(context, configuration, providerDefinitionId);
+            return new CrawlJobDataWrapper(configuration);
+        }
+
+        protected virtual Task TransformConfigurationAsync(ProviderUpdateContext context, IDictionary<string, object> configuration, Guid providerDefinitionId)
+        {
             if (!configuration.TryGetValue(StorageConfigurationConstants.ProviderDefinitionIdKey, out var _))
             {
                 configuration.Add(StorageConfigurationConstants.ProviderDefinitionIdKey, providerDefinitionId);
             }
-            return Task.FromResult<CrawlJobData>(new CrawlJobDataWrapper(configuration));
+
+            return Task.CompletedTask;
         }
 
         /// <summary>

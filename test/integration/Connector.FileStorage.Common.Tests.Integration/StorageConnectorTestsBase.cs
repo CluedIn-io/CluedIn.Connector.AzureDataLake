@@ -43,7 +43,6 @@ using Newtonsoft.Json.Linq;
 using Parquet;
 
 using Xunit;
-using Xunit.Abstractions;
 using ExecutionContext = CluedIn.Core.ExecutionContext;
 using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
@@ -143,7 +142,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         SetupConfiguration(configuration);
 
         var constantsMock = CreateConstantsMock();
-        var storageFactoryMock = CreateStorageFactoryMock(container, applicationContext, mockDateTimeOffsetProvider);
+        var storageFactoryMock = CreateStorageFactoryMock(container, applicationContext, mockDateTimeOffsetProvider, constantsMock);
         var connectorMock = GetConnectorMock(applicationContext, mockDateTimeOffsetProvider, constantsMock, storageFactoryMock);
         storageFactoryMock.Setup(x => x.CreateStorageConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<IReadOnlyStreamModel>()))
             .ReturnsAsync(configuration);
@@ -177,7 +176,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     protected abstract Mock<TClientFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider);
+        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<TConfigurationConstants> constantsMock);
 
     protected virtual StreamModel CreateStreamModel(
         Organization organization,
@@ -364,10 +364,12 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     {
         var streamRepository = new Mock<IStreamRepository>();
         var streamModel = CreateStreamModel(organization, providerDefinitionId, streamMode);
-        streamRepository.Setup(x => x.GetStream(It.IsAny<ExecutionContext>(), streamModel.Id)).ReturnsAsync(streamModel);
+        SetupGetStream(streamRepository, streamModel);
         container.Register(Component.For<IStreamRepository>().Instance(streamRepository.Object));
         return (streamModel, streamRepository);
     }
+
+    private static partial void SetupGetStream(Mock<IStreamRepository> streamRepository, StreamModel streamModel);
 
     private ExecutionContext SetupExecutionContext(ApplicationContext applicationContext, Organization organization)
     {
@@ -447,7 +449,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         }
         else
         {
-            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DefaultCurrentTime);
+            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DefaultCurrentTime.ToUniversalTime());
         }
 
         return mockDateTimeOffsetProvider;
@@ -647,7 +649,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             { "PersistHash", "etypzcezkiehwq8vw4oqog==" },
             { "PersistVersion", isStringIntegers ? 1.ToString() : 1 },
             { "ProviderDefinitionId", "c444cda8-d9b5-45cc-a82d-fef28e08d55c" },
-            { "Timestamp", "2024-08-21T03:16:00.0000000+05:00" },
+            { "Timestamp", DefaultCurrentTime.ToUniversalTime().ToString("o") },
             { $"user{separator}age", "123" },
             { $"user{separator}dobInDateTime", "2000-01-02T03:04:05" },
             { $"user{separator}dobInDateTimeOffset", "2000-01-02T03:04:05+12:34" },
@@ -1102,5 +1104,61 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                 Assert.Equal(StorageExportEntitiesJobBase.StreamNotStartedReason, result.Reason);
                 return null;
             });
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WhenNoDataStoredAndNoTableCreated_CanSkip()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            (_, _) => Task.CompletedTask,
+            async executeExportArg =>
+            {
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(StorageExportEntitiesJobBase.TableNotFoundReason, result.Reason);
+                return null;
+            },
+            getConnectorEntityData: Array.Empty<ConnectorEntityData>);
+    }
+
+    [Fact]
+    public async Task VerifyStoreData_Sync_WhenRepeatRunOfSkipped_CanSkip()
+    {
+        await VerifyStoreData_Sync_WithStreamCache(
+            "csv",
+            (_, _) => Task.CompletedTask,
+            async executeExportArg =>
+            {
+                var jobArgs = new StorageJobArgs
+                {
+                    OrganizationId = executeExportArg.Organization.Id.ToString(),
+                    Schedule = "0 0/1 * * *",
+                    Message = executeExportArg.StreamId.ToString(),
+                    IsTriggeredFromJobServer = false,
+                };
+                var result = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+                var result2 = await executeExportArg.ExportJob.DoRunInternalAsync(
+                    executeExportArg.ExecutionContext,
+                    jobArgs);
+
+                Assert.False(result.HasExported);
+                Assert.Equal(StorageExportEntitiesJobBase.TableNotFoundReason, result.Reason);
+                Assert.Equal(StorageExportEntitiesJobBase.ExportedBeforeReason, result2.Reason);
+                return null;
+            },
+            getConnectorEntityData: Array.Empty<ConnectorEntityData>);
     }
 }
