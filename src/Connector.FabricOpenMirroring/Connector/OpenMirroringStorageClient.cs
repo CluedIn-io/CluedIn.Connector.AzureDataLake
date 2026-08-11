@@ -419,6 +419,33 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
         }
     }
 
+    internal async Task DeleteMirroredDatabaseAsync()
+    {
+        var token = await GetToken();
+
+        using var httpClient = new HttpClient();
+
+        var workspace = await GetWorkspaceAsync(httpClient, token);
+        if (workspace == null)
+        {
+            throw new ApplicationException($"Failed to find workspace using {_configuration.WorkspaceName}.");
+        }
+        var mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
+        if (mirroredDatabase == null)
+        {
+            throw new ApplicationException($"Failed to find mirrored database using workspace {_configuration.WorkspaceName} and mirrored database name {_configuration.MirroredDatabaseName}.");
+        }
+
+        var url = $"{GetApiUrl(workspace.Id)}/v1/workspaces/{workspace.Id}/mirroredDatabases/{mirroredDatabase.Id}";
+        var request = new HttpRequestMessage();
+        request.Method = HttpMethod.Delete;
+        request.RequestUri = new Uri(url);
+        request.Headers.Add("Authorization", $"Bearer {token}");
+        var response = await httpClient.SendAsync(request);
+
+        await EnsureSuccess(url, response);
+    }
+
     private record Workspace(Guid Id, string DisplayName, string Description, string Type, Guid CapacityId);
     private enum SqlEndpointProvisioningStatus
     {
