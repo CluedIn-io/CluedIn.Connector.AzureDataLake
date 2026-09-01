@@ -14,7 +14,6 @@ using CluedIn.Core.Streams.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
-using Nest;
 
 namespace CluedIn.Connector.FileStorage.Common.EventHandlers;
 
