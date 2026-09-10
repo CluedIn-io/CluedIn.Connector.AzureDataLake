@@ -1,9 +1,37 @@
-# GitVersion.yml
 mode: ContinuousDeployment
-next-version: 5.0
+next-version: '5.0'
 branches:
-  master:
+  main:
     mode: ContinuousDelivery
-  pull-request:
-    tag: pr
+  develop:
+    tag: alpha
+    increment: Patch
+    # Do not track release branches, but rather look at the last merge commit
+    # when we got release branch merged into our branch and use it as a base
+    tracks-release-branches: false
+
+  release:
+    regex: ^releases?[\/-].*$
+    source-branches:
+      - main
+  support:
+    tag: update
     increment: None
+    source-branches:
+      - main
+  hotfix:
+    tag: useBranchName
+  pull-request:
+    tag: alpha.0.pr
+    increment: Patch
+  feature:
+    tag: alpha.0.{BranchName}
+  unknown:
+    regex: ^(?!master$|main$|develop$|releases?[\/-]|support[\/-]|hotfix(es)?[\/-]|features?[\/-]|(pull|pull\-requests|pr)[\/-]).*$
+    tag: alpha.0.{BranchName}
+    source-branches:
+    - develop
+    - main
+    - release
+    - support
+    - hotfix
