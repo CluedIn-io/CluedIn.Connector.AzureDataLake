@@ -48,11 +48,6 @@ variables:
 lockBehavior: sequential
 
 steps:
-  - task: UseDotNet@2
-    displayName: Install .NET SDK 6.0
-    inputs:
-      version: 6.0.x
-
   - task: NuGetAuthenticate@0
     displayName: 'Authenticate with nuget'
 
