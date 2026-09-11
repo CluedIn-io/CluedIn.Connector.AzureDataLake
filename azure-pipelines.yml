@@ -4,11 +4,18 @@ parameters:
     displayName: Run Integration Tests
     type: boolean
     default: true
-    
+
   - name: pipelineTemplateRef
     displayName: Pipeline Template Ref
     type: string
-    default: refs/heads/refactor
+    default: refs/heads/feature/multi-version-packaging
+
+  # Manual, one-off check that this repo still builds and tests cleanly against a CluedIn.Core
+  # version outside multiVersionCluedInTargets below - leave blank for a normal run.
+  - name: probeCluedInVersion
+    displayName: Probe CluedIn Version (leave blank for a normal run)
+    type: string
+    default: ''
 
 trigger:
   branches:
@@ -28,9 +35,6 @@ resources:
       endpoint: 'CluedIn-io'
       ref: ${{ parameters.pipelineTemplateRef }}
 
-pool:
-  vmImage: 'ubuntu-22.04'
-
 variables:
   - name: testFolderPath
     value: '$(Build.SourcesDirectory)/test'
@@ -47,19 +51,31 @@ variables:
 # Serialize all runs for this pipeline; change to 'runLatest' if only the latest queued run should proceed.
 lockBehavior: sequential
 
-steps:
-  - task: NuGetAuthenticate@0
-    displayName: 'Authenticate with nuget'
-
-  - template: crawler.build.yml@templates
+# jobs:, not pool:/steps: - crawler.build.jobs.yml is a jobs template, the only one with
+# multi-version support (crawler.build.yml has none).
+jobs:
+  - template: crawler.build.jobs.yml@templates
     parameters:
+      pool:
+        vmImage: 'ubuntu-22.04'
       githubReleaseInMaster: true
       publicReleaseForMaster: true
+      publishCodeCoverage: true
+      useGitVersionDotNetTool: true
+      publishToDevFeed: true
+      probeCluedInVersion: ${{ parameters.probeCluedInVersion }}
       executeIntegrationTests: ${{ parameters.runIntegrationTests }}
       createIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
       createIntegrationEnvironmentScriptArguments: '-Action SetUp'
       deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
       deleteIntegrationEnvironmentScriptArguments: '-Action TearDown'
-      publishCodeCoverage: true
-      useGitVersionDotNetTool: true
-      publishToDevFeed: true
+      # Matches this repo's own CLUEDIN_V46_OR_GREATER/V47_OR_GREATER/V48_OR_GREATER/V50_OR_GREATER
+      # DefineConstants gates in Directory.Build.props. release/4.6.7, release/4.7.4 and
+      # release/4.8.1(/.2) are all still actively released lines (tags as recent as 2026-08-11) -
+      # 4.6.0 is included unlike most other repos' multi-version migrations. 5.0.0-beta.* floats to
+      # whatever prerelease is newest in the develop feed.
+      multiVersionCluedInTargets:
+        - cluedInVersion: '4.6.0'
+        - cluedInVersion: '4.7.0'
+        - cluedInVersion: '4.8.0'
+        - cluedInVersion: '5.0.0-beta.*'
