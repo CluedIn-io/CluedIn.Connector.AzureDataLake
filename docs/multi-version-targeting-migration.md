@@ -96,3 +96,25 @@ repo's content. Relying on this PR's own CI build to confirm the resolved versio
 ## Step 4 — CI verification
 
 Status: **Pending** - see PR.
+
+---
+
+## Addendum — version baseline moved from 1.0.0 to 100.0.0
+
+Status: **Done**
+
+The CluedIn version is now carried entirely by the package suffix (`.460`/`.470`/`.480`/`.500`), not
+by this repo's own `next-version` number, so that number moved again, from `1.0` to `100.0`. Reason:
+repos that were previously at 4.x/5.x under the old single-version-targeting scheme would appear to
+"go backwards" if their next version showed as `1.0.0` — `100.0.0` is unambiguously higher than any
+prior single-version release number this repo ever had.
+
+Unlike the original `1.0` reset, no `commits-before`/`ignore` trick is needed this time:
+`next-version` only needs help overriding an existing tag when the configured value is *lower* than
+that tag, and `100.0` is already higher than every pre-existing tag here. Removed the
+`ignore.commits-before` line entirely (this repo's `ignore:` block had no `sha`, so the whole block
+was removed).
+
+Verified with a real local `dotnet-gitversion` run (this machine's earlier `LibGit2Sharp.Core.NativeMethods`
+native-loader failure, noted in Step 3 above, did not recur here): `MajorMinorPatch` resolves to
+`"100.0.0"`. `docs/1.0.0-release-notes.md` renamed to `docs/100.0.0-release-notes.md`.
