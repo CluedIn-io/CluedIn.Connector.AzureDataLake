@@ -30,7 +30,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     private readonly IStorageConfigurationConstants _dataLakeConstants;
     private readonly IStorageFactory _storageFactory;
     private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
-    private static readonly TimeSpan _exportTimeout = TimeSpan.MaxValue;
     private const int ExportEntitiesLockInMilliseconds = 100;
     private const string StreamIdKey = "StreamId";
     private const string DataTimeKey = "DataTime";
@@ -38,6 +37,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     private const string TemporaryFileSuffix = ".tmp";
 
     // Status values
+    private const string StartingStatus = "Starting";
     private const string CompleteStatus = "Complete";
     private const string FailedStatus = "Failed";
     private const string SkippedStatus = "Skipped";
@@ -114,19 +114,37 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         try
         {
-            using var transactionScope = new TransactionScope(
-                TransactionScopeOption.Required,
-                _exportTimeout,
-                TransactionScopeAsyncFlowOption.Enabled);
-            await using var connection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
-            await connection.OpenAsync();
+            // No ambient transaction for the export. On large streams the full read plus the file upload runs for 15+
+            // minutes, and the ambient transaction was being ended part-way through (TimeSpan.MaxValue is capped by
+            // TransactionManager.MaxTimeout). UpdateHistory then threw "transaction has completed but has not been
+            // disposed" after the file had been delivered, and the history row was rolled back, so the run was retried.
+            using var suppressScope = new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled);
 
-            if (!await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"{GetType().Name}_{streamId}", ExportEntitiesLockInMilliseconds))
+            // The per-stream export lock and the full-table read share one connection and an explicit transaction. The
+            // read keeps the connection busy for the whole export, so it isn't dropped as idle (an idle connection holding
+            // the lock was closed after ~30 minutes, releasing the lock and letting a second export of the stream start),
+            // and an explicit SqlTransaction isn't subject to the System.Transactions timeout. Disposing it releases the lock.
+            await using var exportConnection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
+            await exportConnection.OpenAsync();
+            await using var exportTransaction = exportConnection.BeginTransaction();
+            if (!await DistributedLockHelper.TryAcquireExclusiveLock(exportTransaction, $"{GetType().Name}_{streamId}", ExportEntitiesLockInMilliseconds))
             {
                 context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamId);
                 return ExportResult.CreateSkipped("Failed to acquire lock");
             }
-            return await DoRunInternalAsync(context, args, exportJobData, transactionScope, connection);
+
+            // Short queries and history rows use a separate connection without a transaction.
+            await using var connection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
+            await connection.OpenAsync();
+            try
+            {
+                return await DoRunInternalAsync(context, args, exportJobData, connection, exportConnection, exportTransaction);
+            }
+            catch
+            {
+                await TryMarkHistoryFailedAsync(context, exportJobData, GetTriggerSource(args), args.Schedule);
+                throw;
+            }
         }
         catch (Exception ex)
         {
@@ -139,8 +157,9 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         ExecutionContext context,
         IStorageJobArgs args,
         ExportJobData exportJobData,
-        TransactionScope transactionScope,
-        SqlConnection connection)
+        SqlConnection connection,
+        SqlConnection exportConnection,
+        SqlTransaction exportTransaction)
     {
         var streamId = exportJobData.StreamId;
         var streamModel = exportJobData.StreamModel;
@@ -182,7 +201,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             StartTime: _dateTimeOffsetProvider.GetCurrentUtcTime(),
             EndTime: null,
             TotalRows: null,
-            Status: "Starting",
+            Status: StartingStatus,
             ExporterHostName: Dns.GetHostName());
         await InsertHistory(context, connection, exportHistory);
 
@@ -219,10 +238,18 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return ExportResult.CreateSkipped(NoRowsReason);
         }
 
-        await InitializeBaseDirectoryAsync(context, connection, exportJobData, storageClient);
-        await InitializeOutputDirectoryAsync(context, connection, exportJobData, storageClient);
+        // Overrides may take transaction-owned application locks on the connection (e.g. Open Mirroring's partner
+        // events file), so they get a short transaction of their own.
+        using (var initializeScope = new TransactionScope(TransactionScopeOption.Required, TransactionScopeAsyncFlowOption.Enabled))
+        {
+            await using var initializeConnection = new SqlConnection(configuration.StreamCacheConnectionString);
+            await initializeConnection.OpenAsync();
+            await InitializeBaseDirectoryAsync(context, initializeConnection, exportJobData, storageClient);
+            await InitializeOutputDirectoryAsync(context, initializeConnection, exportJobData, storageClient);
+            initializeScope.Complete();
+        }
 
-        var getDataCommand = GetDataSql(connection, asOfTime, tableName, validFrom);
+        var getDataCommand = GetDataSql(exportConnection, asOfTime, tableName, validFrom, transaction: exportTransaction);
 
         await using var reader = await getDataCommand.ExecuteReaderAsync();
 
@@ -252,8 +279,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             context.Log.LogWarning(
                 "Error creating file client for {TemporaryOutputFileName}.",
                 temporaryOutputFileName);
-            transactionScope.Complete();
-            transactionScope.Dispose();
             await AddErrorToStreamIngestionLog(context, streamModel, $"Error creating file client for {temporaryOutputFileName}.", exception: getTemporaryFileClientException);
             throw;
         }
@@ -291,8 +316,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         await reader.CloseAsync();
 
         await UpdateHistoryWithStatus(CompleteStatus, totalRows: totalRows);
-        transactionScope.Complete();
-        transactionScope.Dispose();
         context.Log.LogInformation(
             "End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.",
             GetType().Name,
@@ -360,13 +383,13 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             await targetFileClient.DeleteIfExistsAsync();
         }
 
-        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null)
+        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null, SqlTransaction transaction = null)
         {
             var limitClause = limit.HasValue ? $"TOP ({limit.Value}) " : string.Empty;
             var getDataSql = validFrom.HasValue
                 ? $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}' WHERE ValidFrom > @ValidFrom"
                 : $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
-            var command = new SqlCommand(getDataSql, connection)
+            var command = new SqlCommand(getDataSql, connection, transaction)
             {
                 CommandType = CommandType.Text
             };
@@ -392,14 +415,15 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         async Task AddInformationToStreamIngestionLogLocal(string message)
         {
-            transactionScope.Complete();
-            transactionScope.Dispose();
             await this.AddInformationToStreamIngestionLog(context, streamModel, message: message);
         }
 
         async Task UpdateHistoryWithStatus(string status, long? totalRows = null)
         {
-            await UpdateHistory(context, connection, exportHistory with
+            // A fresh connection: the final update comes after the export, when `connection` may have been idle for a long time.
+            await using var historyConnection = new SqlConnection(configuration.StreamCacheConnectionString);
+            await historyConnection.OpenAsync();
+            await UpdateHistory(context, historyConnection, exportHistory with
             {
                 Status = status,
                 TotalRows = totalRows,
@@ -897,7 +921,23 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         static async Task insert(SqlConnection connection, ExportHistory exportHistory)
         {
             var tableName = GetExportHistoryTableName(exportHistory.StreamId);
+            // An earlier attempt for the same slot may have left a Starting or Failed row, so reuse it.
             var insertSql = $"""
+                        UPDATE [{tableName}] SET
+                            FilePath = @FilePath,
+                            FileFormat = @FileFormat,
+                            StartTime = @StartTime,
+                            EndTime = @EndTime,
+                            TotalRows = @TotalRows,
+                            Status = @Status,
+                            ExporterHostName = @ExporterHostName
+                        WHERE
+                            StreamId = @StreamId
+                            AND DataTime = @DataTime
+                            AND TriggerSource = @TriggerSource
+                            AND CronSchedule = @CronSchedule;
+
+                        IF @@ROWCOUNT = 0
                         INSERT INTO [{tableName}] (
                             StreamId,
                             DataTime,
@@ -1053,6 +1093,56 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         if (rowsAffected != 1)
         {
             throw new ApplicationException($"Rows affected for update of is not 1, it is {rowsAffected}.");
+        }
+    }
+
+    private async Task TryMarkHistoryFailedAsync(
+        ExecutionContext context,
+        ExportJobData exportJobData,
+        string triggerSource,
+        string cronSchedule)
+    {
+        // Only a row still in Starting belongs to the failed attempt; Complete and Skipped rows are left alone.
+        var tableName = GetExportHistoryTableName(exportJobData.StreamId);
+        var updateSql = $"""
+                    UPDATE [{tableName}] SET
+                        EndTime = @EndTime,
+                        Status = @Status
+                    WHERE
+                        StreamId = @StreamId
+                        AND DataTime = @DataTime
+                        AND TriggerSource = @TriggerSource
+                        AND CronSchedule = @CronSchedule
+                        AND Status = '{StartingStatus}'
+                    """;
+        try
+        {
+            await using var connection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
+            await connection.OpenAsync();
+            var command = new SqlCommand(updateSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
+            command.Parameters.Add(new SqlParameter($"@StreamId", exportJobData.StreamId));
+            command.Parameters.Add(new SqlParameter($"@DataTime", exportJobData.AsOfTime));
+            command.Parameters.Add(new SqlParameter($"@TriggerSource", triggerSource));
+            command.Parameters.Add(new SqlParameter($"@CronSchedule", cronSchedule));
+            command.Parameters.Add(new SqlParameter($"@EndTime", _dateTimeOffsetProvider.GetCurrentUtcTime()));
+            command.Parameters.Add(new SqlParameter($"@Status", FailedStatus));
+            _ = await command.ExecuteNonQueryAsync();
+        }
+        catch (SqlException tableNotFoundException) when (tableNotFoundException.IsTableNotFoundException())
+        {
+            // The export failed before its first history row was written.
+        }
+        catch (Exception updateException)
+        {
+            context.Log.LogWarning(
+                updateException,
+                "Unable to mark export history as {Status} for StreamId {StreamId} and DataTime {DataTime}.",
+                FailedStatus,
+                exportJobData.StreamId,
+                exportJobData.AsOfTime);
         }
     }
 
