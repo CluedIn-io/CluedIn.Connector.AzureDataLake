@@ -404,9 +404,18 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                     CommandType = CommandType.Text
                 };
                 command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.IdKey}", syncItem.EntityId));
-                command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.ChangeTypeKey}", syncItem.ChangeType.ToString()));
-                command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.TimestampKey}", syncItem.Data[StorageConfigurationConstants.TimestampKey]));
-                command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.EpochKey}", syncItem.Data[StorageConfigurationConstants.EpochKey]));
+                command.Parameters.Add(CacheTableParameterHelper.CreateParameter(
+                    $"@{StorageConfigurationConstants.ChangeTypeKey}",
+                    syncItem.ChangeType.ToString(),
+                    typeof(string)));
+                command.Parameters.Add(CacheTableParameterHelper.CreateParameter(
+                    $"@{StorageConfigurationConstants.TimestampKey}",
+                    syncItem.Data[StorageConfigurationConstants.TimestampKey],
+                    syncItem.DataValueTypes[StorageConfigurationConstants.TimestampKey]));
+                command.Parameters.Add(CacheTableParameterHelper.CreateParameter(
+                    $"@{StorageConfigurationConstants.EpochKey}",
+                    syncItem.Data[StorageConfigurationConstants.EpochKey],
+                    syncItem.DataValueTypes[StorageConfigurationConstants.EpochKey]));
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
                 if (rowsAffected != 1)
@@ -498,7 +507,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 for (var i = 0; i < propertyKeys.Count; i++)
                 {
                     var key = propertyKeys[i];
-                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
+                    command.Parameters.Add(CacheTableParameterHelper.CreateParameter($"@p{i}", GetDatabaseValue(syncItem, key), syncItem.DataValueTypes[key]));
                 }
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
@@ -545,7 +554,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 for (var i = 0; i < propertyKeys.Count; i++)
                 {
                     var key = propertyKeys[i];
-                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
+                    command.Parameters.Add(CacheTableParameterHelper.CreateParameter($"@p{i}", GetDatabaseValue(syncItem, key), syncItem.DataValueTypes[key]));
                 }
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
