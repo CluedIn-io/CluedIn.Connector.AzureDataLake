@@ -341,9 +341,9 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -399,9 +399,9 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -465,7 +465,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             setupResult.StreamRepositoryMock.Object,
             setupResult.ConstantsMock.Object,
             setupResult.StorageFactoryMock.Object,
-            setupResult.DateTimeOffsetProviderMock.Object);
+            setupResult.TimeProviderMock.Object);
         return exportJob;
     }
 
@@ -502,7 +502,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
 
     protected override Mock<AmazonS3Connector> GetConnectorMock(
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IAmazonS3ConfigurationConstants> constantsMock,
         Mock<AmazonS3StorageFactory> storageConfigurationFactory)
     {
@@ -511,14 +511,14 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             applicationContext,
             constantsMock.Object,
             storageConfigurationFactory.Object,
-            mockDateTimeOffsetProvider.Object);
+            mockTimeProvider.Object);
         return mockConnector;
     }
 
     protected override Mock<AmazonS3StorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IAmazonS3ConfigurationConstants> constantsMock)
     {
         var storageFactory = new Mock<AmazonS3StorageFactory>();

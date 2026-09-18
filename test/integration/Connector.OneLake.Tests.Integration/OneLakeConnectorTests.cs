@@ -427,9 +427,9 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -481,9 +481,9 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -557,7 +557,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             setupResult.StreamRepositoryMock.Object,
             setupResult.ConstantsMock.Object,
             setupResult.StorageFactoryMock.Object,
-            setupResult.DateTimeOffsetProviderMock.Object);
+            setupResult.TimeProviderMock.Object);
         return exportJob;
     }
 
@@ -613,7 +613,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
 
     protected override Mock<OneLakeConnector> GetConnectorMock(
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IOneLakeConfigurationConstants> constantsMock,
         Mock<OneLakeStorageFactory> storageConfigurationFactory)
     {
@@ -622,21 +622,21 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             applicationContext,
             constantsMock.Object,
             storageConfigurationFactory.Object,
-            mockDateTimeOffsetProvider.Object);
+            mockTimeProvider.Object);
         return mockConnector;
     }
 
     protected override Mock<OneLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IOneLakeConfigurationConstants> constantsMock)
     {
         //container.Register(Component.For<OneLakeFactory>().ImplementedBy<OneLakeFactory>().LifestyleSingleton());
         var storageFactory = new Mock<OneLakeStorageFactory>();
         storageFactory.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
             .Returns<ExecutionContext, IStorageConfiguration>(
-            (_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration, applicationContext, mockDateTimeOffsetProvider.Object)));
+            (_, data) => Task.FromResult<IStorageClient>(new OneLakeStorageClient(NullLogger<OneLakeStorageClient>.Instance, data as OneLakeConnectorConfiguration, applicationContext, mockTimeProvider.Object)));
         return storageFactory;
     }
 

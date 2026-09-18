@@ -15,14 +15,14 @@ internal class ChangeStreamStateEventHandler : UpdateStreamScheduleBase, IDispos
         ApplicationContext applicationContext,
         IStorageConfigurationConstants constants,
         IStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider,
+        ITimeProvider timeProvider,
         Type exportEntitiesJobType,
         IScheduledJobQueue jobQueue)
         : base(
             applicationContext,
             constants,
             storageFactory,
-            dateTimeOffsetProvider,
+            timeProvider,
             exportEntitiesJobType,
             jobQueue)
     {

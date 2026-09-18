@@ -30,8 +30,8 @@ public class AmazonS3Connector : StorageConnectorBase
         ApplicationContext applicationContext,
         IAmazonS3ConfigurationConstants constants,
         AmazonS3StorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(logger, applicationContext, constants, storageFactory, timeProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

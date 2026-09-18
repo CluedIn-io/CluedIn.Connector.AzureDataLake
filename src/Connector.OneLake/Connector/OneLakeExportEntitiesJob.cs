@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
@@ -18,8 +19,8 @@ internal class OneLakeExportEntitiesJob : StorageExportEntitiesJobBase
         IStreamRepository streamRepository,
         IOneLakeConfigurationConstants configurationConstants,
         OneLakeStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, timeProvider)
     {
         _storageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
     }
