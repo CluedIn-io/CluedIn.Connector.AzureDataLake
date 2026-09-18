@@ -11,6 +11,7 @@ using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
+using CluedIn.Core.Data;
 using CluedIn.Core.Streams;
 
 using Microsoft.Data.SqlClient;
@@ -22,9 +23,9 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
 {
     private const int PartnerEventsJsonLockInMilliseconds = 100;
     private static readonly AssemblyName _connectorAssemblyName = typeof(OpenMirroringExportEntitiesJob).Assembly.GetName();
-    private static readonly AssemblyName _cluedInCoreAssemblyName = typeof(IDateTimeOffsetProvider).Assembly.GetName();
+    private static readonly AssemblyName _cluedInCoreAssemblyName = typeof(IEntity).Assembly.GetName();
     private static readonly FileVersionInfo _connectorFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(OpenMirroringExportEntitiesJob).Assembly.Location);
-    private static readonly FileVersionInfo _cluedInCoreFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(IDateTimeOffsetProvider).Assembly.Location);
+    private static readonly FileVersionInfo _cluedInCoreFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(IEntity).Assembly.Location);
     private static readonly string _partnerName = "CluedIn ApS";
 
     private IDateTimeOffsetProvider DateTimeOffsetProvider { get; }
