@@ -30,8 +30,8 @@ public class OneLakeConnector : StorageConnectorBase
         ApplicationContext applicationContext,
         IOneLakeConfigurationConstants constants,
         OneLakeStorageFactory dataLakeStorageJobDataFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, dataLakeStorageJobDataFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(logger, applicationContext, constants, dataLakeStorageJobDataFactory, timeProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

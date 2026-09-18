@@ -29,7 +29,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     private readonly IStreamRepository _streamRepository;
     private readonly IStorageConfigurationConstants _dataLakeConstants;
     private readonly IStorageFactory _storageFactory;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
     private static readonly TimeSpan _exportTimeout = TimeSpan.MaxValue;
     private const int ExportEntitiesLockInMilliseconds = 100;
     private const string StreamIdKey = "StreamId";
@@ -55,12 +55,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         IStreamRepository streamRepository,
         IStorageConfigurationConstants configurationConstants,
         IStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext, dateTimeOffsetProvider)
+        ITimeProvider timeProvider) : base(appContext, timeProvider)
     {
         _streamRepository = streamRepository ?? throw new ArgumentNullException(nameof(streamRepository));
         _dataLakeConstants = configurationConstants ?? throw new ArgumentNullException(nameof(configurationConstants));
         _storageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     protected virtual string StreamIdDefaultStringFormat => "N";
@@ -179,7 +179,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             CronSchedule: args.Schedule,
             FilePath: outputFileName,
             FileFormat: outputFormat,
-            StartTime: _dateTimeOffsetProvider.GetCurrentUtcTime(),
+            StartTime: _timeProvider.GetUtcNow(),
             EndTime: null,
             TotalRows: null,
             Status: "Starting",
@@ -235,7 +235,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             ["FileName"] = outputFileName,
             ["TemporaryFileName"] = temporaryOutputFileName,
             ["Format"] = outputFormat,
-            ["StartTime"] = _dateTimeOffsetProvider.GetCurrentUtcTime(),
+            ["StartTime"] = _timeProvider.GetUtcNow(),
             [InstanceTimeKey] = args.InstanceTime,
             [DataTimeKey] = asOfTime,
         });
@@ -403,7 +403,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             {
                 Status = status,
                 TotalRows = totalRows,
-                EndTime = _dateTimeOffsetProvider.GetCurrentUtcTime()
+                EndTime = _timeProvider.GetUtcNow()
             });
         }
     }
@@ -656,7 +656,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                     "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from job server. Switching to using current time.",
                     outputFileName,
                     asOfTime);
-                asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                asOfTime = _timeProvider.GetUtcNow();
                 outputFileName = await GetOutputFileNameAsync(context, exportJobDataBase with { AsOfTime = asOfTime }, isInitialExport, lastExportedFile, outputDirectoryPath);
                 outputFileExists = false;
             }
@@ -855,7 +855,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         if (configuration.UseCurrentTimeForExport || args.Schedule == CronSchedules.NeverCron)
         {
             context.Log.LogDebug("Using current time for export.");
-            return _dateTimeOffsetProvider.GetCurrentUtcTime();
+            return _timeProvider.GetUtcNow();
         }
 
         return args.InstanceTime;
