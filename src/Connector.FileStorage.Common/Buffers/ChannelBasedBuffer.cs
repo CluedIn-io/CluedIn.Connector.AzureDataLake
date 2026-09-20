@@ -103,7 +103,7 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
     private readonly ChannelBasedBufferOptions _options;
     private readonly IBufferMetrics _metrics;
     private readonly Func<T[], CancellationToken, Task> _bulkActionAsync;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
     private readonly Channel<Message> _channel;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _consumerTask;
@@ -161,14 +161,14 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
     public ChannelBasedBuffer(
         ChannelBasedBufferOptions options,
         Func<T[], CancellationToken, Task> bulkActionAsync,
-        IDateTimeOffsetProvider dateTimeOffsetProvider,
+        ITimeProvider timeProvider,
         IBufferMetrics? metrics = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
 
         _bulkActionAsync = bulkActionAsync ?? throw new ArgumentNullException(nameof(bulkActionAsync));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _metrics = metrics ?? NullBufferMetrics.Instance;
 
         _initialMaxBatchSize = _options.MaxBatchSize;
@@ -284,14 +284,14 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
         // Reused list to build batches on consumer thread
         var batch = new List<AddEntry>(_initialMaxBatchSize);
 
-        var lastItemAtUtc = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var lastItemAtUtc = _timeProvider.GetUtcNow();
 
         try
         {
             while (true)
             {
                 // Wait until there is at least one message, or channel completes, or cancel
-                var elapsed = _dateTimeOffsetProvider.GetCurrentUtcTime() - lastItemAtUtc;
+                var elapsed = _timeProvider.GetUtcNow() - lastItemAtUtc;
                 var timeToWait = GetTimeToWait(elapsed);
                 var timeOutTask = Task.Delay(timeToWait, _cts.Token);
                 var readValueTask = reader.WaitToReadAsync(_cts.Token);
@@ -314,13 +314,13 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
                         entry.Completion = msg.AddCompletion!;
 
                         batch.Add(entry);
-                        lastItemAtUtc = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                        lastItemAtUtc = _timeProvider.GetUtcNow();
 
                         if (batch.Count >= _maxBatchSize)
                         {
                             _ = ScheduleFlush(batch, idleFlush: false);
                             batch = new List<AddEntry>(_maxBatchSize);
-                            lastItemAtUtc = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                            lastItemAtUtc = _timeProvider.GetUtcNow();
                         }
                     }
                     else // Flush
@@ -342,7 +342,7 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
                 {
                     _ = ScheduleFlush(batch, idleFlush: true);
                     batch = new List<AddEntry>(_maxBatchSize);
-                    lastItemAtUtc = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                    lastItemAtUtc = _timeProvider.GetUtcNow();
                 }
 
                 // If channel is completed and we still have buffered items, flush them before exiting.
@@ -440,7 +440,7 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
         _metrics.OnBatchScheduled(count, _maxBatchSize, _pendingFlushBatches is null ? -1 : _pendingFlushBatches.CurrentCount);
 
         await _flushConcurrency.WaitAsync(_cts.Token).ConfigureAwait(false);
-        var started = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var started = _timeProvider.GetUtcNow();
         var sw = Stopwatch.StartNew();
 
         Exception? error = null;
@@ -523,14 +523,14 @@ internal sealed class ChannelBasedBuffer<T> : IDisposable, IAsyncDisposable, IBu
                         if (spanMs < expectedMinMs)
                         {
                             _maxBatchSize = Math.Max(1, firstCount);
-                            _autoMaxSizeSetAtUtc = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                            _autoMaxSizeSetAtUtc = _timeProvider.GetUtcNow();
                         }
                     }
                 }
             }
 
             if (_maxBatchSize != _initialMaxBatchSize &&
-                (_dateTimeOffsetProvider.GetCurrentUtcTime() - _autoMaxSizeSetAtUtc) > _options.AutoTuneResetAfter)
+                (_timeProvider.GetUtcNow() - _autoMaxSizeSetAtUtc) > _options.AutoTuneResetAfter)
             {
                 _maxBatchSize = _initialMaxBatchSize;
             }

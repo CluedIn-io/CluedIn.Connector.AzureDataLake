@@ -8,7 +8,7 @@ using CluedIn.Core.Providers.ExtendedConfiguration;
 
 namespace CluedIn.Connector.FileStorage.Common;
 
-internal abstract partial class InstallComponentsBase : IWindsorInstaller
+internal abstract class InstallComponentsBase : IWindsorInstaller
 {
     private static readonly object _extendedConfigurationRegistrationLock = new();
     private static bool _isExtendedConfigurationRegistered;
@@ -21,7 +21,7 @@ internal abstract partial class InstallComponentsBase : IWindsorInstaller
         where TConstants : class, IStorageConfigurationConstants, TIConstants
         where TClientFactory : class, IStorageFactory
     {
-        RegisterDateTimeProvider(container);
+        container.Register(Component.For<ITimeProvider>().ImplementedBy<DefaultTimeProvider>().LifestyleSingleton());
         container.Register(Component.For<TExportJob>().ImplementedBy<TExportJob>().OnlyNewServices());
         container.Register(Component.For<TIConstants>().ImplementedBy<TConstants>().LifestyleSingleton());
         container.Register(Component.For<TClientFactory>().ImplementedBy<TClientFactory>().LifestyleSingleton());
@@ -35,6 +35,4 @@ internal abstract partial class InstallComponentsBase : IWindsorInstaller
             }
         }
     }
-
-    private static partial void RegisterDateTimeProvider(IWindsorContainer container);
 }

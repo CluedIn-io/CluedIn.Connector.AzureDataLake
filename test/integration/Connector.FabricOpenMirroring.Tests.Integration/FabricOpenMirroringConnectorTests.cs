@@ -204,9 +204,9 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 Assert.Equal(StorageExportEntitiesJobBase.NoRowsReason, result.Reason);
                 return firstPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -273,9 +273,9 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 Assert.Equal(StorageExportEntitiesJobBase.ExportedBeforeReason, lastResult.Reason);
                 return firstPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -301,13 +301,13 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             "parquet",
             async (setupResult, filePath) =>
             {
-                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                var dateTimeProvider = setupResult.TimeProviderMock.Object;
                 await base.AssertParquetResult(setupResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
                 {
                     var updated = original.ToList();
                     updated[0].Columns["__rowMarker__"] = "4";
-                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
-                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetUtcNow().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetUtcNow().ToUnixTimeMilliseconds();
                     updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 2;
                     updated[0].Columns["user_age"] = firstChangeUserData.Age.ToString();
                     return updated;
@@ -350,9 +350,9 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -417,9 +417,9 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 Assert.Equal(StorageExportEntitiesJobBase.NoRowsReason, result.Reason);
                 return firstPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -451,13 +451,13 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             "parquet",
             async (setupResult, filePath) =>
             {
-                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                var dateTimeProvider = setupResult.TimeProviderMock.Object;
                 await base.AssertParquetResult(setupResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
                 {
                     var updated = original.ToList();
                     updated[0].Columns["__rowMarker__"] = "4";
-                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
-                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetUtcNow().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetUtcNow().ToUnixTimeMilliseconds();
                     updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 2;
                     updated[0].Columns["user_age"] = firstChangeUserData.Age.ToString();
                     return updated;
@@ -498,9 +498,9 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -561,13 +561,13 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             "parquet",
             async (setupResult, filePath) =>
             {
-                var dateTimeProvider = setupResult.DateTimeOffsetProviderMock.Object;
+                var dateTimeProvider = setupResult.TimeProviderMock.Object;
                 await base.AssertParquetResult(setupResult, filePath, separator: "_", isArrayColumnEnabled: false, formatResult: (original) =>
                 {
                     var updated = original.ToList();
                     updated[0].Columns["__rowMarker__"] = "4";
-                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetCurrentUtcTime().ToString("O");
-                    updated[0].Columns["Epoch"] = dateTimeProvider.GetCurrentUtcTime().ToUnixTimeMilliseconds();
+                    updated[0].Columns["Timestamp"] = dateTimeProvider.GetUtcNow().ToString("O");
+                    updated[0].Columns["Epoch"] = dateTimeProvider.GetUtcNow().ToUnixTimeMilliseconds();
                     updated[0].Columns[StorageConfigurationConstants.PersistVersionKey] = 4;
                     updated[0].Columns["user_age"] = thirdChangeUserData.Age.ToString();
                     return updated;
@@ -644,9 +644,9 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 Assert.Equal($"{4:D20}.parquet", fourthPath.Name);
                 return fourthPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -735,7 +735,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             setupResult.StreamRepositoryMock.Object,
             setupResult.ConstantsMock.Object,
             setupResult.StorageFactoryMock.Object,
-            setupResult.DateTimeOffsetProviderMock.Object);
+            setupResult.TimeProviderMock.Object);
         return exportJob;
     }
 
@@ -793,7 +793,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
 
     protected override Mock<OpenMirroringConnector> GetConnectorMock(
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IOpenMirroringConfigurationConstants> constantsMock,
         Mock<OpenMirroringStorageFactory> jobDataFactory)
     {
@@ -802,21 +802,21 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             applicationContext,
             constantsMock.Object,
             jobDataFactory.Object,
-            mockDateTimeOffsetProvider.Object);
+            mockTimeProvider.Object);
         return mockConnector;
     }
 
     protected override Mock<OpenMirroringStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IOpenMirroringConfigurationConstants> constantsMock)
     {
         var dataFactoryMock = new Mock<OpenMirroringStorageFactory>();
         dataFactoryMock.Setup(x => x.CreateStorageClient(It.IsAny<ExecutionContext>(), It.IsAny<IStorageConfiguration>()))
             .Returns<ExecutionContext, IStorageConfiguration>((_, data) => Task.FromResult<IStorageClient>(new OpenMirroringStorageClient(NullLogger<OpenMirroringStorageClient>.Instance, data as OpenMirroringConnectorConfiguration,
                 applicationContext,
-                mockDateTimeOffsetProvider.Object)));
+                mockTimeProvider.Object)));
         return dataFactoryMock;
     }
 
@@ -937,7 +937,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         var connector = setupResult.ConnectorMock.Object;
         setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
             .Returns(Task.FromResult<IStorageConfiguration>(jobData));
-        setupResult.DateTimeOffsetProviderMock.Setup(provider => provider.GetCurrentUtcTime())
+        setupResult.TimeProviderMock.Setup(provider => provider.GetUtcNow())
             .Returns(DateTimeOffset.UtcNow);
 
         var workspaceName = configuration[nameof(OpenMirroringConfigurationConstants.WorkspaceName)] as string;
