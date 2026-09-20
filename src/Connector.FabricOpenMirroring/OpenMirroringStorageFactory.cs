@@ -37,10 +37,10 @@ public class OpenMirroringStorageFactory : StorageFactoryBase, IStorageFactory
     public override async Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration configuration)
     {
         var logger = executionContext.ApplicationContext.Container.Resolve<ILogger<OpenMirroringStorageClient>>();
-        var dateTimeOffsetProvider = executionContext.ApplicationContext.Container.Resolve<IDateTimeOffsetProvider>();
+        var timeProvider = executionContext.ApplicationContext.Container.Resolve<ITimeProvider>();
         var client = new OpenMirroringStorageClient(logger, configuration as OpenMirroringConnectorConfiguration,
             executionContext.ApplicationContext,
-            dateTimeOffsetProvider);
+            timeProvider);
         return client;
     }
 }

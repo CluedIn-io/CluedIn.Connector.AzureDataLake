@@ -76,7 +76,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         try
         {
             var setupResult = await SetupContainer(jobData, StreamMode.EventStream);
-            setupResult.DateTimeOffsetProviderMock.Setup(x => x.GetCurrentUtcTime()).Returns(DateTimeOffset.UtcNow);
+            setupResult.TimeProviderMock.Setup(x => x.GetUtcNow()).Returns(DateTimeOffset.UtcNow);
             var connector = setupResult.ConnectorMock.Object;
             setupResult.StorageFactoryMock.Setup(factory => factory.CreateStorageConfiguration(setupResult.Context, configuration, It.IsAny<string>()))
                 .Returns(Task.FromResult<IStorageConfiguration>(jobData));
@@ -630,9 +630,9 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -684,9 +684,9 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -830,7 +830,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             setupResult.StreamRepositoryMock.Object,
             setupResult.ConstantsMock.Object,
             setupResult.StorageFactoryMock.Object,
-            setupResult.DateTimeOffsetProviderMock.Object);
+            setupResult.TimeProviderMock.Object);
         return exportJob;
     }
 
@@ -909,7 +909,7 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
 
     protected override Mock<AzureDataLakeConnector> GetConnectorMock(
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IAzureDataLakeConfigurationConstants> constantsMock,
         Mock<AzureDataLakeStorageFactory> jobDataFactory)
     {
@@ -918,14 +918,14 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             applicationContext,
             constantsMock.Object,
             jobDataFactory.Object,
-            mockDateTimeOffsetProvider.Object);
+            mockTimeProvider.Object);
         return mockConnector;
     }
 
     protected override Mock<AzureDataLakeStorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IAzureDataLakeConfigurationConstants> constantsMock)
     {
         var dataFactoryMock = new Mock<AzureDataLakeStorageFactory>(constantsMock.Object);

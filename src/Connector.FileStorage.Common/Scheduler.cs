@@ -15,7 +15,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
 {
     private static ActivitySource ActivitySource = new ActivitySource("CluedIn.Connector.FileStorage.Common.Scheduler", "1.0.0");
     protected readonly ILogger _logger;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
     private static readonly string _schedulerCron = "* * * * *";
     private static readonly TimeSpan _initialDelay = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan _errorDelay = TimeSpan.FromMinutes(1);
@@ -31,7 +31,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
         ILogger logger,
         string componentName,
         ApplicationContext applicationContext,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
     {
         if (string.IsNullOrWhiteSpace(componentName))
         {
@@ -41,7 +41,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _schedulerName = componentName;
         _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _jobProducers = new List<Func<IScheduledJobQueue, Task>>();
     }
 
@@ -60,7 +60,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
         _logger.LogDebug("Waiting for {InitialDelay} before starting '{SchedulerName}' scheduler.", _initialDelay, _schedulerName);
         await Task.Delay(_initialDelay);
 
-        _iterationTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        _iterationTime = _timeProvider.GetUtcNow();
 
         while (true)
         {
@@ -69,9 +69,9 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
             try
             {
                 await RunSchedulerIterationAsync();
-                _iterationTime = CronSchedules.GetNextOccurrence(_schedulerCron, _dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(1));
+                _iterationTime = CronSchedules.GetNextOccurrence(_schedulerCron, _timeProvider.GetUtcNow().AddSeconds(1));
                 _logger.LogDebug("End scheduling for '{SchedulerName}' scheduler. Next run at {NextRunTime}", _schedulerName, _iterationTime);
-                var delayToNextSchedule = _iterationTime - _dateTimeOffsetProvider.GetCurrentUtcTime();
+                var delayToNextSchedule = _iterationTime - _timeProvider.GetUtcNow();
                 if (delayToNextSchedule.TotalSeconds > 0)
                 {
                     await Task.Delay(delayToNextSchedule);
@@ -172,7 +172,7 @@ internal class Scheduler : IScheduledJobQueue, IScheduler
 
             if (!shouldRerun)
             {
-                saveLastSuccessfulRunTime(jobData, previousRunTime ?? _dateTimeOffsetProvider.GetCurrentUtcTime());
+                saveLastSuccessfulRunTime(jobData, previousRunTime ?? _timeProvider.GetUtcNow());
             }
 
             var nextRunTimeReached = jobData.NextRunTime <= _iterationTime;

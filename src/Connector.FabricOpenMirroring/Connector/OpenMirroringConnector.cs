@@ -30,19 +30,19 @@ public class OpenMirroringConnector : StorageConnectorBase
     private readonly TimeSpan _mirroredDatabaseCreationRetryInterval;
     private readonly ILogger<OpenMirroringConnector> _logger;
     private readonly OpenMirroringStorageFactory _storageStorageFactory;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
 
     public OpenMirroringConnector(
         ILogger<OpenMirroringConnector> logger,
         ApplicationContext applicationContext,
         IOpenMirroringConfigurationConstants constants,
         OpenMirroringStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(logger, applicationContext, constants, storageFactory, timeProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _storageStorageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         var createDatabaseRetryIntervalMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.MirroredDatabaseCreationRetryIntervalKeyName, constants.MirroredDatabaseCreationRetryIntervalDefaultValue);
 
@@ -129,12 +129,12 @@ public class OpenMirroringConnector : StorageConnectorBase
                 _ = executionContext.ApplicationContext.System.Cache.GetItem(cacheKey, () =>
                 {
                     canCreate = true;
-                    return _dateTimeOffsetProvider.GetCurrentUtcTime().ToString("o");
+                    return _timeProvider.GetUtcNow().ToString("o");
                 },
                 cachePolicy: cachePolicy => cachePolicy
                     .WithAbsoluteExpiration(
-                        _dateTimeOffsetProvider
-                        .GetCurrentUtcTime()
+                        _timeProvider
+                        .GetUtcNow()
                         .Add(_mirroredDatabaseCreationRetryInterval)));
             }
 
@@ -240,7 +240,7 @@ public class OpenMirroringConnector : StorageConnectorBase
         var containerName = streamModel.ContainerName;
 
         var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
-        var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, configuration, streamModel.Id, containerName, _dateTimeOffsetProvider.GetCurrentUtcTime(), configuration.OutputFormat);
+        var subDirectory = await OutputDirectoryHelper.GetSubDirectory(executionContext, configuration, streamModel.Id, containerName, _timeProvider.GetUtcNow(), configuration.OutputFormat);
         using var client = await StorageFactory.CreateStorageClient(executionContext, configuration);
         var basePath = await client.GetBaseDirectoryPathAsync();
         await client.DeleteDirectoryAsync(basePath.GetSubDirectoryPath(subDirectory));

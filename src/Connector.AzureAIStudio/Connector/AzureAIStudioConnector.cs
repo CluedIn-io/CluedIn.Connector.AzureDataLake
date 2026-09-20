@@ -1,5 +1,6 @@
 using System;
 
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
@@ -14,8 +15,8 @@ public class AzureAIStudioConnector : StorageConnectorBase
         ApplicationContext applicationContext,
         IAzureAIStudioConfigurationConstants constants,
         AzureAIStudioStorageFactory dataLakeStorageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, dataLakeStorageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(logger, applicationContext, constants, dataLakeStorageFactory, timeProvider)
     {
     }
 
