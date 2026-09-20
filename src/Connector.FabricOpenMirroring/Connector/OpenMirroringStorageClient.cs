@@ -13,6 +13,7 @@ using Azure.Core;
 using Azure.Identity;
 
 using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
@@ -26,7 +27,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
     private const int CreateMirroredDatabaseLockTimeoutInMilliseconds = 100;
     private readonly ApplicationContext _applicationContext;
     private readonly ILogger<OpenMirroringStorageClient> _logger;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
     private readonly OpenMirroringConnectorConfiguration _configuration;
     private static readonly TimeSpan CreationPollTimeOut = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan DelayBetweenCreationPolls = TimeSpan.FromSeconds(5);
@@ -44,12 +45,12 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
         ILogger<OpenMirroringStorageClient> logger,
         OpenMirroringConnectorConfiguration configuration,
         ApplicationContext applicationContext,
-        IDateTimeOffsetProvider dateTimeOffsetProvider):
+        ITimeProvider timeProvider):
         base(logger, configuration)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
@@ -101,7 +102,7 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
         return await _applicationContext.System.Cache.GetItemAsync(
             $"OpenMirroringWorkspaceId_{_configuration.TenantId}_{_configuration.ClientId}_{_configuration.WorkspaceName}",
             GetWorkspaceIdFromServiceAsync,
-            cachePolicy: policy => policy.WithAbsoluteExpiration(_dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(30))
+            cachePolicy: policy => policy.WithAbsoluteExpiration(_timeProvider.GetUtcNow().AddSeconds(30))
         );
 
         async Task<Guid?> GetWorkspaceIdFromServiceAsync()
@@ -299,7 +300,7 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
 
     private async Task<SqlEndpointProvisioningStatus?> PollForCompletionAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
-        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var start = _timeProvider.GetUtcNow();
         while (true)
         {
             var result = await GetMirroredDatabaseAsync(httpClient, token, workspaceId, mirroredDatabaseId);
@@ -309,7 +310,7 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
             {
                 return status.Value;
             }
-            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+            var now = _timeProvider.GetUtcNow();
             if (now - start > CreationPollTimeOut)
             {
                 return null;

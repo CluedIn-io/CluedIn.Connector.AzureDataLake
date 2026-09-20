@@ -15,7 +15,7 @@ namespace CluedIn.Connector.AzureDataLake.Connector;
 public class AzureDataLakeConnector : StorageConnectorBase
 {
     private readonly ILogger<AzureDataLakeConnector> _logger;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
     internal static readonly Regex AccountNameRegex = new("^[a-z0-9]+$", RegexOptions.Compiled);
     internal static readonly Regex FileSystemNameRegex = new("^(?=.{3,63}$)[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.Compiled);
     internal const string InvalidAuthenticationMethodErrorMessage = "Invalid authentication method";
@@ -32,11 +32,11 @@ public class AzureDataLakeConnector : StorageConnectorBase
         ApplicationContext applicationContext,
         IAzureDataLakeConfigurationConstants constants,
         AzureDataLakeStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, storageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(logger, applicationContext, constants, storageFactory, timeProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     protected override Type ExportJobType => typeof(AzureDataLakeExportEntitiesJob);
@@ -69,7 +69,7 @@ public class AzureDataLakeConnector : StorageConnectorBase
             }
             else
             {
-                if (!casted.IsValidSasTokenTime(_dateTimeOffsetProvider))
+                if (!casted.IsValidSasTokenTime(_timeProvider))
                 {
                     return CreateFailedConnectionVerification(InvalidSasTokenTimeErrorMessage);
                 }

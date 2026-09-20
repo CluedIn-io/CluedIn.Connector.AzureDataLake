@@ -1,5 +1,6 @@
 using System;
 
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
@@ -14,8 +15,8 @@ public class AzureDatabricksConnector : StorageConnectorBase
         ApplicationContext applicationContext,
         IAzureDatabricksConfigurationConstants configurationConstants,
         AzureDatabricksStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, configurationConstants, storageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(logger, applicationContext, configurationConstants, storageFactory, timeProvider)
     {
     }
 
