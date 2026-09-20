@@ -21,7 +21,7 @@ internal abstract class InstallComponentsBase : IWindsorInstaller
         where TConstants : class, IStorageConfigurationConstants, TIConstants
         where TClientFactory : class, IStorageFactory
     {
-        container.Register(Component.For<ITimeProvider>().ImplementedBy<DefaultTimeProvider>().LifestyleSingleton());
+        container.Register(Component.For<ITimeProvider>().ImplementedBy<DefaultTimeProvider>().LifestyleSingleton().OnlyNewServices());
         container.Register(Component.For<TExportJob>().ImplementedBy<TExportJob>().OnlyNewServices());
         container.Register(Component.For<TIConstants>().ImplementedBy<TConstants>().LifestyleSingleton());
         container.Register(Component.For<TClientFactory>().ImplementedBy<TClientFactory>().LifestyleSingleton());
