@@ -598,7 +598,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
         Assert.NotNull(workspaceName);
         Assert.NotNull(itemName);
 
-        var directoryName = $"xunit-{DateTime.Now.Ticks}";
+        var directoryName = $"xunit-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         return new Dictionary<string, object>()
         {
             { nameof(OneLakeConfigurationConstants.TenantId), tenantId },

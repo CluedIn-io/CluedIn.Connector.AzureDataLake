@@ -144,8 +144,8 @@ public class AzureDataLakeStorageClientTests
         var accountName = Environment.GetEnvironmentVariable("ADL2_ACCOUNTNAME");
         Assert.NotNull(accountName);
 
-        var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}";
-        var directoryName = $"xunit-{DateTime.Now.Ticks}";
+        var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
+        var directoryName = $"xunit-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         return new Dictionary<string, object>()
         {
             { nameof(AzureDataLakeConfigurationConstants.AccountName), accountName },
