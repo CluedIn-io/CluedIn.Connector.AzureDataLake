@@ -771,7 +771,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
         Assert.NotNull(workspaceName);
         Assert.NotNull(mirroredDatabaseName);
 
-        var directoryName = $"xunit-{DateTime.Now.Ticks}";
+        var directoryName = $"xunit-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         return new Dictionary<string, object>()
         {
             { nameof(OpenMirroringConfigurationConstants.TenantId), tenantId },

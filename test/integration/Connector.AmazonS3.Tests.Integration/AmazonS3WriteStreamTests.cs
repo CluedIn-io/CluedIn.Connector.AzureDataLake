@@ -119,7 +119,7 @@ public partial class AmazonS3WriteStreamTests : IAsyncLifetime
         Assert.NotNull(region);
         Assert.NotNull(bucketName);
 
-        var testPrefix = $"xunit-prefix-{DateTime.Now.Ticks}";
+        var testPrefix = $"xunit-prefix-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         var dictionary = new Dictionary<string, object>()
         {
             { AmazonS3ConfigurationConstants.AccessKey, accessKey },
