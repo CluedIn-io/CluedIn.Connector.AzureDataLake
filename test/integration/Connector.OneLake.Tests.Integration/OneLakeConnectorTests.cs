@@ -531,7 +531,7 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             {
                 values.Add(nameof(OneLakeConfigurationConstants.ShouldEscapeVocabularyKeys), true);
                 values.Add(nameof(OneLakeConfigurationConstants.ShouldWriteGuidAsString), true);
-                values[nameof(OneLakeConfigurationConstants.ItemFolder)] = "Files/Path With Space/Test Folder";
+                values[nameof(OneLakeConfigurationConstants.ItemFolder)] = $"Files/Path With Space/Test Folder {Guid.NewGuid():N}";
             });
     }
 
