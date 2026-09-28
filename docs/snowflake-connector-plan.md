@@ -129,24 +129,62 @@ are otherwise fully wired up and ready to run once a user + private key are supp
 
 ## Phases
 
-- [ ] **Phase 0** — this plan document. _(this commit)_
-- [ ] **Phase 1** — project scaffolding: `src/Connector.Snowflake` csproj, solution entry,
+- [x] **Phase 0** — this plan document. _(commit d5dbff9)_
+- [x] **Phase 1** — project scaffolding: `src/Connector.Snowflake` csproj, solution entry,
   `IConfigurationConstants`/`SnowflakeConfigurationConstants`, config UI fields, resource
-  icon, `InstallComponents`.
-- [ ] **Phase 2** — `SnowflakeConnectorConfiguration` (`IsStreamCacheEnabled = true`,
+  icon, `InstallComponents`. _(commit 5d527bc)_
+- [x] **Phase 2** — `SnowflakeConnectorConfiguration` (`IsStreamCacheEnabled = true`,
   `IsDeltaMode = true`, no `IsSoftDelete` override), `SnowflakeStorageFactory`,
   `SnowflakeConnector` (`GetSupportedModes() => [Sync]`, connection verification).
-- [ ] **Phase 3** — `SnowflakeStorageClient`/`SnowflakeStorageFileClient` (lightweight,
-  no blob storage, per design above).
-- [ ] **Phase 4** — Snowpipe Streaming REST API client (auth, open channel, append rows,
-  close channel) + transient table lifecycle (leftover cleanup, create fresh table).
-- [ ] **Phase 5** — `SnowflakeSnowpipeSqlDataWriter : ISqlDataWriter` (streams delta rows
-  from the reader into the transient table via the REST client).
-- [ ] **Phase 6** — `SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase` wiring the
-  writer + `PostExportAsync` (dedupe-and-`MERGE` transient → target, drop transient table).
+  _(commit fd2de7b)_
+- [x] **Phase 3** — `SnowflakeStorageClient`/`SnowflakeStorageFileClient` (lightweight,
+  no blob storage, per design above). _(commit 0b8437d)_
+- [x] **Phase 4** — Snowflake REST API client: the SQL API for DDL/MERGE and the Snowpipe
+  Streaming REST API for row ingestion, both authenticated with the same RSA key-pair JWT,
+  implemented with only `HttpClient` + BCL crypto (no ADO.NET driver / extra NuGet
+  dependency - see "Implementation notes" below). _(commit b2e9f6d)_
+- [x] **Phase 5** — `SnowflakeSnowpipeSqlDataWriter : ISqlDataWriter` (streams delta rows
+  from the reader into the transient table via the REST client, batched). _(commit 978296b)_
+- [x] **Phase 6** — `SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase` wiring the
+  writer + `PostExportAsync` (dedupe-and-`MERGE` transient → target, then truncate the
+  transient table - see "Implementation notes" for why it is truncated rather than
+  dropped). _(commit f8179c1)_
 - [ ] **Phase 7** — Unit tests (`test/unit/Connector.Snowflake.Tests.Unit`).
 - [ ] **Phase 8** — Integration tests (`test/integration/Connector.Snowflake.Tests.Integration`)
   against the real Snowflake account above, gated on environment variables.
 - [ ] **Phase 9** — Docs (README/guide entry) + final pass, mark plan complete.
 
 Each phase is committed separately on branch `feature/snowflake-connector`.
+
+## Implementation notes (refinements made while building phases 1-6)
+
+- **Stable transient table + pipe, not "fresh per run".** Snowpipe Streaming pipes are
+  bound to a fixed target table via `COPY INTO`, so recreating the transient table with a
+  unique name every run would mean recreating its pipe every run too. Instead
+  `SnowflakeConnectorConfiguration.TransientTableName`/`PipeName` are deterministic
+  (`{TableName}__CLUEDIN_TRANSIENT` / `{TableName}__CLUEDIN_PIPE`), created idempotently
+  (`CREATE ... IF NOT EXISTS`) in `InitializeBaseDirectoryAsync`, and **truncated** (not
+  dropped) both at the start of a run (clears anything left by a previous crashed run) and
+  again in `PostExportAsync` after a successful `MERGE` (steady-state cleanup).
+- **Transient table is schema-independent.** It has a fixed 4-column shape -
+  `ENTITY_ID VARCHAR, CHANGE_TYPE VARCHAR, PERSIST_VERSION NUMBER, ROW_DATA VARIANT` (see
+  `TransientTableColumns`) - rather than one column per CluedIn property, because the
+  target table's real schema is user-managed and not knowable at DDL time. Consequently
+  **the target table (e.g. `MYTESTTABLE`) is expected to have an `ID` column and a `DATA`
+  VARIANT column** for the generated `MERGE` (`SnowflakeSqlBuilder.MergeTransientIntoTarget`)
+  to work as written - this is a real constraint on the pre-existing target table, not
+  auto-created by this connector.
+- **No Snowflake ADO.NET driver / extra NuGet dependency.** Both the DDL/MERGE side and the
+  Snowpipe Streaming ingestion side go over Snowflake's public REST surface (the SQL API and
+  the Snowpipe Streaming REST API respectively), authenticated with a hand-built RS256 JWT
+  signed with `System.Security.Cryptography.RSA` - no `Snowflake.Data` package reference.
+  This keeps the connector's only dependency on Snowflake being `HttpClient`, and keeps both
+  REST surfaces unit-testable behind `ISnowflakeApiClient` with a mocked
+  `HttpMessageHandler`, without needing a live account.
+- **Risk flag:** the exact Snowpipe Streaming REST API request/response shapes in
+  `SnowflakeApiClient` (channel open/append-rows/close) are implemented to the best of
+  available knowledge of Snowflake's public REST contract, but have **not been verified
+  against a live account** (no Snowflake user/private key was supplied - see "Provided
+  Snowflake test account details" above). Once real key-pair credentials are available,
+  the integration tests in phase 8 will be the first real signal on whether the request/
+  response shapes need adjusting.
