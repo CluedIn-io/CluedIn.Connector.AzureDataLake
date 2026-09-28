@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -54,10 +55,41 @@ public class SnowflakeApiClientTests
         Assert.Contains("\"warehouse\":\"COMPUTE_WH\"", request.Body);
     }
 
+    // The Snowpipe Streaming REST API is a separate deployment from the SQL API: every
+    // streaming call is preceded by (1) GET /v2/streaming/hostname on the control host to
+    // discover the ingest host, and (2) POST /oauth/token on the control host to exchange
+    // the account JWT for a token scoped to that ingest host - both verified against a
+    // live account (see docs/snowflake-connector-plan.md). This handler answers those two
+    // first, then routes the remaining request(s) to the per-test responder.
+    private static RecordingHttpMessageHandler CreateStreamingHandler(
+        Func<HttpRequestMessage, string, HttpResponseMessage> respondToDataCall)
+    {
+        return new RecordingHttpMessageHandler((request, body) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/v2/streaming/hostname")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("QS30799.ingest.example.snowflakecomputing.com", Encoding.UTF8, "text/plain"),
+                };
+            }
+
+            if (request.RequestUri.AbsolutePath == "/oauth/token")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("scoped-token-1", Encoding.UTF8, "text/plain"),
+                };
+            }
+
+            return respondToDataCall(request, body);
+        });
+    }
+
     [Fact]
     public async Task OpenChannelAsync_SendsPutToChannelPath()
     {
-        var handler = new RecordingHttpMessageHandler(
+        var handler = CreateStreamingHandler(
             (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("""{"next_continuation_token":"token-1"}""", Encoding.UTF8, "application/json"),
@@ -68,18 +100,21 @@ public class SnowflakeApiClientTests
         var channel = await apiClient.OpenChannelAsync("MYTESTTABLE__CLUEDIN_PIPE", "channel-1");
 
         Assert.Equal("token-1", channel.ContinuationToken);
-        var request = Assert.Single(handler.Requests);
+        var request = handler.Requests.Last();
         Assert.Equal(HttpMethod.Put, request.Method);
-        Assert.Equal("/v2/streaming/channels/MYTESTTABLE__CLUEDIN_PIPE/channel-1", request.Uri.AbsolutePath);
+        Assert.Equal("qs30799.ingest.example.snowflakecomputing.com", request.Uri.Host.ToLowerInvariant());
+        Assert.Equal("/v2/streaming/databases/SNOWFLAKE_LEARNING_DB/schemas/TESTSCHEMA/pipes/MYTESTTABLE__CLUEDIN_PIPE/channels/channel-1", request.Uri.AbsolutePath);
+        Assert.Equal("Bearer", request.AuthorizationScheme);
+        Assert.Equal("scoped-token-1", request.AuthorizationParameter);
     }
 
     [Fact]
-    public async Task AppendRowsAsync_SendsPostWithContinuationTokenAndRows()
+    public async Task AppendRowsAsync_SendsPostWithContinuationTokenAndNdjsonRows()
     {
-        var handler = new RecordingHttpMessageHandler(
+        var handler = CreateStreamingHandler(
             (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("""{"next_continuation_token":"token-2"}""", Encoding.UTF8, "application/json"),
+                Content = new StringContent("""{"status_code":0,"next_continuation_token":"token-2"}""", Encoding.UTF8, "application/json"),
             });
         using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://qs30799.snowflakecomputing.com") };
         using var apiClient = new SnowflakeApiClient(CreateSettings(), httpClient);
@@ -91,26 +126,29 @@ public class SnowflakeApiClientTests
         var channel = await apiClient.AppendRowsAsync("MYTESTTABLE__CLUEDIN_PIPE", "channel-1", "token-1", rows);
 
         Assert.Equal("token-2", channel.ContinuationToken);
-        var request = Assert.Single(handler.Requests);
+        var request = handler.Requests.Last();
         Assert.Equal(HttpMethod.Post, request.Method);
-        Assert.StartsWith("/v2/streaming/channels/MYTESTTABLE__CLUEDIN_PIPE/channel-1/rows", request.Uri.AbsolutePath);
+        Assert.StartsWith(
+            "/v2/streaming/data/databases/SNOWFLAKE_LEARNING_DB/schemas/TESTSCHEMA/pipes/MYTESTTABLE__CLUEDIN_PIPE/channels/channel-1/rows",
+            request.Uri.AbsolutePath);
         Assert.Contains("continuationToken=token-1", request.Uri.Query);
-        Assert.Contains("\"ENTITY_ID\":\"e1\"", request.Body);
+        // NDJSON, not a JSON object wrapping a "rows" array.
+        Assert.Equal("""{"ENTITY_ID":"e1","CHANGE_TYPE":"Added"}""", request.Body);
     }
 
     [Fact]
     public async Task CloseChannelAsync_SendsDelete()
     {
-        var handler = new RecordingHttpMessageHandler(
+        var handler = CreateStreamingHandler(
             (_, _) => new HttpResponseMessage(HttpStatusCode.OK));
         using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://qs30799.snowflakecomputing.com") };
         using var apiClient = new SnowflakeApiClient(CreateSettings(), httpClient);
 
         await apiClient.CloseChannelAsync("MYTESTTABLE__CLUEDIN_PIPE", "channel-1");
 
-        var request = Assert.Single(handler.Requests);
+        var request = handler.Requests.Last();
         Assert.Equal(HttpMethod.Delete, request.Method);
-        Assert.Equal("/v2/streaming/channels/MYTESTTABLE__CLUEDIN_PIPE/channel-1", request.Uri.AbsolutePath);
+        Assert.Equal("/v2/streaming/databases/SNOWFLAKE_LEARNING_DB/schemas/TESTSCHEMA/pipes/MYTESTTABLE__CLUEDIN_PIPE/channels/channel-1", request.Uri.AbsolutePath);
     }
 
     [Fact]

@@ -189,29 +189,44 @@ key pair were supplied after phase 8 landed):
      was updated accordingly.
    - The SQL API rejected requests with "Invalid or empty User-Agent header set" - added a
      `User-Agent` header to every request.
-3. **Currently blocked on a live permissions error**, not a code bug:
-   `Role 'ACCOUNTADMIN' specified in the connect string is not granted to this user`. The
-   `CLUEDIN_STREAM_SVC` user authenticates fine (JWT/host/User-Agent all confirmed working
-   against the real account) but does not have the `ACCOUNTADMIN` role granted, despite that
-   being the role given in the original account details - that role was presumably the
-   describer's own session role, not one granted to this service user. Needs one of:
-   `GRANT ROLE ACCOUNTADMIN TO USER CLUEDIN_STREAM_SVC;`, or a different role name that
-   *is* granted to it (with `CREATE TABLE`/`CREATE PIPE`/`INSERT`/`SELECT` on
-   `SNOWFLAKE_LEARNING_DB.TESTSCHEMA` and `USAGE` on `COMPUTE_WH`), passed via
-   `SNOWFLAKE_ROLE`.
-4. Ensure the target table has the shape this connector's `MERGE` expects: at minimum an
+3. ~~Grant a role to `CLUEDIN_STREAM_SVC`~~ - done. `ACCOUNTADMIN` (given in the original
+   account details) turned out not to be granted to this service user; `CLUEDIN_STREAM_ROLE`
+   was granted instead (`GRANT ROLE CLUEDIN_STREAM_ROLE TO USER CLUEDIN_STREAM_SVC;`) and
+   works. **`SNOWFLAKE_ROLE=CLUEDIN_STREAM_ROLE`**, not `ACCOUNTADMIN`.
+4. **All 3 phase 8 integration tests now pass for real against the live account** (SQL API:
+   `SELECT 1`, create/insert/query a transient table; Snowpipe Streaming: open channel,
+   append a row, close channel). While getting there, found and fixed a third real bug -
+   the Snowpipe Streaming REST API is a **completely separate deployment** from the SQL
+   API, not just a different path prefix on the same host, as the original implementation
+   assumed. Confirmed against the live account (see the probe sequence that established
+   this, run via `curl` with a hand-generated JWT):
+   - `GET /v2/streaming/hostname` on the **control host** (`{account}.snowflakecomputing.com`,
+     authorized with the account JWT) returns the actual **ingest host**
+     (`QS30799.ingest.sinats.snowflakecomputing.com` for this account) - a different
+     hostname entirely, not derivable from the account name.
+   - The account JWT must then be exchanged for a **scoped token** via
+     `POST /oauth/token` on the control host (form-encoded
+     `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&scope={ingestHost}`, still
+     authorized with the account JWT) - a plain-text bearer token in the response body, not
+     JSON-wrapped.
+   - All channel operations go to the **ingest host**, authorized with the **scoped
+     token** (not the JWT): open/close channel is
+     `{method} /v2/streaming/databases/{db}/schemas/{schema}/pipes/{pipe}/channels/{channel}`
+     (`PUT`/`DELETE`); append rows is
+     `POST /v2/streaming/data/databases/{db}/schemas/{schema}/pipes/{pipe}/channels/{channel}/rows?continuationToken=...`
+     with the body as **newline-delimited JSON** (`Content-Type: application/x-ndjson`, one
+     row object per line), not a JSON object wrapping a `"rows"` array as first implemented.
+   `SnowflakeApiClient` now does hostname discovery and scoped-token exchange itself
+   (cached, refreshed alongside the JWT), and unit tests
+   (`SnowflakeApiClientTests.CreateStreamingHandler`) mock both steps.
+5. Ensure the target table has the shape this connector's `MERGE` expects: at minimum an
    `ID` column and a `DATA VARIANT` column (see "Implementation notes" below) - adjust
    `MYTESTTABLE` or `SnowflakeSqlBuilder.MergeTransientIntoTarget` if the real target shape
-   differs. Not yet verified live - blocked on item 3.
-5. Once the role grant is sorted, rerun phase 8's integration tests
-   (`SNOWFLAKE_ACCOUNT=qs30799.ap-southeast-1 SNOWFLAKE_USER=CLUEDIN_STREAM_SVC
-   SNOWFLAKE_PRIVATE_KEY=... dotnet test
-   test/integration/Connector.Snowflake.Tests.Integration`) - that is the next real signal
-   on whether the Snowpipe Streaming REST request/response shapes in `SnowflakeApiClient`
-   need adjusting (untested past the SQL API so far, since all three integration tests
-   share the same `ExecuteStatementAsync` setup call that's currently blocked on step 3).
-6. Only after phase 8 passes for real would wiring this connector into an actual CluedIn
-   export target/stream be worth doing end-to-end.
+   differs. Not yet exercised end-to-end (the integration tests cover the REST client, not
+   a full connector export run).
+6. Wiring this connector into an actual CluedIn export target/stream and running a real
+   export end-to-end has not been done yet - the integration tests validate
+   `SnowflakeApiClient` directly, not `SnowflakeExportEntitiesJob`'s full flow.
 
 ## Implementation notes (refinements made while building phases 1-6)
 
