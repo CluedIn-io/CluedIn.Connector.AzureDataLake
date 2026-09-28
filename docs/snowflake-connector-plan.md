@@ -149,12 +149,44 @@ are otherwise fully wired up and ready to run once a user + private key are supp
   writer + `PostExportAsync` (dedupe-and-`MERGE` transient → target, then truncate the
   transient table - see "Implementation notes" for why it is truncated rather than
   dropped). _(commit f8179c1)_
-- [ ] **Phase 7** — Unit tests (`test/unit/Connector.Snowflake.Tests.Unit`).
-- [ ] **Phase 8** — Integration tests (`test/integration/Connector.Snowflake.Tests.Integration`)
-  against the real Snowflake account above, gated on environment variables.
-- [ ] **Phase 9** — Docs (README/guide entry) + final pass, mark plan complete.
+- [x] **Phase 7** — Unit tests (`test/unit/Connector.Snowflake.Tests.Unit`): 24 tests
+  covering JWT construction, SQL generation (transient table/pipe DDL, truncate, and the
+  dedupe + insert/update/delete `MERGE`), configuration field mapping, and
+  `SnowflakeApiClient` request construction against a mocked `HttpMessageHandler`. All
+  passing, no credentials required. _(commit de86dab)_
+- [x] **Phase 8** — Integration tests (`test/integration/Connector.Snowflake.Tests.Integration`)
+  against the real Snowflake account above: `SELECT 1` connectivity, a transient
+  table/query round trip via the SQL API, and a full Snowpipe Streaming channel
+  open/append/close round trip - the highest-risk, least-verified part of phase 4.
+  Gated on `SNOWFLAKE_USER`/`SNOWFLAKE_PRIVATE_KEY` env vars via `Assert.Skip` (xunit v3's
+  dynamic skip); confirmed they report as **Skipped**, not failed, when those env vars are
+  absent, which is the case in this environment - so these have not yet run for real.
+  _(commit a0303f8)_
+- [x] **Phase 9** — Docs + final pass. _(this commit)_
 
 Each phase is committed separately on branch `feature/snowflake-connector`.
+
+## Setup checklist (to actually run this for real)
+
+Everything through phase 8 is implemented and unit-tested, but nothing has executed
+against live Snowflake yet - only phase 0's account/database/schema/warehouse/role were
+supplied, not a user or key pair. To actually exercise this connector:
+
+1. Generate an RSA key pair and register the public key on a Snowflake user (key-pair
+   auth): `ALTER USER <user> SET RSA_PUBLIC_KEY='<public key, no headers>';`.
+2. Grant that user (or its role) `CREATE TABLE`, `CREATE PIPE`, and `INSERT`/`SELECT` on
+   `SNOWFLAKE_LEARNING_DB.TESTSCHEMA`, plus `USAGE` on `COMPUTE_WH`.
+3. Ensure the target table has the shape this connector's `MERGE` expects: at minimum an
+   `ID` column and a `DATA VARIANT` column (see "Implementation notes" above) - adjust
+   `MYTESTTABLE` or `SnowflakeSqlBuilder.MergeTransientIntoTarget` if the real target shape
+   differs.
+4. Set `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PRIVATE_KEY` (PEM, `\n`-escaped or
+   base64 are both accepted - see `SnowflakeTestCredentials`), `SNOWFLAKE_DATABASE`,
+   `SNOWFLAKE_SCHEMA`, `SNOWFLAKE_TABLE`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_ROLE` and rerun
+   phase 8's integration tests - that is the first real signal on whether the Snowpipe
+   Streaming REST request/response shapes in `SnowflakeApiClient` need adjusting.
+5. Only after phase 8 passes for real would wiring this connector into an actual CluedIn
+   export target/stream be worth doing end-to-end.
 
 ## Implementation notes (refinements made while building phases 1-6)
 
