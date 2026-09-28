@@ -168,24 +168,49 @@ Each phase is committed separately on branch `feature/snowflake-connector`.
 
 ## Setup checklist (to actually run this for real)
 
-Everything through phase 8 is implemented and unit-tested, but nothing has executed
-against live Snowflake yet - only phase 0's account/database/schema/warehouse/role were
-supplied, not a user or key pair. To actually exercise this connector:
+Updated after a live run against the real account (user `CLUEDIN_STREAM_SVC` and an RSA
+key pair were supplied after phase 8 landed):
 
-1. Generate an RSA key pair and register the public key on a Snowflake user (key-pair
-   auth): `ALTER USER <user> SET RSA_PUBLIC_KEY='<public key, no headers>';`.
-2. Grant that user (or its role) `CREATE TABLE`, `CREATE PIPE`, and `INSERT`/`SELECT` on
-   `SNOWFLAKE_LEARNING_DB.TESTSCHEMA`, plus `USAGE` on `COMPUTE_WH`.
-3. Ensure the target table has the shape this connector's `MERGE` expects: at minimum an
-   `ID` column and a `DATA VARIANT` column (see "Implementation notes" above) - adjust
+1. ~~Generate an RSA key pair and register the public key on a Snowflake user~~ - done;
+   user `CLUEDIN_STREAM_SVC` with key-pair auth is working end-to-end through JWT
+   generation.
+2. **Found and fixed two real bugs in `SnowflakeApiClient` while running against the live
+   account** (both committed):
+   - The HTTP host was built from `SnowflakeJwtTokenBuilder.NormalizeAccount(account)`,
+     which strips everything after the first `.` - correct for the JWT `iss`/`sub` claims
+     (which must use the bare account locator), but wrong for the host, which needs the
+     **full** account identifier including any region/cloud suffix. This account's
+     deployment is at `qs30799.ap-southeast-1.snowflakecomputing.com` - the bare
+     `qs30799.snowflakecomputing.com` returns Snowflake's generic 404 HTML page (confirmed
+     with `curl`). Fixed by using `settings.Account` directly (untouched) for the host, and
+     keeping `NormalizeAccount` only for the JWT claims. **Configured `SNOWFLAKE_ACCOUNT`
+     must therefore be the full identifier, `qs30799.ap-southeast-1`**, not the bare
+     `qs30799` given in the original account details - `SnowflakeTestCredentials`'s default
+     was updated accordingly.
+   - The SQL API rejected requests with "Invalid or empty User-Agent header set" - added a
+     `User-Agent` header to every request.
+3. **Currently blocked on a live permissions error**, not a code bug:
+   `Role 'ACCOUNTADMIN' specified in the connect string is not granted to this user`. The
+   `CLUEDIN_STREAM_SVC` user authenticates fine (JWT/host/User-Agent all confirmed working
+   against the real account) but does not have the `ACCOUNTADMIN` role granted, despite that
+   being the role given in the original account details - that role was presumably the
+   describer's own session role, not one granted to this service user. Needs one of:
+   `GRANT ROLE ACCOUNTADMIN TO USER CLUEDIN_STREAM_SVC;`, or a different role name that
+   *is* granted to it (with `CREATE TABLE`/`CREATE PIPE`/`INSERT`/`SELECT` on
+   `SNOWFLAKE_LEARNING_DB.TESTSCHEMA` and `USAGE` on `COMPUTE_WH`), passed via
+   `SNOWFLAKE_ROLE`.
+4. Ensure the target table has the shape this connector's `MERGE` expects: at minimum an
+   `ID` column and a `DATA VARIANT` column (see "Implementation notes" below) - adjust
    `MYTESTTABLE` or `SnowflakeSqlBuilder.MergeTransientIntoTarget` if the real target shape
-   differs.
-4. Set `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PRIVATE_KEY` (PEM, `\n`-escaped or
-   base64 are both accepted - see `SnowflakeTestCredentials`), `SNOWFLAKE_DATABASE`,
-   `SNOWFLAKE_SCHEMA`, `SNOWFLAKE_TABLE`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_ROLE` and rerun
-   phase 8's integration tests - that is the first real signal on whether the Snowpipe
-   Streaming REST request/response shapes in `SnowflakeApiClient` need adjusting.
-5. Only after phase 8 passes for real would wiring this connector into an actual CluedIn
+   differs. Not yet verified live - blocked on item 3.
+5. Once the role grant is sorted, rerun phase 8's integration tests
+   (`SNOWFLAKE_ACCOUNT=qs30799.ap-southeast-1 SNOWFLAKE_USER=CLUEDIN_STREAM_SVC
+   SNOWFLAKE_PRIVATE_KEY=... dotnet test
+   test/integration/Connector.Snowflake.Tests.Integration`) - that is the next real signal
+   on whether the Snowpipe Streaming REST request/response shapes in `SnowflakeApiClient`
+   need adjusting (untested past the SQL API so far, since all three integration tests
+   share the same `ExecuteStatementAsync` setup call that's currently blocked on step 3).
+6. Only after phase 8 passes for real would wiring this connector into an actual CluedIn
    export target/stream be worth doing end-to-end.
 
 ## Implementation notes (refinements made while building phases 1-6)

@@ -10,9 +10,10 @@ namespace CluedIn.Connector.Snowflake.Tests.Integration;
 // AmazonS3ConnectorTests's class doc comment) - nothing is ever hardcoded here.
 //
 // Known values for the test account referenced in docs/snowflake-connector-plan.md:
-//   SNOWFLAKE_ACCOUNT=qs30799, SNOWFLAKE_DATABASE=SNOWFLAKE_LEARNING_DB,
-//   SNOWFLAKE_SCHEMA=TESTSCHEMA, SNOWFLAKE_TABLE=MYTESTTABLE,
-//   SNOWFLAKE_WAREHOUSE=COMPUTE_WH, SNOWFLAKE_ROLE=ACCOUNTADMIN
+//   SNOWFLAKE_ACCOUNT=qs30799.ap-southeast-1 (the bare "qs30799" locator 404s - this
+//   account's deployment needs the region suffix in the host, confirmed against the live
+//   account), SNOWFLAKE_DATABASE=SNOWFLAKE_LEARNING_DB, SNOWFLAKE_SCHEMA=TESTSCHEMA,
+//   SNOWFLAKE_TABLE=MYTESTTABLE, SNOWFLAKE_WAREHOUSE=COMPUTE_WH, SNOWFLAKE_ROLE=ACCOUNTADMIN
 // SNOWFLAKE_USER and SNOWFLAKE_PRIVATE_KEY (PEM, key-pair auth) are account-specific
 // secrets and must be supplied separately - tests skip when they are absent.
 internal static class SnowflakeTestCredentials
@@ -27,7 +28,7 @@ internal static class SnowflakeTestCredentials
     public static SnowflakeConnectionSettings Load()
     {
         return new SnowflakeConnectionSettings(
-            GetRequired("SNOWFLAKE_ACCOUNT", "qs30799"),
+            GetRequired("SNOWFLAKE_ACCOUNT", "qs30799.ap-southeast-1"),
             GetRequired("SNOWFLAKE_USER"),
             GetPrivateKeyPem(),
             Environment.GetEnvironmentVariable("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"),

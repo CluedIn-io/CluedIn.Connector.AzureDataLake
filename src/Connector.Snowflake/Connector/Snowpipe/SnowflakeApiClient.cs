@@ -42,7 +42,13 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
         {
             _httpClient = new HttpClient
             {
-                BaseAddress = new Uri($"https://{SnowflakeJwtTokenBuilder.NormalizeAccount(settings.Account).ToLowerInvariant()}.snowflakecomputing.com"),
+                // Unlike the JWT iss/sub claims (which must use the bare account locator,
+                // see SnowflakeJwtTokenBuilder.NormalizeAccount), the HTTP host needs the
+                // full account identifier the user was given - which for many accounts
+                // includes a region/cloud suffix (e.g. "qs30799.ap-southeast-1"). Stripping
+                // it here caused every request to hit Snowflake's generic 404 page instead
+                // of the account's actual deployment.
+                BaseAddress = new Uri($"https://{settings.Account.Trim().ToLowerInvariant()}.snowflakecomputing.com"),
             };
             _ownsHttpClient = true;
         }
@@ -182,6 +188,7 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.Add("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT");
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("CluedIn-Connector-Snowflake", "1.0"));
 
         return await _httpClient.SendAsync(request, cancellationToken);
     }
