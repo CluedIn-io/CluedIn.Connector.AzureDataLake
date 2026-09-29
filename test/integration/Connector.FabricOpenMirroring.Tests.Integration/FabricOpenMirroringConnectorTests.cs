@@ -780,6 +780,7 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             { nameof(OpenMirroringConfigurationConstants.WorkspaceName), workspaceName },
             { nameof(OpenMirroringConfigurationConstants.MirroredDatabaseName), mirroredDatabaseName },
             { nameof(OpenMirroringConfigurationConstants.ShouldCreateMirroredDatabase), false },
+            { nameof(OpenMirroringConfigurationConstants.TableName), directoryName },
         };
     }
 

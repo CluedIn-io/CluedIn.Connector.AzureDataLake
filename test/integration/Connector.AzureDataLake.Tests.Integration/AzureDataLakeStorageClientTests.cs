@@ -115,17 +115,17 @@ public class AzureDataLakeStorageClientTests
         }
         finally
         {
-            await DeleteFileSystemAsync();
+            await DeleteFileSystemAsync(connectorConfiguration.FileSystemName);
         }
     }
 
-    private async Task DeleteFileSystemAsync()
+    private async Task DeleteFileSystemAsync(string fileSystemName)
     {
         var connectorConfiguration = CreateConnectorConfigurationWithSharedKey();
         var client = new DataLakeServiceClient(
             new Uri($"https://{connectorConfiguration.AccountName}.dfs.core.windows.net"),
             new StorageSharedKeyCredential(connectorConfiguration.AccountName, connectorConfiguration.AccountKey));
-        var fileSystemCLient = client.GetFileSystemClient(connectorConfiguration.FileSystemName);
+        var fileSystemCLient = client.GetFileSystemClient(fileSystemName);
         await fileSystemCLient.DeleteIfExistsAsync();
     }
 
