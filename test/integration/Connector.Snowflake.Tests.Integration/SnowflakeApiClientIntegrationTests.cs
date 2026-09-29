@@ -127,13 +127,60 @@ public class SnowflakeApiClientIntegrationTests : IAsyncLifetime
                 },
             };
 
-            await _client.AppendRowsAsync(pipeName, channelName, channel.ContinuationToken, rows);
+            // The offset token is what actually makes Snowflake commit the batch -
+            // verified live that an append without one is buffered but never committed
+            // (rows never become queryable, even after 60+ seconds).
+            await _client.AppendRowsAsync(pipeName, channelName, channel.ContinuationToken, "1", rows);
+
+            // Also verified live: closing the channel immediately after append - the real
+            // pattern this test used to follow - does NOT wait for that append to commit
+            // either, and the buffered row is simply lost. GetChannelStatusAsync must be
+            // polled until the offset is actually committed before it's safe to close.
+            await AssertCommitsWithinTimeout();
         }
         finally
         {
             await _client.CloseChannelAsync(pipeName, channelName);
         }
 
+        await AssertRowLandsWithinTimeout();
+
         await _client.ExecuteStatementAsync($"""DROP PIPE IF EXISTS "{pipeName}" """);
+
+        async Task AssertCommitsWithinTimeout()
+        {
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                var status = await _client.GetChannelStatusAsync(pipeName, channelName);
+                Assert.Equal(0, status.RowsErrorCount);
+                if (status.LastCommittedOffsetToken == "1")
+                {
+                    return;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+
+            Assert.Fail($"Channel '{channelName}' did not commit offset '1' within 30 seconds.");
+        }
+
+        async Task AssertRowLandsWithinTimeout()
+        {
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                var result = await _client.ExecuteStatementAsync($"""SELECT ENTITY_ID FROM "{_transientTableName}" """);
+                if (result.Rows.Count > 0)
+                {
+                    Assert.Equal("entity-1", Assert.Single(result.Rows[0]));
+                    return;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+
+            Assert.Fail($"Streamed row did not land in \"{_transientTableName}\" within 10 seconds of its offset committing.");
+        }
     }
 }

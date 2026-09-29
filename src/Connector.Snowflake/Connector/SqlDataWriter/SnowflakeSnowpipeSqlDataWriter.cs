@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -26,6 +27,8 @@ namespace CluedIn.Connector.Snowflake.Connector.SqlDataWriter;
 internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
 {
     private const int BatchSize = 1000;
+    private static readonly TimeSpan CommitTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan CommitPollInterval = TimeSpan.FromSeconds(2);
 
     public SnowflakeSnowpipeSqlDataWriter()
     {
@@ -72,7 +75,7 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
 
                 if (batch.Count >= BatchSize)
                 {
-                    channel = await apiClient.AppendRowsAsync(snowflakeConfiguration.PipeName, channelName, channel.ContinuationToken, batch);
+                    channel = await apiClient.AppendRowsAsync(snowflakeConfiguration.PipeName, channelName, channel.ContinuationToken, totalProcessed.ToString(CultureInfo.InvariantCulture), batch);
                     batch.Clear();
                 }
 
@@ -84,7 +87,17 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
 
             if (batch.Count > 0)
             {
-                await apiClient.AppendRowsAsync(snowflakeConfiguration.PipeName, channelName, channel.ContinuationToken, batch);
+                await apiClient.AppendRowsAsync(snowflakeConfiguration.PipeName, channelName, channel.ContinuationToken, totalProcessed.ToString(CultureInfo.InvariantCulture), batch);
+            }
+
+            // Appending only buffers rows - verified live that closing the channel right
+            // after an append does not wait for (or force) that data to commit, and the
+            // buffered rows are simply lost, leaving the transient table empty for the
+            // MERGE step that follows. Wait for Snowflake to actually commit everything
+            // this run appended before the finally block below closes the channel.
+            if (totalProcessed > 0)
+            {
+                await WaitForCommitAsync(context, apiClient, snowflakeConfiguration, channelName, totalProcessed.ToString(CultureInfo.InvariantCulture));
             }
         }
         finally
@@ -94,6 +107,45 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
         }
 
         return totalProcessed;
+    }
+
+    private static async Task WaitForCommitAsync(
+        ExecutionContext context,
+        ISnowflakeApiClient apiClient,
+        SnowflakeConnectorConfiguration configuration,
+        string channelName,
+        string expectedOffsetToken)
+    {
+        var deadline = DateTimeOffset.UtcNow.Add(CommitTimeout);
+        while (true)
+        {
+            var status = await apiClient.GetChannelStatusAsync(configuration.PipeName, channelName);
+            if (status.RowsErrorCount > 0)
+            {
+                throw new SnowflakeApiException(
+                    $"Snowpipe Streaming reported {status.RowsErrorCount} row error(s) on channel '{channelName}': {status.LastErrorMessage}",
+                    System.Net.HttpStatusCode.OK,
+                    string.Empty);
+            }
+
+            if (status.LastCommittedOffsetToken == expectedOffsetToken)
+            {
+                return;
+            }
+
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                throw new TimeoutException(
+                    $"Snowpipe Streaming channel '{channelName}' on pipe '{configuration.PipeName}' did not commit offset '{expectedOffsetToken}' within {CommitTimeout}. Last committed offset was '{status.LastCommittedOffsetToken}'.");
+            }
+
+            context.Log.LogDebug(
+                "Waiting for Snowflake to commit offset {ExpectedOffsetToken} on channel {ChannelName} (currently at {LastCommittedOffsetToken}).",
+                expectedOffsetToken,
+                channelName,
+                status.LastCommittedOffsetToken);
+            await Task.Delay(CommitPollInterval);
+        }
     }
 
     // Every transient/target column is VARCHAR except PersistVersion (NUMBER, so the

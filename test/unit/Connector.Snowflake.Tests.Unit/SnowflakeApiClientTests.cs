@@ -171,7 +171,7 @@ public class SnowflakeApiClientTests
             new Dictionary<string, object> { ["ENTITY_ID"] = "e1", ["CHANGE_TYPE"] = "Added" },
         };
 
-        var channel = await apiClient.AppendRowsAsync("MYTESTTABLE__CLUEDIN_PIPE", "channel-1", "token-1", rows);
+        var channel = await apiClient.AppendRowsAsync("MYTESTTABLE__CLUEDIN_PIPE", "channel-1", "token-1", "42", rows);
 
         Assert.Equal("token-2", channel.ContinuationToken);
         var request = handler.Requests.Last();
@@ -180,6 +180,11 @@ public class SnowflakeApiClientTests
             "/v2/streaming/data/databases/SNOWFLAKE_LEARNING_DB/schemas/TESTSCHEMA/pipes/MYTESTTABLE__CLUEDIN_PIPE/channels/channel-1/rows",
             request.Uri.AbsolutePath);
         Assert.Contains("continuationToken=token-1", request.Uri.Query);
+        // startOffsetToken/endOffsetToken are what actually makes Snowflake commit the
+        // batch - verified live that without them the append is buffered but never
+        // committed (rows never become queryable, even after 60+ seconds).
+        Assert.Contains("startOffsetToken=42", request.Uri.Query);
+        Assert.Contains("endOffsetToken=42", request.Uri.Query);
         // NDJSON, not a JSON object wrapping a "rows" array.
         Assert.Equal("""{"ENTITY_ID":"e1","CHANGE_TYPE":"Added"}""", request.Body);
     }
@@ -197,6 +202,31 @@ public class SnowflakeApiClientTests
         var request = handler.Requests.Last();
         Assert.Equal(HttpMethod.Delete, request.Method);
         Assert.Equal("/v2/streaming/databases/SNOWFLAKE_LEARNING_DB/schemas/TESTSCHEMA/pipes/MYTESTTABLE__CLUEDIN_PIPE/channels/channel-1", request.Uri.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task GetChannelStatusAsync_SendsBulkStatusPostAndParsesCommittedOffset()
+    {
+        var handler = CreateStreamingHandler(
+            (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"channel_statuses":{"channel-1":{"last_committed_offset_token":"42","rows_inserted":5,"rows_error_count":0,"last_error_message":null}}}""",
+                    Encoding.UTF8,
+                    "application/json"),
+            });
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://qs30799.snowflakecomputing.com") };
+        using var apiClient = new SnowflakeApiClient(CreateSettings(), httpClient);
+
+        var status = await apiClient.GetChannelStatusAsync("MYTESTTABLE__CLUEDIN_PIPE", "channel-1");
+
+        Assert.Equal("42", status.LastCommittedOffsetToken);
+        Assert.Equal(5, status.RowsInserted);
+        Assert.Equal(0, status.RowsErrorCount);
+        var request = handler.Requests.Last();
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("/v2/streaming/databases/SNOWFLAKE_LEARNING_DB/schemas/TESTSCHEMA/pipes/MYTESTTABLE__CLUEDIN_PIPE:bulk-channel-status", request.Uri.AbsolutePath);
+        Assert.Contains("\"channel_names\":[\"channel-1\"]", request.Body);
     }
 
     [Fact]

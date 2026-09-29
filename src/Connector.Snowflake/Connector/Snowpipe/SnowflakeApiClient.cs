@@ -156,10 +156,20 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
         string pipeName,
         string channelName,
         string continuationToken,
+        string offsetToken,
         IReadOnlyList<IReadOnlyDictionary<string, object>> rows,
         CancellationToken cancellationToken = default)
     {
-        var path = $"{GetChannelDataPath(pipeName, channelName)}/rows?continuationToken={Uri.EscapeDataString(continuationToken)}";
+        // startOffsetToken/endOffsetToken are documented as optional, but verified live
+        // that without them the append is only ever buffered, never committed - rows_inserted
+        // and last_committed_offset_token both stay at their initial value indefinitely (60s+),
+        // and the row never becomes queryable. Setting both to the same value (this call's
+        // batch is always appended as a single unit, not a sub-range) is what actually makes
+        // Snowflake commit the batch.
+        var path = $"{GetChannelDataPath(pipeName, channelName)}/rows"
+            + $"?continuationToken={Uri.EscapeDataString(continuationToken)}"
+            + $"&startOffsetToken={Uri.EscapeDataString(offsetToken)}"
+            + $"&endOffsetToken={Uri.EscapeDataString(offsetToken)}";
         var uri = await BuildIngestUriAsync(path, cancellationToken);
 
         // The Snowpipe Streaming REST API takes newline-delimited JSON here, not a JSON
@@ -198,6 +208,29 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new SnowflakeApiException(ExtractErrorMessage(body), response.StatusCode, body);
         }
+    }
+
+    public async Task<SnowflakeChannelStatus> GetChannelStatusAsync(string pipeName, string channelName, CancellationToken cancellationToken = default)
+    {
+        var path = $"/v2/streaming/databases/{Uri.EscapeDataString(_settings.Database)}/schemas/{Uri.EscapeDataString(_settings.Schema)}"
+            + $"/pipes/{Uri.EscapeDataString(pipeName)}:bulk-channel-status";
+        var uri = await BuildIngestUriAsync(path, cancellationToken);
+
+        using var response = await SendIngestHostAsync(HttpMethod.Post, uri, new BulkChannelStatusRequest { ChannelNames = [channelName] }, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new SnowflakeApiException(ExtractErrorMessage(body), response.StatusCode, body);
+        }
+
+        var statusResponse = JsonSerializer.Deserialize<BulkChannelStatusResponse>(body, _jsonOptions);
+        if (statusResponse?.ChannelStatuses == null || !statusResponse.ChannelStatuses.TryGetValue(channelName, out var status))
+        {
+            throw new SnowflakeApiException($"No status returned for channel '{channelName}'.", response.StatusCode, body);
+        }
+
+        return new SnowflakeChannelStatus(status.LastCommittedOffsetToken, status.RowsInserted, status.RowsErrorCount, status.LastErrorMessage);
     }
 
     // Named-channel open/close path: /v2/streaming/databases/{db}/schemas/{schema}/pipes/{pipe}/channels/{channel}
@@ -470,6 +503,33 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
 
         [JsonPropertyName("message")]
         public string Message { get; set; }
+    }
+
+    private class BulkChannelStatusRequest
+    {
+        [JsonPropertyName("channel_names")]
+        public List<string> ChannelNames { get; set; }
+    }
+
+    private class BulkChannelStatusResponse
+    {
+        [JsonPropertyName("channel_statuses")]
+        public Dictionary<string, ChannelStatusEntry> ChannelStatuses { get; set; }
+    }
+
+    private class ChannelStatusEntry
+    {
+        [JsonPropertyName("last_committed_offset_token")]
+        public string LastCommittedOffsetToken { get; set; }
+
+        [JsonPropertyName("rows_inserted")]
+        public long RowsInserted { get; set; }
+
+        [JsonPropertyName("rows_error_count")]
+        public long RowsErrorCount { get; set; }
+
+        [JsonPropertyName("last_error_message")]
+        public string LastErrorMessage { get; set; }
     }
 
     private class ErrorResponse

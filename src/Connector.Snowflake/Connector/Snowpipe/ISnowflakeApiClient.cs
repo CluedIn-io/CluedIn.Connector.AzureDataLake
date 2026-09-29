@@ -14,15 +14,24 @@ internal interface ISnowflakeApiClient
         string pipeName,
         string channelName,
         string continuationToken,
+        string offsetToken,
         IReadOnlyList<IReadOnlyDictionary<string, object>> rows,
         CancellationToken cancellationToken = default);
 
     Task CloseChannelAsync(string pipeName, string channelName, CancellationToken cancellationToken = default);
+
+    // Appending rows only buffers them - verified live that closing a channel right after
+    // an append does not wait for (or force) that data to actually commit, and the buffered
+    // rows are simply lost. Callers must poll this until LastCommittedOffsetToken reaches
+    // the offset token of their last append before closing the channel.
+    Task<SnowflakeChannelStatus> GetChannelStatusAsync(string pipeName, string channelName, CancellationToken cancellationToken = default);
 }
 
 internal record SnowflakeStatementResult(bool Success, IReadOnlyList<string> ColumnNames, IReadOnlyList<IReadOnlyList<string>> Rows);
 
 internal record SnowflakeChannelHandle(string ChannelName, string ContinuationToken);
+
+internal record SnowflakeChannelStatus(string LastCommittedOffsetToken, long RowsInserted, long RowsErrorCount, string LastErrorMessage);
 
 // Controls which of the connection's Database/Schema/Warehouse are sent as session context
 // on a statement request. Used to isolate permission checks to a single object at a time
