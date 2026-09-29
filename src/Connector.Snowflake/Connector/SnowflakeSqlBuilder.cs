@@ -45,14 +45,29 @@ internal static class SnowflakeSqlBuilder
             """;
     }
 
-    // The property set can grow over time (new vocabulary keys), and the transient table
-    // may already exist from before those properties appeared - so on every run, make sure
-    // any newly-seen field also has a column. Returns one ALTER TABLE statement per column
-    // (Snowflake's ADD COLUMN IF NOT EXISTS is documented per-column; issuing them
-    // separately avoids relying on undocumented multi-column IF NOT EXISTS behavior).
-    public static IEnumerable<string> GetAddMissingColumnsStatements(string database, string schema, string transientTableName, IReadOnlyList<string> fieldNames)
+    // The target table is a regular (non-transient) table, since it holds the actual
+    // exported data rather than a per-run landing area - transient tables have no
+    // fail-safe and a shorter default time-travel retention.
+    public static string CreateTargetTableIfNotExists(string database, string schema, string targetTableName, IReadOnlyList<string> fieldNames)
     {
-        var qualified = QualifiedName(database, schema, transientTableName);
+        var qualified = QualifiedName(database, schema, targetTableName);
+        var columnDefinitions = string.Join(",\n    ", fieldNames.Select(GetColumnDefinition));
+        return $"""
+            CREATE TABLE IF NOT EXISTS {qualified} (
+                {columnDefinitions}
+            )
+            """;
+    }
+
+    // The property set can grow over time (new vocabulary keys), and a table may already
+    // exist from before those properties appeared - so on every run, make sure any
+    // newly-seen field also has a column, on both the transient and target tables. Returns
+    // one ALTER TABLE statement per column (Snowflake's ADD COLUMN IF NOT EXISTS is
+    // documented per-column; issuing them separately avoids relying on undocumented
+    // multi-column IF NOT EXISTS behavior).
+    public static IEnumerable<string> GetAddMissingColumnsStatements(string database, string schema, string tableName, IReadOnlyList<string> fieldNames)
+    {
+        var qualified = QualifiedName(database, schema, tableName);
         return fieldNames.Select(fieldName => $"ALTER TABLE {qualified} ADD COLUMN IF NOT EXISTS {GetColumnDefinition(fieldName)}");
     }
 
@@ -73,12 +88,10 @@ internal static class SnowflakeSqlBuilder
         return $"TRUNCATE TABLE IF EXISTS {QualifiedName(database, schema, transientTableName)}";
     }
 
-    // Assumes the target table has the same columns as the transient table (one per
-    // CluedIn property, see the type header above) - not auto-created here, since
-    // CreateContainer is a no-op for FileStorage.Common-based connectors (see
-    // docs/snowflake-connector-plan.md). If the target table is missing newly-seen
-    // columns, add them the same way GetAddMissingColumnsStatements does for the transient
-    // table before relying on this MERGE.
+    // Assumes the target table already exists with the same columns as the transient table
+    // (one per CluedIn property, see the type header above) - see
+    // CreateTargetTableIfNotExists/GetAddMissingColumnsStatements, which
+    // SnowflakeExportEntitiesJob runs against the target table before this MERGE.
     public static string MergeTransientIntoTarget(string database, string schema, string transientTableName, string targetTableName, IReadOnlyList<string> fieldNames)
     {
         var qualifiedTarget = QualifiedName(database, schema, targetTableName);

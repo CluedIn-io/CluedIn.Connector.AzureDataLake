@@ -61,6 +61,30 @@ public class SnowflakeSqlBuilderTests
     }
 
     [Fact]
+    public void GetAddMissingColumnsStatements_TargetsWhicheverTableNameIsPassedIn()
+    {
+        var statements = SnowflakeSqlBuilder.GetAddMissingColumnsStatements(Database, Schema, TargetTableName, FieldNames);
+
+        var statementList = new List<string>(statements);
+        Assert.All(statementList, s => Assert.Contains(SnowflakeSqlBuilder.QualifiedName(Database, Schema, TargetTableName), s));
+        Assert.All(statementList, s => Assert.DoesNotContain(TransientTableName, s));
+    }
+
+    [Fact]
+    public void CreateTargetTableIfNotExists_DeclaresOneColumnPerFieldNameAsARegularTable()
+    {
+        var sql = SnowflakeSqlBuilder.CreateTargetTableIfNotExists(Database, Schema, TargetTableName, FieldNames);
+
+        Assert.Contains("CREATE TABLE IF NOT EXISTS", sql);
+        Assert.DoesNotContain("TRANSIENT", sql);
+        Assert.Contains(SnowflakeSqlBuilder.QualifiedName(Database, Schema, TargetTableName), sql);
+        Assert.Contains("ID VARCHAR", sql);
+        Assert.Contains("__CHANGETYPE__ VARCHAR", sql);
+        Assert.Contains("PERSISTVERSION NUMBER", sql);
+        Assert.Contains("USER_EMAIL VARCHAR", sql);
+    }
+
+    [Fact]
     public void CreatePipeIfNotExists_BindsPipeToTransientTableAsStreamingSource()
     {
         var sql = SnowflakeSqlBuilder.CreatePipeIfNotExists(Database, Schema, PipeName, TransientTableName);

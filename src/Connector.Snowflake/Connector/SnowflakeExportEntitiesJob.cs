@@ -28,9 +28,14 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
 
     // Overriding ExportDataAsync means the base's default file-writing implementation -
     // and, with it, the base's call to PostExportAsync - never runs. So this override does
-    // the transient-table setup, streams rows via the Snowpipe writer, then does the
-    // transient-to-target MERGE and cleanup itself, all in one place, instead of splitting
-    // "post export" work into a PostExportAsync override that would silently never fire.
+    // the transient- and target-table setup, streams rows via the Snowpipe writer, then
+    // does the transient-to-target MERGE and cleanup itself, all in one place, instead of
+    // splitting "post export" work into a PostExportAsync override that would silently
+    // never fire.
+    //
+    // CreateContainer (the usual place a connector provisions its target) is a no-op for
+    // every FileStorage.Common-based connector (see StorageConnectorBase.CreateContainer),
+    // so the target table is created/grown here instead, on every export run.
     protected override async Task<long> ExportDataAsync(
         ExecutionContext context,
         ExportJobData exportJobData,
@@ -55,6 +60,17 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
                 SnowflakeSqlBuilder.CreateTransientTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName, fieldNames));
 
             foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName, fieldNames))
+            {
+                await apiClient.ExecuteStatementAsync(alterStatement);
+            }
+
+            // The target table is user-facing data, not a per-run landing area - create it
+            // if this is the first export to it, and grow its columns the same way the
+            // transient table's are grown, since it's never recreated afterwards.
+            await apiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.CreateTargetTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName, fieldNames));
+
+            foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName, fieldNames))
             {
                 await apiClient.ExecuteStatementAsync(alterStatement);
             }
