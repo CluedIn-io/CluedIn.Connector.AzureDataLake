@@ -5,6 +5,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <IgnoresAccessChecksTo Include="CluedIn.ComponentHealth" />
+    <IgnoresAccessChecksTo Include="CluedIn.Streams" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IgnoresAccessChecksToGenerator" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\src\Connector.Snowflake\Connector.Snowflake.csproj" />
   </ItemGroup>
 
