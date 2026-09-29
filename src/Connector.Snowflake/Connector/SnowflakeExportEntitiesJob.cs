@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Transactions;
 
@@ -67,10 +68,17 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
             // The target table is user-facing data, not a per-run landing area - create it
             // if this is the first export to it, and grow its columns the same way the
             // transient table's are grown, since it's never recreated afterwards.
-            await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.CreateTargetTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName, fieldNames));
+            // __ChangeType__ is excluded here: it's only transient-side bookkeeping the
+            // MERGE below reads to decide insert/update/delete, never a real CluedIn
+            // property, so it has no business being a persisted column on the target table.
+            var targetFieldNames = fieldNames
+                .Where(fieldName => fieldName != StorageConfigurationConstants.ChangeTypeKey)
+                .ToList();
 
-            foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName, fieldNames))
+            await apiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.CreateTargetTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName, targetFieldNames));
+
+            foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName, targetFieldNames))
             {
                 await apiClient.ExecuteStatementAsync(alterStatement);
             }

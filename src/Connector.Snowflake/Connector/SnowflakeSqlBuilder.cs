@@ -129,9 +129,10 @@ internal static class SnowflakeSqlBuilder
     }
 
     // Assumes the target table already exists with the same columns as the transient table
-    // (one per CluedIn property, see the type header above) - see
+    // minus __ChangeType__ (one per CluedIn property, see the type header above) - see
     // CreateTargetTableIfNotExists/GetAddMissingColumnsStatements, which
-    // SnowflakeExportEntitiesJob runs against the target table before this MERGE.
+    // SnowflakeExportEntitiesJob runs against the target table (with __ChangeType__
+    // excluded from fieldNames) before this MERGE.
     public static string MergeTransientIntoTarget(string database, string schema, string transientTableName, string targetTableName, IReadOnlyList<string> fieldNames)
     {
         var qualifiedTarget = QualifiedName(database, schema, targetTableName);
@@ -141,19 +142,26 @@ internal static class SnowflakeSqlBuilder
         var changeTypeColumn = SanitizeColumnName(StorageConfigurationConstants.ChangeTypeKey);
         var persistVersionColumn = SanitizeColumnName(StorageConfigurationConstants.PersistVersionKey);
 
-        var columns = fieldNames.Select(SanitizeColumnName).ToList();
-        var columnList = string.Join(", ", columns);
-        var updateList = string.Join(", ", columns
+        // __ChangeType__ is transient-only bookkeeping used below to decide which MERGE
+        // action to take - it's never a real CluedIn property, so it's read from the
+        // transient table (sourceColumns, for the WHEN clauses) but excluded from what
+        // actually gets INSERTed/UPDATEd into the target table (targetColumns).
+        var sourceColumns = fieldNames.Select(SanitizeColumnName).ToList();
+        var sourceColumnList = string.Join(", ", sourceColumns);
+
+        var targetColumns = sourceColumns.Where(column => column != changeTypeColumn).ToList();
+        var targetColumnList = string.Join(", ", targetColumns);
+        var updateList = string.Join(", ", targetColumns
             .Where(column => column != idColumn)
             .Select(column => $"target.{column} = source.{column}"));
-        var insertValueList = string.Join(", ", columns.Select(column => $"source.{column}"));
+        var insertValueList = string.Join(", ", targetColumns.Select(column => $"source.{column}"));
 
         return $"""
             MERGE INTO {qualifiedTarget} AS target
             USING (
-                SELECT {columnList}
+                SELECT {sourceColumnList}
                 FROM (
-                    SELECT {columnList},
+                    SELECT {sourceColumnList},
                         ROW_NUMBER() OVER (PARTITION BY {idColumn} ORDER BY {persistVersionColumn} DESC) AS RN
                     FROM {qualifiedTransient}
                 )
@@ -162,7 +170,7 @@ internal static class SnowflakeSqlBuilder
             ON target.{idColumn} = source.{idColumn}
             WHEN MATCHED AND source.{changeTypeColumn} = 'Removed' THEN DELETE
             WHEN MATCHED THEN UPDATE SET {updateList}
-            WHEN NOT MATCHED AND source.{changeTypeColumn} != 'Removed' THEN INSERT ({columnList}) VALUES ({insertValueList})
+            WHEN NOT MATCHED AND source.{changeTypeColumn} != 'Removed' THEN INSERT ({targetColumnList}) VALUES ({insertValueList})
             """;
     }
 

@@ -167,9 +167,20 @@ public class SnowflakeSqlBuilderTests
 
         Assert.Contains("WHEN MATCHED AND source.__CHANGETYPE__ = 'Removed' THEN DELETE", sql);
         Assert.Contains("WHEN MATCHED THEN UPDATE SET", sql);
-        Assert.Contains("target.__CHANGETYPE__ = source.__CHANGETYPE__", sql);
         Assert.Contains("target.USER_EMAIL = source.USER_EMAIL", sql);
         Assert.Contains("WHEN NOT MATCHED AND source.__CHANGETYPE__ != 'Removed' THEN INSERT", sql);
+    }
+
+    // __ChangeType__ is transient-only bookkeeping the MERGE reads to decide which action to
+    // take - it's read from the transient table (source.__CHANGETYPE__ in the WHEN clauses
+    // above), but must never be written into the target table as a persisted column/value.
+    [Fact]
+    public void MergeTransientIntoTarget_ExcludesChangeTypeFromTargetInsertAndUpdate()
+    {
+        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);
+
+        Assert.DoesNotContain("target.__CHANGETYPE__", sql);
+        Assert.DoesNotContain("INSERT (ID, __CHANGETYPE__", sql);
     }
 
     [Fact]
@@ -191,10 +202,10 @@ public class SnowflakeSqlBuilderTests
     }
 
     [Fact]
-    public void MergeTransientIntoTarget_InsertsAllColumnsIncludingId()
+    public void MergeTransientIntoTarget_InsertsAllColumnsIncludingIdButExcludingChangeType()
     {
         var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);
 
-        Assert.Contains("INSERT (ID, __CHANGETYPE__, PERSISTVERSION, USER_EMAIL) VALUES (source.ID, source.__CHANGETYPE__, source.PERSISTVERSION, source.USER_EMAIL)", sql);
+        Assert.Contains("INSERT (ID, PERSISTVERSION, USER_EMAIL) VALUES (source.ID, source.PERSISTVERSION, source.USER_EMAIL)", sql);
     }
 }
