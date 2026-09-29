@@ -98,6 +98,36 @@ internal static class SnowflakeSqlBuilder
         return $"DROP PIPE IF EXISTS {QualifiedName(database, schema, pipeName)}";
     }
 
+    // Used to check whether the configured role can see a given warehouse/database/schema,
+    // for connection verification (see SnowflakeConnector.VerifyDataLakeConnection). A row
+    // comes back only for objects that exist and the role has at least one privilege on;
+    // this was chosen over "USE WAREHOUSE"/"USE DATABASE"/"USE SCHEMA" (not supported by the
+    // SQL API) and over sending the object in a statement's session context (a plain
+    // "SELECT 1" doesn't actually resolve database/schema/warehouse, so an invalid one goes
+    // unnoticed) - verified live against a real account. The warehouse check specifically is
+    // still throttled for health checks (see SnowflakeConnector.HealthCheckWarehouseCheckWindowMinutes) -
+    // referencing a warehouse object can resume it, and resuming/keeping it active on every
+    // health check tick is a real cost concern regardless of what the query itself needs.
+    public static string ShowWarehouses(string warehouseName)
+    {
+        return $"SHOW WAREHOUSES LIKE '{EscapeLikePattern(warehouseName)}'";
+    }
+
+    public static string ShowDatabases(string databaseName)
+    {
+        return $"SHOW DATABASES LIKE '{EscapeLikePattern(databaseName)}'";
+    }
+
+    public static string ShowSchemasInDatabase(string database, string schemaName)
+    {
+        return $"SHOW SCHEMAS LIKE '{EscapeLikePattern(schemaName)}' IN DATABASE \"{database}\"";
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value.Replace("'", "''");
+    }
+
     // Assumes the target table already exists with the same columns as the transient table
     // (one per CluedIn property, see the type header above) - see
     // CreateTargetTableIfNotExists/GetAddMissingColumnsStatements, which

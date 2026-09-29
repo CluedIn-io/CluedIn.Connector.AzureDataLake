@@ -71,15 +71,21 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
         }
     }
 
-    public async Task<SnowflakeStatementResult> ExecuteStatementAsync(string sql, CancellationToken cancellationToken = default)
+    public async Task<SnowflakeStatementResult> ExecuteStatementAsync(string sql, SnowflakeStatementScope scope = SnowflakeStatementScope.All, CancellationToken cancellationToken = default)
     {
         var requestBody = new StatementRequest
         {
             Statement = sql,
             Timeout = 60,
-            Database = _settings.Database,
-            Schema = _settings.Schema,
-            Warehouse = _settings.Warehouse,
+            Database = scope is SnowflakeStatementScope.All or SnowflakeStatementScope.DatabaseOnly or SnowflakeStatementScope.DatabaseAndSchema
+                ? _settings.Database
+                : null,
+            Schema = scope is SnowflakeStatementScope.All or SnowflakeStatementScope.DatabaseAndSchema
+                ? _settings.Schema
+                : null,
+            Warehouse = scope is SnowflakeStatementScope.All or SnowflakeStatementScope.WarehouseOnly
+                ? _settings.Warehouse
+                : null,
             Role = string.IsNullOrWhiteSpace(_settings.Role) ? null : _settings.Role,
         };
 

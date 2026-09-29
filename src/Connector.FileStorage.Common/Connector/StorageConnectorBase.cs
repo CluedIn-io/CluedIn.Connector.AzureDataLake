@@ -675,7 +675,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 shouldLogError = !isHealthCheck ||
                     !_lastHealthCheckErrorLogs.TryGetValue(connectorType, out var lastCheck) ||
                     _timeProvider.GetUtcNow() - lastCheck > _delayBetweenHealthCheckErrorLog;
-                var result = await VerifyConnectionInternal(executionContext, configuration, shouldLogError);
+                var result = await VerifyConnectionInternal(executionContext, configuration, shouldLogError, isHealthCheck);
                 if (result.HasException)
                 {
                     UpdateLastHealthCheckErrorLogTime(isHealthCheck, shouldLogError, connectorType);
@@ -711,7 +711,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             return false;
         }
 
-        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
+        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException, bool isHealthCheck)
         {
             var verifyConnectionResult = await VerifyDataLakeConnection(executionContext, configuration, shouldLogException);
             if (!verifyConnectionResult.Success)

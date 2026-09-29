@@ -120,6 +120,38 @@ public class SnowflakeSqlBuilderTests
     }
 
     [Fact]
+    public void ShowWarehouses_FiltersByExactName()
+    {
+        var sql = SnowflakeSqlBuilder.ShowWarehouses("COMPUTE_WH");
+
+        Assert.Equal("SHOW WAREHOUSES LIKE 'COMPUTE_WH'", sql);
+    }
+
+    [Fact]
+    public void ShowDatabases_FiltersByExactName()
+    {
+        var sql = SnowflakeSqlBuilder.ShowDatabases(Database);
+
+        Assert.Equal($"SHOW DATABASES LIKE '{Database}'", sql);
+    }
+
+    [Fact]
+    public void ShowSchemasInDatabase_FiltersByExactNameWithinDatabase()
+    {
+        var sql = SnowflakeSqlBuilder.ShowSchemasInDatabase(Database, Schema);
+
+        Assert.Equal($"SHOW SCHEMAS LIKE '{Schema}' IN DATABASE \"{Database}\"", sql);
+    }
+
+    [Fact]
+    public void ShowWarehouses_EscapesSingleQuotesInTheName()
+    {
+        var sql = SnowflakeSqlBuilder.ShowWarehouses("O'BRIEN_WH");
+
+        Assert.Equal("SHOW WAREHOUSES LIKE 'O''BRIEN_WH'", sql);
+    }
+
+    [Fact]
     public void MergeTransientIntoTarget_DedupesByLatestPersistVersionPerEntity()
     {
         var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);

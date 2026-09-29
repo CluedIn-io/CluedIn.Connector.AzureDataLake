@@ -55,6 +55,54 @@ public class SnowflakeApiClientTests
         Assert.Contains("\"warehouse\":\"COMPUTE_WH\"", request.Body);
     }
 
+    [Fact]
+    public Task ExecuteStatementAsync_WarehouseOnlyScope_OnlyIncludesWarehouse()
+    {
+        return AssertScopeIncludesObjects(SnowflakeStatementScope.WarehouseOnly, expectWarehouse: true, expectDatabase: false, expectSchema: false);
+    }
+
+    [Fact]
+    public Task ExecuteStatementAsync_DatabaseOnlyScope_OnlyIncludesDatabase()
+    {
+        return AssertScopeIncludesObjects(SnowflakeStatementScope.DatabaseOnly, expectWarehouse: false, expectDatabase: true, expectSchema: false);
+    }
+
+    [Fact]
+    public Task ExecuteStatementAsync_DatabaseAndSchemaScope_IncludesDatabaseAndSchemaButNotWarehouse()
+    {
+        return AssertScopeIncludesObjects(SnowflakeStatementScope.DatabaseAndSchema, expectWarehouse: false, expectDatabase: true, expectSchema: true);
+    }
+
+    [Fact]
+    public Task ExecuteStatementAsync_AllScope_IncludesEverything()
+    {
+        return AssertScopeIncludesObjects(SnowflakeStatementScope.All, expectWarehouse: true, expectDatabase: true, expectSchema: true);
+    }
+
+    [Fact]
+    public Task ExecuteStatementAsync_NoneScope_IncludesNothing()
+    {
+        return AssertScopeIncludesObjects(SnowflakeStatementScope.None, expectWarehouse: false, expectDatabase: false, expectSchema: false);
+    }
+
+    private static async Task AssertScopeIncludesObjects(SnowflakeStatementScope scope, bool expectWarehouse, bool expectDatabase, bool expectSchema)
+    {
+        var handler = new RecordingHttpMessageHandler(
+            (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"resultSetMetaData":{"rowType":[]},"data":[]}""", Encoding.UTF8, "application/json"),
+            });
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://qs30799.snowflakecomputing.com") };
+        using var apiClient = new SnowflakeApiClient(CreateSettings(), httpClient);
+
+        await apiClient.ExecuteStatementAsync("SELECT 1", scope);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(expectWarehouse, request.Body.Contains("\"warehouse\":\"COMPUTE_WH\""));
+        Assert.Equal(expectDatabase, request.Body.Contains("\"database\":\"SNOWFLAKE_LEARNING_DB\""));
+        Assert.Equal(expectSchema, request.Body.Contains("\"schema\":\"TESTSCHEMA\""));
+    }
+
     // The Snowpipe Streaming REST API is a separate deployment from the SQL API: every
     // streaming call is preceded by (1) GET /v2/streaming/hostname on the control host to
     // discover the ingest host, and (2) POST /oauth/token on the control host to exchange
