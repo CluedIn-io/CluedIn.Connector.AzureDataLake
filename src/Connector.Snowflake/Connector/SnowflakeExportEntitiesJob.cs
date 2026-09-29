@@ -1,14 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Transactions;
 
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Connector.Snowflake.Connector.Snowpipe;
+using CluedIn.Connector.Snowflake.Connector.SqlDataWriter;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
-
-using SnowflakeSqlDataWriter = CluedIn.Connector.Snowflake.Connector.SqlDataWriter.SnowflakeSnowpipeSqlDataWriter;
 
 using Microsoft.Data.SqlClient;
 
@@ -16,37 +17,44 @@ namespace CluedIn.Connector.Snowflake.Connector;
 
 internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
 {
-    private readonly Func<SnowflakeConnectorConfiguration, ISnowflakeApiClient> _apiClientFactory;
+    private readonly SnowflakeStorageFactory _storageFactory;
 
     public SnowflakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         ISnowflakeConfigurationConstants configurationConstants,
         SnowflakeStorageFactory storageFactory,
-        ITimeProvider timeProvider,
-        Func<SnowflakeConnectorConfiguration, ISnowflakeApiClient> apiClientFactory = null)
+        ITimeProvider timeProvider)
         : base(appContext, streamRepository, configurationConstants, storageFactory, timeProvider)
     {
-        _apiClientFactory = apiClientFactory
-            ?? (config => new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(config)));
+        _storageFactory = storageFactory;
     }
 
-    protected override ISqlDataWriter GetSqlDataWriter(string outputFormat)
+    protected override Task<long> ExportDataAsync(
+        ExecutionContext context,
+        ExportJobData exportJobData,
+        IStorageConfiguration configuration,
+        IStorageClient storageClient,
+        SqlDataReader reader,
+        TransactionScope transactionScope,
+        List<string> fieldNames,
+        DateTimeOffset instanceTime)
     {
-        return new SnowflakeSqlDataWriter(_apiClientFactory);
+        var writer = new SnowflakeSnowpipeSqlDataWriter();
+        return writer.WriteOutputAsync(context, configuration, null, fieldNames, exportJobData.IsInitialExport, reader);
     }
 
     // The Snowpipe Streaming pipe is bound to a fixed transient table (see
     // SnowflakeConnectorConfiguration.TransientTableName/PipeName), so it is
     // created once, idempotently, rather than fresh per run.
-    private protected override async Task InitializeBaseDirectoryAsync(
+    protected override async Task InitializeOutputTargetAsync(
         ExecutionContext context,
         SqlConnection connection,
         ExportJobData exportJobData,
         IStorageClient client)
     {
         var configuration = GetSnowflakeConfiguration(exportJobData);
-        var apiClient = _apiClientFactory(configuration);
+        var apiClient = CreateApiClient(configuration);
         try
         {
             await apiClient.ExecuteStatementAsync(
@@ -65,19 +73,15 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         }
     }
 
-    private protected override Task InitializeOutputDirectoryAsync(
-        ExecutionContext context,
-        SqlConnection connection,
-        ExportJobData exportJobData,
-        IStorageClient client)
+    private static SnowflakeApiClient CreateApiClient(SnowflakeConnectorConfiguration configuration)
     {
-        return Task.CompletedTask;
+        return new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(configuration));
     }
 
     private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
     {
         var configuration = GetSnowflakeConfiguration(exportJobData);
-        var apiClient = _apiClientFactory(configuration);
+        var apiClient = CreateApiClient(configuration);
         try
         {
             await apiClient.ExecuteStatementAsync(

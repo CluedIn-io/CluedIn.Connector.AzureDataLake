@@ -21,12 +21,9 @@ namespace CluedIn.Connector.Snowflake.Connector.SqlDataWriter;
 internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
 {
     private const int BatchSize = 1000;
-    private readonly Func<SnowflakeConnectorConfiguration, ISnowflakeApiClient> _apiClientFactory;
 
-    public SnowflakeSnowpipeSqlDataWriter(Func<SnowflakeConnectorConfiguration, ISnowflakeApiClient> apiClientFactory = null)
+    public SnowflakeSnowpipeSqlDataWriter()
     {
-        _apiClientFactory = apiClientFactory
-            ?? (config => new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(config)));
     }
 
     public override async Task<long> WriteOutputAsync(
@@ -42,7 +39,7 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
             throw new ArgumentException($"Configuration must be of type {nameof(SnowflakeConnectorConfiguration)}.", nameof(configuration));
         }
 
-        var apiClient = _apiClientFactory(snowflakeConfiguration);
+        var apiClient = new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(snowflakeConfiguration));
         var channelName = $"cluedin_{Guid.NewGuid():N}";
         var totalProcessed = 0L;
 
