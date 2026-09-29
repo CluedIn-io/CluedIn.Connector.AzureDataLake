@@ -88,6 +88,16 @@ internal static class SnowflakeSqlBuilder
         return $"TRUNCATE TABLE IF EXISTS {QualifiedName(database, schema, transientTableName)}";
     }
 
+    public static string DropTableIfExists(string database, string schema, string tableName)
+    {
+        return $"DROP TABLE IF EXISTS {QualifiedName(database, schema, tableName)}";
+    }
+
+    public static string DropPipeIfExists(string database, string schema, string pipeName)
+    {
+        return $"DROP PIPE IF EXISTS {QualifiedName(database, schema, pipeName)}";
+    }
+
     // Assumes the target table already exists with the same columns as the transient table
     // (one per CluedIn property, see the type header above) - see
     // CreateTargetTableIfNotExists/GetAddMissingColumnsStatements, which

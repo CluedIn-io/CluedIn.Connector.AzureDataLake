@@ -43,6 +43,35 @@ public class SnowflakeConnector : StorageConnectorBase
         return [StreamMode.Sync];
     }
 
+    // Drops the target table, transient table, and pipe this connector created (see
+    // SnowflakeExportEntitiesJob), rather than leaving them behind when a stream is
+    // archived. The pipe is dropped before the transient table it's bound to, and the
+    // transient table before the target table, so nothing is ever dropped while something
+    // else still references it.
+    public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+    {
+        var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
+        if (configuration is SnowflakeConnectorConfiguration snowflakeConfiguration)
+        {
+            var apiClient = new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(snowflakeConfiguration));
+            try
+            {
+                await apiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropPipeIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.PipeName));
+                await apiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName));
+                await apiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName));
+            }
+            finally
+            {
+                (apiClient as IDisposable)?.Dispose();
+            }
+        }
+
+        await base.ArchiveContainer(executionContext, streamModel);
+    }
+
     protected override async Task<FileStorageConnectionVerificationResult> VerifyDataLakeConnection(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
     {
         if (configuration is not SnowflakeConnectorConfiguration casted)

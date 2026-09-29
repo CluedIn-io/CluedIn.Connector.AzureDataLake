@@ -104,6 +104,22 @@ public class SnowflakeSqlBuilderTests
     }
 
     [Fact]
+    public void DropTableIfExists_TargetsWhicheverTableNameIsPassedIn()
+    {
+        var sql = SnowflakeSqlBuilder.DropTableIfExists(Database, Schema, TargetTableName);
+
+        Assert.Equal($"DROP TABLE IF EXISTS {SnowflakeSqlBuilder.QualifiedName(Database, Schema, TargetTableName)}", sql);
+    }
+
+    [Fact]
+    public void DropPipeIfExists_TargetsThePipe()
+    {
+        var sql = SnowflakeSqlBuilder.DropPipeIfExists(Database, Schema, PipeName);
+
+        Assert.Equal($"DROP PIPE IF EXISTS {SnowflakeSqlBuilder.QualifiedName(Database, Schema, PipeName)}", sql);
+    }
+
+    [Fact]
     public void MergeTransientIntoTarget_DedupesByLatestPersistVersionPerEntity()
     {
         var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);
