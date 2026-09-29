@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.FileStorage.Common;
@@ -18,6 +19,10 @@ namespace CluedIn.Connector.Snowflake.Connector.SqlDataWriter;
 // outputStream (that stream only exists to satisfy the base export pipeline's
 // file-writing contract; see SnowflakeStorageClient). Rows are batched rather than sent
 // one HTTP call at a time, since many small round trips are expensive against Snowflake.
+//
+// Each row is shaped as one column per CluedIn property (see SnowflakeSqlBuilder, which
+// this writer must stay in lockstep with for column naming), not a single VARIANT blob -
+// matching how the old CluedIn.Connector.Snowflake repo's table shape works.
 internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
 {
     private const int BatchSize = 1000;
@@ -55,23 +60,12 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
                     continue;
                 }
 
-                var rowData = new Dictionary<string, object>();
+                var shapedRow = new Dictionary<string, object>();
                 foreach (var field in fieldNames)
                 {
-                    rowData[field] = GetValue(field, reader, configuration);
+                    var value = GetValue(field, reader, configuration);
+                    shapedRow[SnowflakeSqlBuilder.SanitizeColumnName(field)] = ConvertValueForColumn(field, value);
                 }
-
-                rowData.TryGetValue(StorageConfigurationConstants.IdKey, out var entityId);
-                rowData.TryGetValue(StorageConfigurationConstants.ChangeTypeKey, out var changeType);
-                rowData.TryGetValue(StorageConfigurationConstants.PersistVersionKey, out var persistVersion);
-
-                var shapedRow = new Dictionary<string, object>
-                {
-                    [TransientTableColumns.EntityId] = entityId?.ToString(),
-                    [TransientTableColumns.ChangeType] = changeType?.ToString() ?? "Added",
-                    [TransientTableColumns.PersistVersion] = persistVersion,
-                    [TransientTableColumns.RowData] = rowData,
-                };
 
                 batch.Add(shapedRow);
                 totalProcessed++;
@@ -100,5 +94,31 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
         }
 
         return totalProcessed;
+    }
+
+    // Every transient/target column is VARCHAR except PersistVersion (NUMBER, so the
+    // MERGE's ROW_NUMBER() ... ORDER BY dedupes correctly) - see
+    // SnowflakeSqlBuilder.GetColumnDefinition. Complex values (Codes, edges, etc.) are
+    // JSON-serialized to a string, matching the old connector's
+    // JsonConvert.SerializeObject(value) approach for its uniformly-VARCHAR columns.
+    private static object ConvertValueForColumn(string fieldName, object value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        if (fieldName == StorageConfigurationConstants.PersistVersionKey)
+        {
+            return value;
+        }
+
+        return value switch
+        {
+            string => value,
+            bool or byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal => value.ToString(),
+            DateTime or DateTimeOffset or Guid => value.ToString(),
+            _ => JsonSerializer.Serialize(value),
+        };
     }
 }

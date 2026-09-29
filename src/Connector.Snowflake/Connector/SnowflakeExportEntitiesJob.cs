@@ -5,7 +5,6 @@ using System.Transactions;
 
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
-using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Connector.Snowflake.Connector.Snowpipe;
 using CluedIn.Connector.Snowflake.Connector.SqlDataWriter;
 using CluedIn.Core;
@@ -17,8 +16,6 @@ namespace CluedIn.Connector.Snowflake.Connector;
 
 internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
 {
-    private readonly SnowflakeStorageFactory _storageFactory;
-
     public SnowflakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
@@ -27,10 +24,14 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         ITimeProvider timeProvider)
         : base(appContext, streamRepository, configurationConstants, storageFactory, timeProvider)
     {
-        _storageFactory = storageFactory;
     }
 
-    protected override Task<long> ExportDataAsync(
+    // Overriding ExportDataAsync means the base's default file-writing implementation -
+    // and, with it, the base's call to PostExportAsync - never runs. So this override does
+    // the transient-table setup, streams rows via the Snowpipe writer, then does the
+    // transient-to-target MERGE and cleanup itself, all in one place, instead of splitting
+    // "post export" work into a PostExportAsync override that would silently never fire.
+    protected override async Task<long> ExportDataAsync(
         ExecutionContext context,
         ExportJobData exportJobData,
         IStorageConfiguration configuration,
@@ -40,59 +41,51 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         List<string> fieldNames,
         DateTimeOffset instanceTime)
     {
-        var writer = new SnowflakeSnowpipeSqlDataWriter();
-        return writer.WriteOutputAsync(context, configuration, null, fieldNames, exportJobData.IsInitialExport, reader);
-    }
+        var snowflakeConfiguration = GetSnowflakeConfiguration(exportJobData);
+        var apiClient = CreateApiClient(snowflakeConfiguration);
+        long totalProcessed;
 
-    // The Snowpipe Streaming pipe is bound to a fixed transient table (see
-    // SnowflakeConnectorConfiguration.TransientTableName/PipeName), so it is
-    // created once, idempotently, rather than fresh per run.
-    protected override async Task InitializeOutputTargetAsync(
-        ExecutionContext context,
-        SqlConnection connection,
-        ExportJobData exportJobData,
-        IStorageClient client)
-    {
-        var configuration = GetSnowflakeConfiguration(exportJobData);
-        var apiClient = CreateApiClient(configuration);
         try
         {
+            // The transient table (and its Snowpipe Streaming pipe) is stable/reused
+            // across runs rather than recreated per run - see
+            // SnowflakeConnectorConfiguration.TransientTableName/PipeName - so its column
+            // shape must be able to grow as new CluedIn properties are seen over time.
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.CreateTransientTableIfNotExists(configuration.Database, configuration.Schema, configuration.TransientTableName));
-            await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.CreatePipeIfNotExists(configuration.Database, configuration.Schema, configuration.PipeName, configuration.TransientTableName));
+                SnowflakeSqlBuilder.CreateTransientTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName, fieldNames));
 
-            // Clear out any rows left behind by a previous run that crashed before its own
-            // post-export truncate (see PostExportAsync) ran.
+            foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName, fieldNames))
+            {
+                await apiClient.ExecuteStatementAsync(alterStatement);
+            }
+
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.TruncateTransientTable(configuration.Database, configuration.Schema, configuration.TransientTableName));
+                SnowflakeSqlBuilder.CreatePipeIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.PipeName, snowflakeConfiguration.TransientTableName));
+
+            // Clear out any rows left behind by a previous run that crashed before
+            // reaching the truncate at the end of this method.
+            await apiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.TruncateTransientTable(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName));
+
+            var writer = new SnowflakeSnowpipeSqlDataWriter();
+            totalProcessed = await writer.WriteOutputAsync(context, configuration, null, fieldNames, exportJobData.IsInitialExport, reader);
+
+            await apiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.MergeTransientIntoTarget(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName, snowflakeConfiguration.TableName, fieldNames));
+            await apiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.TruncateTransientTable(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName));
         }
         finally
         {
             (apiClient as IDisposable)?.Dispose();
         }
+
+        return totalProcessed;
     }
 
     private static SnowflakeApiClient CreateApiClient(SnowflakeConnectorConfiguration configuration)
     {
         return new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(configuration));
-    }
-
-    private protected override async Task PostExportAsync(ExecutionContext context, ExportJobData exportJobData)
-    {
-        var configuration = GetSnowflakeConfiguration(exportJobData);
-        var apiClient = CreateApiClient(configuration);
-        try
-        {
-            await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.MergeTransientIntoTarget(configuration.Database, configuration.Schema, configuration.TransientTableName, configuration.TableName));
-            await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.TruncateTransientTable(configuration.Database, configuration.Schema, configuration.TransientTableName));
-        }
-        finally
-        {
-            (apiClient as IDisposable)?.Dispose();
-        }
     }
 
     private static SnowflakeConnectorConfiguration GetSnowflakeConfiguration(ExportJobData exportJobData)

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 using CluedIn.Connector.Snowflake.Connector;
 
 using Xunit;
@@ -12,6 +14,8 @@ public class SnowflakeSqlBuilderTests
     private const string PipeName = "MYTESTTABLE__CLUEDIN_PIPE";
     private const string TargetTableName = "MYTESTTABLE";
 
+    private static readonly IReadOnlyList<string> FieldNames = new[] { "Id", "__ChangeType__", "PersistVersion", "user.email" };
+
     [Fact]
     public void QualifiedName_WrapsEachPartInDoubleQuotes()
     {
@@ -20,17 +24,40 @@ public class SnowflakeSqlBuilderTests
         Assert.Equal("\"SNOWFLAKE_LEARNING_DB\".\"TESTSCHEMA\".\"MYTESTTABLE\"", qualified);
     }
 
-    [Fact]
-    public void CreateTransientTableIfNotExists_DeclaresExpectedColumns()
+    [Theory]
+    [InlineData("Id", "ID")]
+    [InlineData("__ChangeType__", "__CHANGETYPE__")]
+    [InlineData("PersistVersion", "PERSISTVERSION")]
+    [InlineData("user.email", "USER_EMAIL")]
+    public void SanitizeColumnName_UpperCasesAndReplacesNonAlphanumerics(string fieldName, string expected)
     {
-        var sql = SnowflakeSqlBuilder.CreateTransientTableIfNotExists(Database, Schema, TransientTableName);
+        Assert.Equal(expected, SnowflakeSqlBuilder.SanitizeColumnName(fieldName));
+    }
+
+    [Fact]
+    public void CreateTransientTableIfNotExists_DeclaresOneColumnPerFieldName()
+    {
+        var sql = SnowflakeSqlBuilder.CreateTransientTableIfNotExists(Database, Schema, TransientTableName, FieldNames);
 
         Assert.Contains("CREATE TRANSIENT TABLE IF NOT EXISTS", sql);
         Assert.Contains(SnowflakeSqlBuilder.QualifiedName(Database, Schema, TransientTableName), sql);
-        Assert.Contains($"{TransientTableColumns.EntityId} VARCHAR", sql);
-        Assert.Contains($"{TransientTableColumns.ChangeType} VARCHAR", sql);
-        Assert.Contains($"{TransientTableColumns.PersistVersion} NUMBER", sql);
-        Assert.Contains($"{TransientTableColumns.RowData} VARIANT", sql);
+        Assert.Contains("ID VARCHAR", sql);
+        Assert.Contains("__CHANGETYPE__ VARCHAR", sql);
+        Assert.Contains("PERSISTVERSION NUMBER", sql);
+        Assert.Contains("USER_EMAIL VARCHAR", sql);
+        Assert.DoesNotContain("VARIANT", sql);
+    }
+
+    [Fact]
+    public void GetAddMissingColumnsStatements_ReturnsOneAlterStatementPerFieldName()
+    {
+        var statements = SnowflakeSqlBuilder.GetAddMissingColumnsStatements(Database, Schema, TransientTableName, FieldNames);
+
+        var statementList = new List<string>(statements);
+        Assert.Equal(FieldNames.Count, statementList.Count);
+        Assert.Contains(statementList, s => s.Contains("ADD COLUMN IF NOT EXISTS ID VARCHAR"));
+        Assert.Contains(statementList, s => s.Contains("ADD COLUMN IF NOT EXISTS PERSISTVERSION NUMBER"));
+        Assert.All(statementList, s => Assert.Contains(SnowflakeSqlBuilder.QualifiedName(Database, Schema, TransientTableName), s));
     }
 
     [Fact]
@@ -55,28 +82,47 @@ public class SnowflakeSqlBuilderTests
     [Fact]
     public void MergeTransientIntoTarget_DedupesByLatestPersistVersionPerEntity()
     {
-        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName);
+        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);
 
-        Assert.Contains($"ROW_NUMBER() OVER (PARTITION BY {TransientTableColumns.EntityId} ORDER BY {TransientTableColumns.PersistVersion} DESC) AS RN", sql);
+        Assert.Contains("ROW_NUMBER() OVER (PARTITION BY ID ORDER BY PERSISTVERSION DESC) AS RN", sql);
         Assert.Contains("WHERE RN = 1", sql);
     }
 
     [Fact]
     public void MergeTransientIntoTarget_AppliesDeleteUpdateInsertByChangeType()
     {
-        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName);
+        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);
 
-        Assert.Contains($"WHEN MATCHED AND source.{TransientTableColumns.ChangeType} = 'Removed' THEN DELETE", sql);
-        Assert.Contains($"WHEN MATCHED THEN UPDATE SET target.DATA = source.{TransientTableColumns.RowData}", sql);
-        Assert.Contains($"WHEN NOT MATCHED AND source.{TransientTableColumns.ChangeType} != 'Removed' THEN INSERT", sql);
+        Assert.Contains("WHEN MATCHED AND source.__CHANGETYPE__ = 'Removed' THEN DELETE", sql);
+        Assert.Contains("WHEN MATCHED THEN UPDATE SET", sql);
+        Assert.Contains("target.__CHANGETYPE__ = source.__CHANGETYPE__", sql);
+        Assert.Contains("target.USER_EMAIL = source.USER_EMAIL", sql);
+        Assert.Contains("WHEN NOT MATCHED AND source.__CHANGETYPE__ != 'Removed' THEN INSERT", sql);
     }
 
     [Fact]
-    public void MergeTransientIntoTarget_JoinsOnEntityIdAgainstTargetId()
+    public void MergeTransientIntoTarget_DoesNotIncludeIdColumnInUpdateSet()
     {
-        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName);
+        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);
 
-        Assert.Contains($"ON target.ID = source.{TransientTableColumns.EntityId}", sql);
+        Assert.DoesNotContain("target.ID = source.ID,", sql);
+        Assert.DoesNotContain("SET target.ID = source.ID", sql);
+    }
+
+    [Fact]
+    public void MergeTransientIntoTarget_JoinsOnIdAgainstTargetId()
+    {
+        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);
+
+        Assert.Contains("ON target.ID = source.ID", sql);
         Assert.Contains($"MERGE INTO {SnowflakeSqlBuilder.QualifiedName(Database, Schema, TargetTableName)} AS target", sql);
+    }
+
+    [Fact]
+    public void MergeTransientIntoTarget_InsertsAllColumnsIncludingId()
+    {
+        var sql = SnowflakeSqlBuilder.MergeTransientIntoTarget(Database, Schema, TransientTableName, TargetTableName, FieldNames);
+
+        Assert.Contains("INSERT (ID, __CHANGETYPE__, PERSISTVERSION, USER_EMAIL) VALUES (source.ID, source.__CHANGETYPE__, source.PERSISTVERSION, source.USER_EMAIL)", sql);
     }
 }
