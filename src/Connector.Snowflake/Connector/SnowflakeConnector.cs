@@ -144,6 +144,11 @@ public class SnowflakeConnector : StorageConnectorBase
             SnowflakeSqlBuilder.ShowTablesLikeInSchema(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, resolvedTableName),
             SnowflakeStatementScope.None);
 
+        if (!result.TryGetExactNameMatch(resolvedTableName, out var row))
+        {
+            return false;
+        }
+
         var commentIndex = result.ColumnNames
             .Select((name, index) => (name, index))
             .Where(pair => string.Equals(pair.name, "comment", StringComparison.OrdinalIgnoreCase))
@@ -155,8 +160,7 @@ public class SnowflakeConnector : StorageConnectorBase
             return false;
         }
 
-        var row = result.Rows.FirstOrDefault();
-        return row != null && string.Equals(row[commentIndex.Value], SnowflakeSqlBuilder.OwnedTableComment, StringComparison.Ordinal);
+        return string.Equals(row.ElementAtOrDefault(commentIndex.Value), SnowflakeSqlBuilder.OwnedTableComment, StringComparison.Ordinal);
     }
 
     // The base only calls VerifyDataLakeConnection, which can't tell a health check apart
@@ -188,7 +192,7 @@ public class SnowflakeConnector : StorageConnectorBase
         try
         {
             var warehouses = await apiClient.ExecuteStatementAsync(SnowflakeSqlBuilder.ShowWarehouses(casted.Warehouse), SnowflakeStatementScope.None);
-            if (warehouses.Rows.Count == 0)
+            if (!warehouses.HasExactNameMatch(casted.Warehouse))
             {
                 return CreateFailedConnectionVerification(WarehouseNotAccessibleErrorMessageFormat.FormatWith(casted.Warehouse, casted.Role));
             }
@@ -276,13 +280,13 @@ public class SnowflakeConnector : StorageConnectorBase
             // warehouse check in VerifyConnectionInternal - neither of these touches
             // compute, so they always run regardless of health-check throttling.
             var databases = await apiClient.ExecuteStatementAsync(SnowflakeSqlBuilder.ShowDatabases(casted.Database), SnowflakeStatementScope.None);
-            if (databases.Rows.Count == 0)
+            if (!databases.HasExactNameMatch(casted.Database))
             {
                 return CreateFailedConnectionVerification(DatabaseNotAccessibleErrorMessageFormat.FormatWith(casted.Database, casted.Role));
             }
 
             var schemas = await apiClient.ExecuteStatementAsync(SnowflakeSqlBuilder.ShowSchemasInDatabase(casted.Database, casted.Schema), SnowflakeStatementScope.None);
-            if (schemas.Rows.Count == 0)
+            if (!schemas.HasExactNameMatch(casted.Schema))
             {
                 return CreateFailedConnectionVerification(SchemaNotAccessibleErrorMessageFormat.FormatWith(casted.Schema, casted.Role));
             }

@@ -201,11 +201,11 @@ public class SnowflakeDeltaExportIntegrationTests
 
             var transientResult = await setup.ApiClient.ExecuteStatementAsync(
                 SnowflakeSqlBuilder.ShowTablesLikeInSchema(setup.Configuration.Database, setup.Configuration.Schema, expectedTransientTableName));
-            Assert.Single(transientResult.Rows);
+            Assert.True(transientResult.HasExactNameMatch(expectedTransientTableName));
 
             var pipeResult = await setup.ApiClient.ExecuteStatementAsync(
                 SnowflakeSqlBuilder.ShowPipesLikeInSchema(setup.Configuration.Database, setup.Configuration.Schema, expectedPipeName));
-            Assert.Single(pipeResult.Rows);
+            Assert.True(pipeResult.HasExactNameMatch(expectedPipeName));
         }
         finally
         {

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -39,6 +41,44 @@ internal interface ISnowflakeApiClient
 }
 
 internal record SnowflakeStatementResult(bool Success, IReadOnlyList<string> ColumnNames, IReadOnlyList<IReadOnlyList<string>> Rows);
+
+// SHOW <objects> LIKE '<pattern>' is the only filter Snowflake's SHOW command syntax
+// supports (there's no WHERE-based exact match) - so a "does this exist" check always goes
+// through a wildcard-capable match, not a genuine exact-name lookup. Escaping the pattern's
+// '_'/'%'/'\' doesn't fully close that gap either: Snowflake's string-literal parser can
+// strip an escaping backslash before LIKE itself ever evaluates the pattern. So any caller
+// that needs to know "is the object I asked about actually here" (not "is something
+// LIKE-matching it here") must additionally check the returned "name" column for a true
+// match, rather than trusting that any returned row is the one it asked about.
+internal static class SnowflakeStatementResultExtensions
+{
+    public static bool HasExactNameMatch(this SnowflakeStatementResult result, string expectedName)
+    {
+        return result.TryGetExactNameMatch(expectedName, out _);
+    }
+
+    public static bool TryGetExactNameMatch(this SnowflakeStatementResult result, string expectedName, out IReadOnlyList<string> row)
+    {
+        var nameIndex = result.ColumnNames
+            .Select((name, index) => (name, index))
+            .Where(pair => string.Equals(pair.name, "name", StringComparison.OrdinalIgnoreCase))
+            .Select(pair => (int?)pair.index)
+            .FirstOrDefault();
+
+        if (nameIndex == null)
+        {
+            row = null;
+            return false;
+        }
+
+        // Case-insensitive: Snowflake's default (unquoted) identifier folding is
+        // upper-case, but callers here compare against names sourced from user-entered
+        // configuration (warehouse/database/schema/role), which isn't guaranteed to already
+        // be upper-case even though the stored object name is.
+        row = result.Rows.FirstOrDefault(r => string.Equals(r.ElementAtOrDefault(nameIndex.Value), expectedName, StringComparison.OrdinalIgnoreCase));
+        return row != null;
+    }
+}
 
 internal record SnowflakeChannelHandle(string ChannelName, string ContinuationToken);
 
