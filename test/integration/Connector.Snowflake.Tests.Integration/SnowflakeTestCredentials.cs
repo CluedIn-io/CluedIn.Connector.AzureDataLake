@@ -8,24 +8,29 @@ namespace CluedIn.Connector.Snowflake.Tests.Integration;
 // Reads live Snowflake credentials from environment variables, following the same pattern
 // Connector.AmazonS3.Tests.Integration uses for its S3 credentials (see
 // AmazonS3ConnectorTests's class doc comment) - nothing is ever hardcoded here, and there
-// are no defaults: SNOWFLAKE_ACCOUNT/DATABASE/SCHEMA/WAREHOUSE/TABLE, SNOWFLAKE_USER, and
+// are no defaults: SNOWFLAKE_ACCOUNT/DATABASE/SCHEMA/WAREHOUSE, SNOWFLAKE_USER, and
 // SNOWFLAKE_PRIVATE_KEY (PEM, key-pair auth) must all be supplied via environment
 // variables. SNOWFLAKE_ROLE and SNOWFLAKE_PRIVATE_KEY_PASSPHRASE are optional (a blank
 // role uses the user's default role - see SnowflakeConfigurationConstants). Tests skip
 // when any required variable is absent, rather than failing.
 internal static class SnowflakeTestCredentials
 {
+    // Generated once per test run rather than read from an env var - matching how
+    // AzureDataLakeConnectorTests/AzureDataLakeStorageClientTests name their scratch
+    // file systems/directories ($"xunit-{DateTime.Now.Ticks}") and
+    // OneLakeConnectorTests names its scratch table (Guid.NewGuid().ToString("N")).
+    public static string TargetTable { get; } = $"XUNIT_{DateTime.Now.Ticks}_{Guid.NewGuid():N}".ToUpperInvariant();
+
     public static bool IsAvailable =>
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_ACCOUNT")) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_USER")) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_PRIVATE_KEY")) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_DATABASE")) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_SCHEMA")) &&
-        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_WAREHOUSE")) &&
-        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_TABLE"));
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_WAREHOUSE"));
 
     public static string SkipReason =>
-        "SNOWFLAKE_ACCOUNT/USER/PRIVATE_KEY/DATABASE/SCHEMA/WAREHOUSE/TABLE environment variables are not all set - see docs/snowflake-connector-plan.md.";
+        "SNOWFLAKE_ACCOUNT/USER/PRIVATE_KEY/DATABASE/SCHEMA/WAREHOUSE environment variables are not all set - see docs/snowflake-connector-plan.md.";
 
     public static SnowflakeConnectionSettings Load()
     {
@@ -39,8 +44,6 @@ internal static class SnowflakeTestCredentials
             GetRequired("SNOWFLAKE_WAREHOUSE"),
             Environment.GetEnvironmentVariable("SNOWFLAKE_ROLE"));
     }
-
-    public static string TargetTable => GetRequired("SNOWFLAKE_TABLE");
 
     private static string GetRequired(string environmentVariableName)
     {

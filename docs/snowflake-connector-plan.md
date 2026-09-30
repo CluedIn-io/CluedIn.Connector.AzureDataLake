@@ -215,10 +215,16 @@ whenever any of these is unset:
 | `SNOWFLAKE_SCHEMA` | yes | |
 | `SNOWFLAKE_WAREHOUSE` | yes | |
 | `SNOWFLAKE_ROLE` | no | Blank uses the user's default role. |
-| `SNOWFLAKE_TABLE` | yes | Target table name. `SnowflakeDeltaExportIntegrationTests` uses its own randomly-generated table name instead and cleans up after itself; `SnowflakeApiClientIntegrationTests` uses a randomly-generated transient table name too. |
 
-`devonly.runsettings` (gitignored, local-only) has a template `<!-- Snowflake -->` section
-with these variable names.
+There's no `SNOWFLAKE_TABLE` variable - target/transient table names are generated per
+test run instead (`SnowflakeTestCredentials.TargetTable`, and each test's own scratch
+table names), matching how `AzureDataLakeConnectorTests`/`AzureDataLakeStorageClientTests`
+name their scratch file systems/directories (`$"xunit-{DateTime.Now.Ticks}"`) and
+`OneLakeConnectorTests` names its scratch table (`Guid.NewGuid().ToString("N")`) - so
+nothing needs cleaning up in Snowflake between runs, and concurrent runs don't collide.
+
+`devonly.runsettings` (untracked, not committed - local-only) has a template
+`<!-- Snowflake -->` section with these variable names.
 
 ### Environment/build note
 
