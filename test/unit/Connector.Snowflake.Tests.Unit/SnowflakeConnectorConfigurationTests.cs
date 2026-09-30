@@ -55,24 +55,12 @@ public class SnowflakeConnectorConfigurationTests
     }
 
     [Fact]
-    public void TransientTableAndPipeNames_AreDerivedFromTargetTableNameAndContainerName()
+    public void TransientTableAndPipeNames_AreDerivedFromTargetTableName()
     {
-        var configuration = new SnowflakeConnectorConfiguration(CreateConfigurationValues(), "my-stream-container");
+        var configuration = new SnowflakeConnectorConfiguration(CreateConfigurationValues());
 
-        Assert.Equal("MYTESTTABLE__CLUEDIN_TRANSIENT__MY_STREAM_CONTAINER", configuration.TransientTableName);
-        Assert.Equal("MYTESTTABLE__CLUEDIN_PIPE__MY_STREAM_CONTAINER", configuration.PipeName);
-    }
-
-    // Two streams configured with the same target TableName must not collide on a shared
-    // transient table/pipe - see SnowflakeConnectorConfiguration.TransientTableName/PipeName.
-    [Fact]
-    public void TransientTableAndPipeNames_DifferByContainerName_ForStreamsSharingATargetTable()
-    {
-        var firstStream = new SnowflakeConnectorConfiguration(CreateConfigurationValues(), "stream-one");
-        var secondStream = new SnowflakeConnectorConfiguration(CreateConfigurationValues(), "stream-two");
-
-        Assert.NotEqual(firstStream.TransientTableName, secondStream.TransientTableName);
-        Assert.NotEqual(firstStream.PipeName, secondStream.PipeName);
+        Assert.Equal("MYTESTTABLE__CLUEDIN_TRANSIENT", configuration.TransientTableName);
+        Assert.Equal("MYTESTTABLE__CLUEDIN_PIPE", configuration.PipeName);
     }
 
     [Fact]

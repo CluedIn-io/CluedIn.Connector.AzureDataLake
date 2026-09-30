@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 
 using CluedIn.Connector.FileStorage.Common;
-using CluedIn.Connector.Snowflake.Connector;
 
 namespace CluedIn.Connector.Snowflake;
 
@@ -29,16 +28,8 @@ internal class SnowflakeConnectorConfiguration : StorageConfigurationBase
     // table and its pipe use stable, deterministic names per target table rather than a
     // fresh name per export run. A leftover transient table from a crashed run is
     // recognised by this same name and its rows are cleared out at the start of the next run.
-    //
-    // Also folded in here: ContainerName, which is unique per stream (see
-    // StorageFactoryBase/streamModel.ContainerName). Two different streams can be
-    // configured with the same target TableName (same account/database/schema/table); the
-    // distributed export lock is scoped per stream, not per target table (see
-    // StorageExportEntitiesJobBase.DoRunInternalAsync), so without also scoping these names
-    // by something stream-specific, two such streams' exports could run concurrently
-    // against the same transient table and pipe and clobber each other's in-flight rows.
-    public string TransientTableName => $"{TableName}__CLUEDIN_TRANSIENT__{SnowflakeSqlBuilder.SanitizeColumnName(ContainerName ?? string.Empty)}";
-    public string PipeName => $"{TableName}__CLUEDIN_PIPE__{SnowflakeSqlBuilder.SanitizeColumnName(ContainerName ?? string.Empty)}";
+    public string TransientTableName => $"{TableName}__CLUEDIN_TRANSIENT";
+    public string PipeName => $"{TableName}__CLUEDIN_PIPE";
 
     public override bool IsStreamCacheEnabled => true;
     public override bool ShouldWriteGuidAsString => true;

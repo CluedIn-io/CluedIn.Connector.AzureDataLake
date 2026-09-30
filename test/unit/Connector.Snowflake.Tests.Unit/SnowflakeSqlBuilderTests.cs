@@ -114,6 +114,26 @@ public class SnowflakeSqlBuilderTests
         Assert.Contains("USER_EMAIL VARCHAR", sql);
     }
 
+    // The COMMENT clause is a no-op when IF NOT EXISTS finds the table already there, so it
+    // doubles as an ownership marker: SnowflakeConnector.ArchiveContainer reads it back
+    // (via ShowTablesLikeInSchema) to decide whether this connector is safe to drop the
+    // target table on archive.
+    [Fact]
+    public void CreateTargetTableIfNotExists_StampsOwnershipComment()
+    {
+        var sql = SnowflakeSqlBuilder.CreateTargetTableIfNotExists(Database, Schema, TargetTableName, FieldNames);
+
+        Assert.Contains($"COMMENT = '{SnowflakeSqlBuilder.OwnedTableComment}'", sql);
+    }
+
+    [Fact]
+    public void ShowTablesLikeInSchema_FiltersByExactNameWithinSchema()
+    {
+        var sql = SnowflakeSqlBuilder.ShowTablesLikeInSchema(Database, Schema, TargetTableName);
+
+        Assert.Equal($"SHOW TABLES LIKE '{TargetTableName}' IN SCHEMA \"{Database}\".\"{Schema}\"", sql);
+    }
+
     [Fact]
     public void CreatePipeIfNotExists_BindsPipeToTransientTableAsStreamingSource()
     {

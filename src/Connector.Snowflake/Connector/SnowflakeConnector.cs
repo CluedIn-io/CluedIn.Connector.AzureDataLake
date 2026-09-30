@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.FileStorage.Common;
@@ -53,19 +54,18 @@ public class SnowflakeConnector : StorageConnectorBase
         return [StreamMode.Sync];
     }
 
-    // Drops the transient table and pipe this connector created (see
+    // Drops the target table, transient table, and pipe this connector created (see
     // SnowflakeExportEntitiesJob), rather than leaving them behind when a stream is
-    // archived. The pipe is dropped before the transient table it's bound to, so nothing
-    // is ever dropped while something else still references it.
+    // archived. The pipe is dropped before the transient table it's bound to, and the
+    // transient table before the target table, so nothing is ever dropped while something
+    // else still references it.
     //
-    // The target table is deliberately NOT dropped here: CREATE TABLE IF NOT EXISTS in
-    // SnowflakeExportEntitiesJob means this connector can't tell whether it created that
-    // table or the user pointed it at a table that already existed (with their own data),
-    // and nothing prevents the same target table being configured across multiple streams.
-    // Dropping it on archive could therefore destroy data this connector doesn't
-    // exclusively own - the transient table and pipe are always connector-created/-owned
-    // (their names are never user-facing), so only those are safe to clean up
-    // unconditionally.
+    // The target table is only dropped if this connector actually created it -
+    // CreateTargetTableIfNotExists stamps a COMMENT on the table that only takes effect
+    // when CREATE TABLE IF NOT EXISTS genuinely creates it (never when it already existed),
+    // so a matching comment here means this connector owns it; anything else (blank, or a
+    // different comment - e.g. the user pointed the connector at a table that already
+    // existed) is left alone.
     public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
     {
         var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
@@ -78,6 +78,18 @@ public class SnowflakeConnector : StorageConnectorBase
                     SnowflakeSqlBuilder.DropPipeIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.PipeName));
                 await apiClient.ExecuteStatementAsync(
                     SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName));
+
+                if (await OwnsTargetTableAsync(apiClient, snowflakeConfiguration))
+                {
+                    await apiClient.ExecuteStatementAsync(
+                        SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName));
+                }
+                else
+                {
+                    _logger.LogInformation(
+                        "Not dropping Snowflake target table '{TableName}' on archive - it wasn't created by this connector (or ownership couldn't be confirmed).",
+                        snowflakeConfiguration.TableName);
+                }
             }
             finally
             {
@@ -86,6 +98,27 @@ public class SnowflakeConnector : StorageConnectorBase
         }
 
         await base.ArchiveContainer(executionContext, streamModel);
+    }
+
+    private static async Task<bool> OwnsTargetTableAsync(SnowflakeApiClient apiClient, SnowflakeConnectorConfiguration snowflakeConfiguration)
+    {
+        var result = await apiClient.ExecuteStatementAsync(
+            SnowflakeSqlBuilder.ShowTablesLikeInSchema(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName),
+            SnowflakeStatementScope.None);
+
+        var commentIndex = result.ColumnNames
+            .Select((name, index) => (name, index))
+            .Where(pair => string.Equals(pair.name, "comment", StringComparison.OrdinalIgnoreCase))
+            .Select(pair => (int?)pair.index)
+            .FirstOrDefault();
+
+        if (commentIndex == null)
+        {
+            return false;
+        }
+
+        var row = result.Rows.FirstOrDefault();
+        return row != null && string.Equals(row[commentIndex.Value], SnowflakeSqlBuilder.OwnedTableComment, StringComparison.Ordinal);
     }
 
     // The base only calls VerifyDataLakeConnection, which can't tell a health check apart

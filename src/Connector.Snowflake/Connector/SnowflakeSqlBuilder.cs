@@ -22,6 +22,14 @@ internal static class SnowflakeSqlBuilder
 {
     private static readonly Regex NonAlphaNumericRegex = new("[^a-zA-Z0-9_]", RegexOptions.Compiled);
 
+    // Marks a target table as created (and therefore owned) by this connector, so
+    // SnowflakeConnector.ArchiveContainer can tell it apart from a table the user pointed
+    // the connector at that already existed - see CreateTargetTableIfNotExists (the COMMENT
+    // clause only takes effect when CREATE TABLE IF NOT EXISTS actually creates the table,
+    // never when it already existed) and ShowTablesLikeInSchema (used to read the comment
+    // back before deciding whether to drop).
+    public const string OwnedTableComment = "Created and owned by the CluedIn Snowflake connector - safe to drop when its stream is archived.";
+
     // Database/schema/table names come from connector configuration - a name containing a
     // double quote would otherwise break out of the quoted identifier and let arbitrary SQL
     // be injected into every generated DDL/MERGE statement. Doubling an embedded quote is
@@ -82,6 +90,12 @@ internal static class SnowflakeSqlBuilder
     // The target table is a regular (non-transient) table, since it holds the actual
     // exported data rather than a per-run landing area - transient tables have no
     // fail-safe and a shorter default time-travel retention.
+    //
+    // The COMMENT clause only takes effect when this statement actually creates the table -
+    // IF NOT EXISTS makes the whole statement (including COMMENT) a no-op when the table
+    // already existed - so it doubles as an ownership marker: a table with this exact
+    // comment was created by this connector, and only such a table is safe for
+    // SnowflakeConnector.ArchiveContainer to drop.
     public static string CreateTargetTableIfNotExists(string database, string schema, string targetTableName, IReadOnlyList<string> fieldNames)
     {
         var qualified = QualifiedName(database, schema, targetTableName);
@@ -90,6 +104,7 @@ internal static class SnowflakeSqlBuilder
             CREATE TABLE IF NOT EXISTS {qualified} (
                 {columnDefinitions}
             )
+            COMMENT = '{OwnedTableComment.Replace("'", "''")}'
             """;
     }
 
@@ -155,6 +170,14 @@ internal static class SnowflakeSqlBuilder
     public static string ShowSchemasInDatabase(string database, string schemaName)
     {
         return $"SHOW SCHEMAS LIKE '{EscapeLikePattern(schemaName)}' IN DATABASE \"{EscapeIdentifier(database)}\"";
+    }
+
+    // Used by SnowflakeConnector.ArchiveContainer to read a target table's "comment" column
+    // back (see OwnedTableComment/CreateTargetTableIfNotExists) before deciding whether it's
+    // safe to drop.
+    public static string ShowTablesLikeInSchema(string database, string schema, string tableName)
+    {
+        return $"SHOW TABLES LIKE '{EscapeLikePattern(tableName)}' IN SCHEMA \"{EscapeIdentifier(database)}\".\"{EscapeIdentifier(schema)}\"";
     }
 
     // Escaping only the single quote that terminates the string literal isn't enough to
