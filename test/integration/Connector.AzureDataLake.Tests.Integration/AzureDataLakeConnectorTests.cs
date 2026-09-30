@@ -869,8 +869,8 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
         var accountKey = Environment.GetEnvironmentVariable("ADL2_ACCOUNTKEY");
         Assert.NotNull(accountKey);
 
-        var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}";
-        var directoryName = $"xunit-{DateTime.Now.Ticks}";
+        var fileSystemName = $"xunit-fs-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
+        var directoryName = $"xunit-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         return new Dictionary<string, object>()
         {
             { nameof(AzureDataLakeConfigurationConstants.AccountName), accountName },
