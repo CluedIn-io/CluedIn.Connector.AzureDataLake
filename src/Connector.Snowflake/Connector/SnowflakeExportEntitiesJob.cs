@@ -48,6 +48,12 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         DateTimeOffset instanceTime)
     {
         var snowflakeConfiguration = GetSnowflakeConfiguration(exportJobData);
+
+        // SanitizeColumnName isn't injective (e.g. "user.email" and "user-email" both fold
+        // to USER_EMAIL) - catch that up front with a clear error instead of silently
+        // generating a table with duplicate columns and a writer that drops one value.
+        SnowflakeSqlBuilder.EnsureNoColumnNameCollisions(fieldNames);
+
         var apiClient = CreateApiClient(snowflakeConfiguration);
         long totalProcessed;
 

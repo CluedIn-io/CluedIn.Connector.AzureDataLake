@@ -53,11 +53,19 @@ public class SnowflakeConnector : StorageConnectorBase
         return [StreamMode.Sync];
     }
 
-    // Drops the target table, transient table, and pipe this connector created (see
+    // Drops the transient table and pipe this connector created (see
     // SnowflakeExportEntitiesJob), rather than leaving them behind when a stream is
-    // archived. The pipe is dropped before the transient table it's bound to, and the
-    // transient table before the target table, so nothing is ever dropped while something
-    // else still references it.
+    // archived. The pipe is dropped before the transient table it's bound to, so nothing
+    // is ever dropped while something else still references it.
+    //
+    // The target table is deliberately NOT dropped here: CREATE TABLE IF NOT EXISTS in
+    // SnowflakeExportEntitiesJob means this connector can't tell whether it created that
+    // table or the user pointed it at a table that already existed (with their own data),
+    // and nothing prevents the same target table being configured across multiple streams.
+    // Dropping it on archive could therefore destroy data this connector doesn't
+    // exclusively own - the transient table and pipe are always connector-created/-owned
+    // (their names are never user-facing), so only those are safe to clean up
+    // unconditionally.
     public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
     {
         var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
@@ -70,8 +78,6 @@ public class SnowflakeConnector : StorageConnectorBase
                     SnowflakeSqlBuilder.DropPipeIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.PipeName));
                 await apiClient.ExecuteStatementAsync(
                     SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName));
-                await apiClient.ExecuteStatementAsync(
-                    SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName));
             }
             finally
             {

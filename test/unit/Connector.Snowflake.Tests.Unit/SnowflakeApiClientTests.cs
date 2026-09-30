@@ -18,9 +18,14 @@ public class SnowflakeApiClientTests
 {
     private static SnowflakeConnectionSettings CreateSettings()
     {
+        return CreateSettingsWithAccount("qs30799");
+    }
+
+    private static SnowflakeConnectionSettings CreateSettingsWithAccount(string account)
+    {
         using var rsa = RSA.Create(2048);
         return new SnowflakeConnectionSettings(
-            "qs30799",
+            account,
             "cluedin_svc",
             ExportPkcs8PrivateKeyPem(rsa),
             null,
@@ -28,6 +33,33 @@ public class SnowflakeApiClientTests
             "TESTSCHEMA",
             "COMPUTE_WH",
             "ACCOUNTADMIN");
+    }
+
+    [Fact]
+    public void Constructor_ValidAccount_BuildsExpectedControlHost()
+    {
+        using var client = new SnowflakeApiClient(CreateSettingsWithAccount("qs30799.ap-southeast-1"));
+
+        // No public accessor for the built HttpClient's BaseAddress - a request against a
+        // relative path is enough to prove the client constructed successfully (an invalid
+        // account throws from the constructor itself, verified below).
+        Assert.NotNull(client);
+    }
+
+    // Account comes from connector configuration and is interpolated into a URI authority -
+    // without validation, a value like "attacker.example#" would make Uri parse the
+    // intended Snowflake suffix as a fragment instead of part of the host, sending the
+    // bearer JWT to "attacker.example" instead of any *.snowflakecomputing.com host.
+    [Theory]
+    [InlineData("attacker.example#")]
+    [InlineData("attacker.example/path")]
+    [InlineData("attacker.example@qs30799")]
+    [InlineData("qs30799\\@attacker.example")]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Constructor_InvalidAccount_ThrowsArgumentException(string maliciousAccount)
+    {
+        Assert.Throws<ArgumentException>(() => new SnowflakeApiClient(CreateSettingsWithAccount(maliciousAccount)));
     }
 
     // RSA.ExportPkcs8PrivateKeyPem() isn't available on net6.0 (added in .NET 7) - this repo

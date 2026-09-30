@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -29,9 +30,22 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
 {
     private static readonly TimeSpan _tokenLifetime = TimeSpan.FromMinutes(59);
     private static readonly TimeSpan _statementPollInterval = TimeSpan.FromMilliseconds(500);
-    private const int MaxStatementPollAttempts = 40;
+    // Must stay comfortably above StatementTimeoutSeconds (the timeout submitted with the
+    // statement itself, below) - polling for less than that meant the client could give up
+    // and throw a spurious TimeoutException while Snowflake was still legitimately
+    // executing a long-running statement server-side.
+    private const int StatementTimeoutSeconds = 60;
+    private static readonly TimeSpan _statementPollTimeout = TimeSpan.FromSeconds(StatementTimeoutSeconds + 15);
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly MediaTypeHeaderValue _ndjsonMediaType = new("application/x-ndjson");
+
+    // Snowflake account identifiers are DNS-label-like: letters, digits, underscores and
+    // hyphens per label, dot-separated for a region/cloud suffix (e.g.
+    // "abc12345.ap-southeast-1"). Validated up front - and the resulting URI's host
+    // re-checked below - so a malformed/malicious configured account (e.g. one containing
+    // '#', '/', '@', or similar) can't redirect the client's bearer JWT to an
+    // attacker-controlled host via URI parsing quirks.
+    private static readonly Regex _accountPattern = new("^[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)*$", RegexOptions.Compiled);
 
     private readonly HttpClient _httpClient;
     private readonly SnowflakeConnectionSettings _settings;
@@ -52,6 +66,7 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
 
         if (httpClient == null)
         {
+            var host = BuildControlHost(settings.Account);
             _httpClient = new HttpClient
             {
                 // Unlike the JWT iss/sub claims (which must use the bare account locator,
@@ -60,7 +75,7 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
                 // includes a region/cloud suffix (e.g. "qs30799.ap-southeast-1"). Stripping
                 // it here caused every request to hit Snowflake's generic 404 page instead
                 // of the account's actual deployment.
-                BaseAddress = new Uri($"https://{settings.Account.Trim().ToLowerInvariant()}.snowflakecomputing.com"),
+                BaseAddress = new Uri($"https://{host}"),
             };
             _ownsHttpClient = true;
         }
@@ -71,12 +86,37 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
         }
     }
 
+    private static string BuildControlHost(string account)
+    {
+        var normalized = account?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(normalized) || !_accountPattern.IsMatch(normalized))
+        {
+            throw new ArgumentException(
+                $"Snowflake account identifier '{account}' is not valid - only letters, digits, underscores, hyphens and dot-separated segments are allowed.",
+                nameof(account));
+        }
+
+        var host = $"{normalized}.snowflakecomputing.com";
+
+        // Defense in depth: even though the pattern above already rejects the characters
+        // that could make Uri parse the intended host as something else (a fragment,
+        // userinfo, etc.), re-parse and confirm the resulting URI's Host is exactly what
+        // was intended before it's ever used to send a request carrying the bearer JWT.
+        var uri = new Uri($"https://{host}");
+        if (!string.Equals(uri.Host, host, StringComparison.OrdinalIgnoreCase) || !uri.Host.EndsWith(".snowflakecomputing.com", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"Snowflake account identifier '{account}' did not resolve to the expected snowflakecomputing.com host.", nameof(account));
+        }
+
+        return host;
+    }
+
     public async Task<SnowflakeStatementResult> ExecuteStatementAsync(string sql, SnowflakeStatementScope scope = SnowflakeStatementScope.All, CancellationToken cancellationToken = default)
     {
         var requestBody = new StatementRequest
         {
             Statement = sql,
-            Timeout = 60,
+            Timeout = StatementTimeoutSeconds,
             Database = scope is SnowflakeStatementScope.All or SnowflakeStatementScope.DatabaseOnly or SnowflakeStatementScope.DatabaseAndSchema
                 ? _settings.Database
                 : null,
@@ -114,7 +154,8 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
 
     private async Task<StatementResponse> PollStatementAsync(string statementHandle, CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < MaxStatementPollAttempts; attempt++)
+        var deadline = DateTimeOffset.UtcNow + _statementPollTimeout;
+        while (DateTimeOffset.UtcNow < deadline)
         {
             await Task.Delay(_statementPollInterval, cancellationToken);
 
@@ -134,7 +175,7 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
             return JsonSerializer.Deserialize<StatementResponse>(body, _jsonOptions);
         }
 
-        throw new TimeoutException($"Snowflake statement '{statementHandle}' did not complete after {MaxStatementPollAttempts} polling attempts.");
+        throw new TimeoutException($"Snowflake statement '{statementHandle}' did not complete within {_statementPollTimeout}.");
     }
 
     public async Task<SnowflakeChannelHandle> OpenChannelAsync(string pipeName, string channelName, CancellationToken cancellationToken = default)

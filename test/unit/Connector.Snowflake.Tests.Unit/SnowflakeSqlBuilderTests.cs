@@ -24,14 +24,44 @@ public class SnowflakeSqlBuilderTests
         Assert.Equal("\"SNOWFLAKE_LEARNING_DB\".\"TESTSCHEMA\".\"MYTESTTABLE\"", qualified);
     }
 
+    // Database/schema/table names come from connector configuration - an embedded double
+    // quote must be doubled (the standard SQL escape) rather than left to break out of the
+    // quoted identifier and inject arbitrary SQL into the generated statement.
+    [Fact]
+    public void QualifiedName_EscapesEmbeddedDoubleQuotes()
+    {
+        var qualified = SnowflakeSqlBuilder.QualifiedName("DB\"; DROP TABLE X; --", "SCHEMA", "TABLE");
+
+        Assert.Equal("\"DB\"\"; DROP TABLE X; --\".\"SCHEMA\".\"TABLE\"", qualified);
+    }
+
     [Theory]
     [InlineData("Id", "ID")]
     [InlineData("__ChangeType__", "__CHANGETYPE__")]
     [InlineData("PersistVersion", "PERSISTVERSION")]
     [InlineData("user.email", "USER_EMAIL")]
+    [InlineData("2fa_enabled", "_2FA_ENABLED")]
     public void SanitizeColumnName_UpperCasesAndReplacesNonAlphanumerics(string fieldName, string expected)
     {
         Assert.Equal(expected, SnowflakeSqlBuilder.SanitizeColumnName(fieldName));
+    }
+
+    // SanitizeColumnName isn't injective - distinct field names can fold to the same
+    // column. EnsureNoColumnNameCollisions is the guard against silently generating a table
+    // with duplicate columns (or a writer that drops one of the colliding values).
+    [Fact]
+    public void EnsureNoColumnNameCollisions_ThrowsWhenDistinctFieldsSanitizeToSameColumn()
+    {
+        var fields = new[] { "user.email", "user-email" };
+
+        var ex = Assert.Throws<System.InvalidOperationException>(() => SnowflakeSqlBuilder.EnsureNoColumnNameCollisions(fields));
+        Assert.Contains("USER_EMAIL", ex.Message);
+    }
+
+    [Fact]
+    public void EnsureNoColumnNameCollisions_DoesNotThrowForUniqueFields()
+    {
+        SnowflakeSqlBuilder.EnsureNoColumnNameCollisions(FieldNames);
     }
 
     [Fact]
@@ -124,7 +154,9 @@ public class SnowflakeSqlBuilderTests
     {
         var sql = SnowflakeSqlBuilder.ShowWarehouses("COMPUTE_WH");
 
-        Assert.Equal("SHOW WAREHOUSES LIKE 'COMPUTE_WH'", sql);
+        // '_' is a LIKE wildcard - it must be escaped so this only matches a warehouse
+        // literally named "COMPUTE_WH", not e.g. "COMPUTEXWH" too.
+        Assert.Equal("SHOW WAREHOUSES LIKE 'COMPUTE\\_WH'", sql);
     }
 
     [Fact]
@@ -132,7 +164,7 @@ public class SnowflakeSqlBuilderTests
     {
         var sql = SnowflakeSqlBuilder.ShowDatabases(Database);
 
-        Assert.Equal($"SHOW DATABASES LIKE '{Database}'", sql);
+        Assert.Equal("SHOW DATABASES LIKE 'SNOWFLAKE\\_LEARNING\\_DB'", sql);
     }
 
     [Fact]
@@ -148,7 +180,19 @@ public class SnowflakeSqlBuilderTests
     {
         var sql = SnowflakeSqlBuilder.ShowWarehouses("O'BRIEN_WH");
 
-        Assert.Equal("SHOW WAREHOUSES LIKE 'O''BRIEN_WH'", sql);
+        Assert.Equal("SHOW WAREHOUSES LIKE 'O''BRIEN\\_WH'", sql);
+    }
+
+    [Theory]
+    [InlineData("_", "\\_")]
+    [InlineData("%", "\\%")]
+    [InlineData("\\", "\\\\")]
+    [InlineData("COMPUTE_WH%TEST", "COMPUTE\\_WH\\%TEST")]
+    public void ShowWarehouses_EscapesLikeWildcards(string warehouseName, string expectedEscaped)
+    {
+        var sql = SnowflakeSqlBuilder.ShowWarehouses(warehouseName);
+
+        Assert.Equal($"SHOW WAREHOUSES LIKE '{expectedEscaped}'", sql);
     }
 
     [Fact]

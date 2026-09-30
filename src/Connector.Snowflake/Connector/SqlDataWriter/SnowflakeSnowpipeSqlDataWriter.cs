@@ -153,6 +153,12 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
     // SnowflakeSqlBuilder.GetColumnDefinition. Complex values (Codes, edges, etc.) are
     // JSON-serialized to a string, matching the old connector's
     // JsonConvert.SerializeObject(value) approach for its uniformly-VARCHAR columns.
+    //
+    // Numeric/temporal values are formatted with InvariantCulture (plain ToString() uses
+    // the running thread's culture, so e.g. a decimal could come out "3,14" instead of
+    // "3.14" depending on server locale) and, for DateTime/DateTimeOffset, the round-trip
+    // "O" format (the culture-dependent default ToString() both varies by locale and loses
+    // precision/offset information a plain export shouldn't lose).
     private static object ConvertValueForColumn(string fieldName, object value)
     {
         if (value == null)
@@ -168,8 +174,10 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
         return value switch
         {
             string => value,
-            bool or byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal => value.ToString(),
-            DateTime or DateTimeOffset or Guid => value.ToString(),
+            bool or Guid => value.ToString(),
+            DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
+            DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
             _ => JsonSerializer.Serialize(value),
         };
     }

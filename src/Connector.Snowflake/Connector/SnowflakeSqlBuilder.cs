@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -21,17 +22,50 @@ internal static class SnowflakeSqlBuilder
 {
     private static readonly Regex NonAlphaNumericRegex = new("[^a-zA-Z0-9_]", RegexOptions.Compiled);
 
+    // Database/schema/table names come from connector configuration - a name containing a
+    // double quote would otherwise break out of the quoted identifier and let arbitrary SQL
+    // be injected into every generated DDL/MERGE statement. Doubling an embedded quote is
+    // the standard Snowflake (and ANSI SQL) escape for a quoted identifier.
+    public static string EscapeIdentifier(string identifier)
+    {
+        return identifier?.Replace("\"", "\"\"");
+    }
+
     public static string QualifiedName(string database, string schema, string objectName)
     {
-        return $"\"{database}\".\"{schema}\".\"{objectName}\"";
+        return $"\"{EscapeIdentifier(database)}\".\"{EscapeIdentifier(schema)}\".\"{EscapeIdentifier(objectName)}\"";
     }
 
     // Snowflake identifiers fold to upper-case unless quoted; sanitizing and upper-casing
     // here up front means every caller (DDL, MERGE, and the Snowpipe writer's row payload
     // keys) agrees on the same bare identifier without needing to quote column references.
+    // An unquoted Snowflake identifier can't start with a digit, so a leading digit after
+    // sanitizing is prefixed with an underscore.
     public static string SanitizeColumnName(string fieldName)
     {
-        return NonAlphaNumericRegex.Replace(fieldName, "_").ToUpperInvariant();
+        var sanitized = NonAlphaNumericRegex.Replace(fieldName, "_").ToUpperInvariant();
+        return sanitized.Length > 0 && char.IsDigit(sanitized[0]) ? $"_{sanitized}" : sanitized;
+    }
+
+    // SanitizeColumnName is not injective - distinct field names (e.g. "user.email" and
+    // "user-email") can sanitize to the same column, which would otherwise produce
+    // duplicate columns in the generated DDL and silently drop one value in the writer's
+    // row dictionary. Call this before creating/growing a table from a field list, and
+    // surface the collision clearly instead of letting either of those happen silently.
+    public static void EnsureNoColumnNameCollisions(IReadOnlyList<string> fieldNames)
+    {
+        var collisions = fieldNames
+            .GroupBy(SanitizeColumnName)
+            .Where(group => group.Distinct().Count() > 1)
+            .ToList();
+
+        if (collisions.Count == 0)
+        {
+            return;
+        }
+
+        var description = string.Join("; ", collisions.Select(group => $"{group.Key} <- [{string.Join(", ", group.Distinct())}]"));
+        throw new InvalidOperationException($"Snowflake column name collision: multiple distinct field names sanitize to the same column name ({description}).");
     }
 
     public static string CreateTransientTableIfNotExists(string database, string schema, string transientTableName, IReadOnlyList<string> fieldNames)
@@ -120,12 +154,22 @@ internal static class SnowflakeSqlBuilder
 
     public static string ShowSchemasInDatabase(string database, string schemaName)
     {
-        return $"SHOW SCHEMAS LIKE '{EscapeLikePattern(schemaName)}' IN DATABASE \"{database}\"";
+        return $"SHOW SCHEMAS LIKE '{EscapeLikePattern(schemaName)}' IN DATABASE \"{EscapeIdentifier(database)}\"";
     }
 
+    // Escaping only the single quote that terminates the string literal isn't enough to
+    // make this an exact-name check: '_' and '%' are LIKE wildcards, so e.g. checking for
+    // missing warehouse "COMPUTE_WH" could incorrectly succeed against an unrelated,
+    // accessible "COMPUTEXWH". Snowflake's default LIKE escape character is a backslash,
+    // so every backslash is escaped first (so it isn't itself misread as starting an
+    // escape sequence), then '_'/'%' are escaped to match literally.
     private static string EscapeLikePattern(string value)
     {
-        return value.Replace("'", "''");
+        return value
+            .Replace("\\", "\\\\")
+            .Replace("_", "\\_")
+            .Replace("%", "\\%")
+            .Replace("'", "''");
     }
 
     // Assumes the target table already exists with the same columns as the transient table
