@@ -11,10 +11,9 @@ namespace CluedIn.Connector.Snowflake.Tests.Integration;
 /// <summary>
 /// Integration tests for SnowflakeApiClient against a real Snowflake account.
 /// Requires environment variables: SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PRIVATE_KEY,
-/// SNOWFLAKE_DATABASE, SNOWFLAKE_SCHEMA, SNOWFLAKE_WAREHOUSE, SNOWFLAKE_ROLE (optional,
-/// defaults to ACCOUNTADMIN). SNOWFLAKE_ACCOUNT/DATABASE/SCHEMA/WAREHOUSE default to the
-/// known test account values documented in docs/snowflake-connector-plan.md when unset.
-/// Tests skip when SNOWFLAKE_USER/SNOWFLAKE_PRIVATE_KEY are not set, rather than failing.
+/// SNOWFLAKE_DATABASE, SNOWFLAKE_SCHEMA, SNOWFLAKE_WAREHOUSE (all required, no defaults),
+/// SNOWFLAKE_ROLE (optional - a blank role uses the user's default role). Tests skip when
+/// any required variable is not set, rather than failing - see SnowflakeTestCredentials.
 /// </summary>
 public class SnowflakeApiClientIntegrationTests : IAsyncLifetime
 {

@@ -7,50 +7,47 @@ namespace CluedIn.Connector.Snowflake.Tests.Integration;
 
 // Reads live Snowflake credentials from environment variables, following the same pattern
 // Connector.AmazonS3.Tests.Integration uses for its S3 credentials (see
-// AmazonS3ConnectorTests's class doc comment) - nothing is ever hardcoded here.
-//
-// Known values for the test account referenced in docs/snowflake-connector-plan.md:
-//   SNOWFLAKE_ACCOUNT=qs30799.ap-southeast-1 (the bare "qs30799" locator 404s - this
-//   account's deployment needs the region suffix in the host, confirmed against the live
-//   account), SNOWFLAKE_DATABASE=SNOWFLAKE_LEARNING_DB, SNOWFLAKE_SCHEMA=TESTSCHEMA,
-//   SNOWFLAKE_TABLE=MYTESTTABLE, SNOWFLAKE_WAREHOUSE=COMPUTE_WH, SNOWFLAKE_ROLE=ACCOUNTADMIN
-// SNOWFLAKE_USER and SNOWFLAKE_PRIVATE_KEY (PEM, key-pair auth) are account-specific
-// secrets and must be supplied separately - tests skip when they are absent.
+// AmazonS3ConnectorTests's class doc comment) - nothing is ever hardcoded here, and there
+// are no defaults: SNOWFLAKE_ACCOUNT/DATABASE/SCHEMA/WAREHOUSE/TABLE, SNOWFLAKE_USER, and
+// SNOWFLAKE_PRIVATE_KEY (PEM, key-pair auth) must all be supplied via environment
+// variables. SNOWFLAKE_ROLE and SNOWFLAKE_PRIVATE_KEY_PASSPHRASE are optional (a blank
+// role uses the user's default role - see SnowflakeConfigurationConstants). Tests skip
+// when any required variable is absent, rather than failing.
 internal static class SnowflakeTestCredentials
 {
     public static bool IsAvailable =>
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_ACCOUNT")) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_USER")) &&
-        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_PRIVATE_KEY"));
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_PRIVATE_KEY")) &&
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_DATABASE")) &&
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_SCHEMA")) &&
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_WAREHOUSE")) &&
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_TABLE"));
 
     public static string SkipReason =>
-        "SNOWFLAKE_USER/SNOWFLAKE_PRIVATE_KEY environment variables are not set - see docs/snowflake-connector-plan.md.";
+        "SNOWFLAKE_ACCOUNT/USER/PRIVATE_KEY/DATABASE/SCHEMA/WAREHOUSE/TABLE environment variables are not all set - see docs/snowflake-connector-plan.md.";
 
     public static SnowflakeConnectionSettings Load()
     {
         return new SnowflakeConnectionSettings(
-            GetRequired("SNOWFLAKE_ACCOUNT", "qs30799.ap-southeast-1"),
+            GetRequired("SNOWFLAKE_ACCOUNT"),
             GetRequired("SNOWFLAKE_USER"),
             GetPrivateKeyPem(),
             Environment.GetEnvironmentVariable("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE"),
-            GetRequired("SNOWFLAKE_DATABASE", "SNOWFLAKE_LEARNING_DB"),
-            GetRequired("SNOWFLAKE_SCHEMA", "TESTSCHEMA"),
-            GetRequired("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
-            Environment.GetEnvironmentVariable("SNOWFLAKE_ROLE") ?? "ACCOUNTADMIN");
+            GetRequired("SNOWFLAKE_DATABASE"),
+            GetRequired("SNOWFLAKE_SCHEMA"),
+            GetRequired("SNOWFLAKE_WAREHOUSE"),
+            Environment.GetEnvironmentVariable("SNOWFLAKE_ROLE"));
     }
 
-    public static string TargetTable => GetRequired("SNOWFLAKE_TABLE", "MYTESTTABLE");
+    public static string TargetTable => GetRequired("SNOWFLAKE_TABLE");
 
-    private static string GetRequired(string environmentVariableName, string defaultValue = null)
+    private static string GetRequired(string environmentVariableName)
     {
         var value = Environment.GetEnvironmentVariable(environmentVariableName);
         if (!string.IsNullOrWhiteSpace(value))
         {
             return value;
-        }
-
-        if (defaultValue != null)
-        {
-            return defaultValue;
         }
 
         throw new InvalidOperationException($"Environment variable '{environmentVariableName}' is required for Snowflake integration tests.");
