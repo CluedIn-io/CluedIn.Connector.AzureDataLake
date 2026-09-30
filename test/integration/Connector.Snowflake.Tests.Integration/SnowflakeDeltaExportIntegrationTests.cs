@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -216,6 +217,103 @@ public class SnowflakeDeltaExportIntegrationTests
                     SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, expectedTransientTableName));
                 await setup.ApiClient.ExecuteStatementAsync(
                     SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, expectedResolvedTableName));
+            }
+            catch (Exception ex)
+            {
+                _testOutputHelper.WriteLine($"Best-effort Snowflake cleanup failed: {ex.Message}");
+            }
+            finally
+            {
+                (setup.ApiClient as IDisposable)?.Dispose();
+            }
+
+            try
+            {
+                await DeleteCacheTablesAsync(setup.StreamModel.Id, setup.StreamCacheConnectionString);
+            }
+            catch (Exception ex)
+            {
+                _testOutputHelper.WriteLine($"Best-effort SQL Server cleanup failed: {ex.Message}");
+            }
+        }
+    }
+
+    // Verifies SnowflakeConnector.ArchiveContainer's archive behavior for a target table
+    // this connector owns: renamed to "<name>_<yyyyMMddHHmmss>" (preserving its data, per
+    // StorageConnectorBase.RenameCacheTableIfExists's convention for the SQL Server cache
+    // table) rather than dropped - the original name no longer exists, and the row exported
+    // to it is still readable under the renamed table.
+    [Fact]
+    public async Task ArchiveContainer_RenamesOwnedTargetTableInsteadOfDroppingIt()
+    {
+        if (!SnowflakeTestCredentials.IsAvailable)
+        {
+            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
+            return;
+        }
+
+        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
+        if (string.IsNullOrWhiteSpace(streamCacheConnectionStringEncoded))
+        {
+            DynamicSkip.Request("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
+            return;
+        }
+
+        var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
+        var setup = await SetupAsync(streamCacheConnectionString);
+        var resolvedTableName = setup.Configuration.TableName;
+        string archivedTableName = null;
+
+        try
+        {
+            var entityId = Guid.NewGuid();
+            await StoreAsync(setup, entityId, "archive-test-a", "Car A", persistVersion: 1, VersionChangeType.Added);
+            var total = await RunExportAsync(setup);
+            Assert.Equal(1, total);
+
+            await setup.Connector.ArchiveContainer(setup.Context, setup.StreamModel);
+
+            var originalStillExists = await setup.ApiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.ShowTablesLikeInSchema(setup.Configuration.Database, setup.Configuration.Schema, resolvedTableName));
+            Assert.Empty(originalStillExists.Rows);
+
+            var renamedTables = await setup.ApiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.ShowTablesLikeInSchema(setup.Configuration.Database, setup.Configuration.Schema, $"{resolvedTableName}_%"));
+            var nameIndex = renamedTables.ColumnNames.ToList().FindIndex(n => string.Equals(n, "name", StringComparison.OrdinalIgnoreCase));
+            Assert.True(nameIndex >= 0, "SHOW TABLES did not return a 'name' column.");
+            var renamedRow = Assert.Single(renamedTables.Rows);
+            archivedTableName = renamedRow[nameIndex];
+            _testOutputHelper.WriteLine($"Archived target table renamed to: {archivedTableName}");
+
+            var idColumn = SnowflakeSqlBuilder.SanitizeColumnName(StorageConfigurationConstants.IdKey);
+            var nameColumn = SnowflakeSqlBuilder.SanitizeColumnName("name");
+            var qualifiedArchived = SnowflakeSqlBuilder.QualifiedName(setup.Configuration.Database, setup.Configuration.Schema, archivedTableName);
+            var dataResult = await setup.ApiClient.ExecuteStatementAsync($"SELECT {nameColumn} FROM {qualifiedArchived} WHERE {idColumn} = '{entityId}'");
+            var row = Assert.Single(dataResult.Rows);
+            Assert.Equal("Car A", Assert.Single(row));
+
+            // The pipe and transient table (always connector-owned) are cleaned up
+            // unconditionally, unlike the renamed-not-dropped target table.
+            var pipeResult = await setup.ApiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.ShowPipesLikeInSchema(setup.Configuration.Database, setup.Configuration.Schema, SnowflakeConnectorConfiguration.GetPipeName(resolvedTableName)));
+            Assert.Empty(pipeResult.Rows);
+        }
+        finally
+        {
+            try
+            {
+                if (archivedTableName != null)
+                {
+                    await setup.ApiClient.ExecuteStatementAsync(
+                        SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, archivedTableName));
+                }
+
+                await setup.ApiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropPipeIfExists(setup.Configuration.Database, setup.Configuration.Schema, SnowflakeConnectorConfiguration.GetPipeName(resolvedTableName)));
+                await setup.ApiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, SnowflakeConnectorConfiguration.GetTransientTableName(resolvedTableName)));
+                await setup.ApiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, resolvedTableName));
             }
             catch (Exception ex)
             {

@@ -190,6 +190,16 @@ public class SnowflakeSqlBuilderTests
     }
 
     [Fact]
+    public void RenameTable_RenamesToTheGivenNewName()
+    {
+        var sql = SnowflakeSqlBuilder.RenameTable(Database, Schema, TargetTableName, "MYTESTTABLE_20260930040000");
+
+        Assert.Equal(
+            $"ALTER TABLE {SnowflakeSqlBuilder.QualifiedName(Database, Schema, TargetTableName)} RENAME TO {SnowflakeSqlBuilder.QualifiedName(Database, Schema, "MYTESTTABLE_20260930040000")}",
+            sql);
+    }
+
+    [Fact]
     public void DropPipeIfExists_TargetsThePipe()
     {
         var sql = SnowflakeSqlBuilder.DropPipeIfExists(Database, Schema, PipeName);

@@ -155,6 +155,14 @@ internal static class SnowflakeSqlBuilder
         return $"DROP TABLE IF EXISTS {QualifiedName(database, schema, tableName)}";
     }
 
+    // Used by SnowflakeConnector.ArchiveContainer to preserve an owned target table's data
+    // instead of dropping it - matching StorageConnectorBase.RenameCacheTableIfExists's
+    // "_{yyyyMMddHHmmss}" suffix convention for the SQL Server cache table.
+    public static string RenameTable(string database, string schema, string tableName, string newTableName)
+    {
+        return $"ALTER TABLE {QualifiedName(database, schema, tableName)} RENAME TO {QualifiedName(database, schema, newTableName)}";
+    }
+
     public static string DropPipeIfExists(string database, string schema, string pipeName)
     {
         return $"DROP PIPE IF EXISTS {QualifiedName(database, schema, pipeName)}";

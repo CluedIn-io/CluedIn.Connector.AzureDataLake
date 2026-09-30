@@ -55,67 +55,87 @@ public class SnowflakeConnector : StorageConnectorBase
         return [StreamMode.Sync];
     }
 
-    // Drops the target table, transient table, and pipe this connector created (see
-    // SnowflakeExportEntitiesJob), rather than leaving them behind when a stream is
-    // archived. The pipe is dropped before the transient table it's bound to, and the
-    // transient table before the target table, so nothing is ever dropped while something
-    // else still references it.
+    // Drops the transient table and pipe this connector created (see
+    // SnowflakeExportEntitiesJob) - they're always connector-created/-owned (their names
+    // are never user-facing) - and, for the target table, renames it (rather than dropping
+    // it) if this connector actually created it. Matches
+    // StorageConnectorBase.RenameCacheTableIfExists's "_{yyyyMMddHHmmss}" suffix convention
+    // for the SQL Server cache table: every other connector preserves exported data on
+    // archive rather than deleting it, so the target table does too.
     //
-    // The target table is only dropped if this connector actually created it -
+    // The target table is only renamed if this connector actually created it -
     // CreateTargetTableIfNotExists stamps a COMMENT on the table that only takes effect
     // when CREATE TABLE IF NOT EXISTS genuinely creates it (never when it already existed),
     // so a matching comment here means this connector owns it; anything else (blank, or a
     // different comment - e.g. the user pointed the connector at a table that already
     // existed) is left alone.
+    //
+    // The whole Snowflake cleanup is best-effort (caught and logged, not propagated): if the
+    // account is unreachable, the key has been rotated, or the role lacks the needed
+    // privilege, base.ArchiveContainer (buffer flush + SQL Server cache table rename) must
+    // still run rather than being skipped because this half failed first.
     public override async Task ArchiveContainer(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
     {
         var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
         if (configuration is SnowflakeConnectorConfiguration snowflakeConfiguration)
         {
-            // TableName can be a pattern (see SnowflakeConfigurationConstants) - resolve it
-            // the same way SnowflakeExportEntitiesJob does, so the transient table/pipe/
-            // target this drops are the same ones that export run created/used.
-            // {DataTime} isn't a supported variable (rejected in VerifyDataLakeConnection),
-            // so - unlike a file name pattern - this always resolves to the same name a
-            // given stream's export runs have been using, regardless of when archive runs.
-            // Upper-cased for the same reason as SnowflakeExportEntitiesJob - see there.
-            var resolvedTableName = (await PatternHelper.ReplaceNameUsingPatternAsync(
-                executionContext,
-                snowflakeConfiguration.TableName,
-                streamModel.Id,
-                streamModel.ContainerName,
-                _timeProvider.GetUtcNow(),
-                snowflakeConfiguration.OutputFormat)).ToUpperInvariant();
-            var transientTableName = SnowflakeConnectorConfiguration.GetTransientTableName(resolvedTableName);
-            var pipeName = SnowflakeConnectorConfiguration.GetPipeName(resolvedTableName);
-
-            var apiClient = new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(snowflakeConfiguration));
             try
             {
-                await apiClient.ExecuteStatementAsync(
-                    SnowflakeSqlBuilder.DropPipeIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, pipeName));
-                await apiClient.ExecuteStatementAsync(
-                    SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName));
-
-                if (await OwnsTargetTableAsync(apiClient, snowflakeConfiguration, resolvedTableName))
-                {
-                    await apiClient.ExecuteStatementAsync(
-                        SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, resolvedTableName));
-                }
-                else
-                {
-                    _logger.LogInformation(
-                        "Not dropping Snowflake target table '{TableName}' on archive - it wasn't created by this connector (or ownership couldn't be confirmed).",
-                        resolvedTableName);
-                }
+                await ArchiveSnowflakeObjectsAsync(executionContext, streamModel, snowflakeConfiguration);
             }
-            finally
+            catch (Exception ex)
             {
-                (apiClient as IDisposable)?.Dispose();
+                _logger.LogError(ex, "Failed to archive Snowflake objects for stream '{StreamId}' - continuing with the rest of archival.", streamModel.Id);
             }
         }
 
         await base.ArchiveContainer(executionContext, streamModel);
+    }
+
+    private async Task ArchiveSnowflakeObjectsAsync(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, SnowflakeConnectorConfiguration snowflakeConfiguration)
+    {
+        // TableName can be a pattern (see SnowflakeConfigurationConstants) - resolve it the
+        // same way SnowflakeExportEntitiesJob does, so the transient table/pipe/target this
+        // touches are the same ones that export run created/used. {DataTime} isn't a
+        // supported variable (rejected in VerifyDataLakeConnection), so - unlike a file name
+        // pattern - this always resolves to the same name a given stream's export runs have
+        // been using, regardless of when archive runs. Upper-cased for the same reason as
+        // SnowflakeExportEntitiesJob - see there.
+        var resolvedTableName = (await PatternHelper.ReplaceNameUsingPatternAsync(
+            executionContext,
+            snowflakeConfiguration.TableName,
+            streamModel.Id,
+            streamModel.ContainerName,
+            _timeProvider.GetUtcNow(),
+            snowflakeConfiguration.OutputFormat)).ToUpperInvariant();
+        var transientTableName = SnowflakeConnectorConfiguration.GetTransientTableName(resolvedTableName);
+        var pipeName = SnowflakeConnectorConfiguration.GetPipeName(resolvedTableName);
+
+        var apiClient = new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(snowflakeConfiguration));
+        try
+        {
+            await apiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.DropPipeIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, pipeName));
+            await apiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName));
+
+            if (await OwnsTargetTableAsync(apiClient, snowflakeConfiguration, resolvedTableName))
+            {
+                var archivedTableName = $"{resolvedTableName}_{_timeProvider.GetUtcNow():yyyyMMddHHmmss}";
+                await apiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.RenameTable(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, resolvedTableName, archivedTableName));
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Not renaming Snowflake target table '{TableName}' on archive - it wasn't created by this connector (or ownership couldn't be confirmed).",
+                    resolvedTableName);
+            }
+        }
+        finally
+        {
+            (apiClient as IDisposable)?.Dispose();
+        }
     }
 
     private static async Task<bool> OwnsTargetTableAsync(SnowflakeApiClient apiClient, SnowflakeConnectorConfiguration snowflakeConfiguration, string resolvedTableName)

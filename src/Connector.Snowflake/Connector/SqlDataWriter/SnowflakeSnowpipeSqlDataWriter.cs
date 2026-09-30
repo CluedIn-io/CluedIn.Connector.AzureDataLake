@@ -109,7 +109,19 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
         }
         finally
         {
-            await apiClient.CloseChannelAsync(_pipeName, channelName);
+            // A failure closing the channel (e.g. the network is still down after an append
+            // or the commit wait above already failed for that reason) must not replace a
+            // real error from the try block above - swallow and log it instead of letting it
+            // propagate and mask the original exception.
+            try
+            {
+                await apiClient.CloseChannelAsync(_pipeName, channelName);
+            }
+            catch (Exception ex)
+            {
+                context.Log.LogWarning(ex, "Failed to close Snowpipe Streaming channel {ChannelName} on pipe {PipeName}.", channelName, _pipeName);
+            }
+
             (apiClient as IDisposable)?.Dispose();
         }
 
