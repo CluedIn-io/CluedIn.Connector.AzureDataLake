@@ -45,7 +45,7 @@ public class SnowflakeConfigurationConstants : StorageConfigurationConstants, IS
                 DisplayName = "Account Identifier",
                 Type = "input",
                 IsRequired = true,
-                Help = "The Snowflake account identifier, e.g. 'qs30799' or 'orgname-accountname'.",
+                Help = "The Snowflake account identifier, e.g. 'cluedin-ci12345'.",
             },
             new()
             {
