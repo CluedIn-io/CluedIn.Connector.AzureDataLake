@@ -12,5 +12,6 @@
     <ProjectReference Include="..\Connector.AzureDataLake\Connector.AzureDataLake.csproj" />
     <ProjectReference Include="..\Connector.OneLake\Connector.OneLake.csproj" />
     <ProjectReference Include="..\Connector.FabricOpenMirroring\Connector.FabricOpenMirroring.csproj" />
+    <ProjectReference Include="..\Connector.Snowflake\Connector.Snowflake.csproj" />
   </ItemGroup>
 </Project>
