@@ -448,7 +448,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     {
         var configuration = CreateConfigurationWithoutStreamCache();
         // Use a unique directory that is guaranteed to be empty
-        configuration[AmazonS3ConfigurationConstants.DirectoryName] = $"xunit-empty-{DateTime.Now.Ticks}";
+        configuration[AmazonS3ConfigurationConstants.DirectoryName] = $"xunit-empty-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(storageConfiguration, StreamMode.Sync);
@@ -489,7 +489,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         Assert.NotNull(region);
         Assert.NotNull(bucketName);
 
-        var testPrefix = $"xunit-prefix-{DateTime.Now.Ticks}";
+        var testPrefix = $"xunit-prefix-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         return new Dictionary<string, object>()
         {
             { AmazonS3ConfigurationConstants.AccessKey, accessKey },
