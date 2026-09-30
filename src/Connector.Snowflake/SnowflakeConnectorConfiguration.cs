@@ -31,6 +31,11 @@ internal class SnowflakeConnectorConfiguration : StorageConfigurationBase
     // (StreamId, ContainerName, OutputFormat).
     public string TableName => GetConfigurationTrimmedStringValue(SnowflakeConfigurationConstants.TableName);
 
+    // Output Format is not user-configurable for Snowflake (see SnowflakeConfigurationConstants,
+    // which omits the control) - Snowpipe Streaming always ingests rows as JSON.
+    // We need to add a new format NewlineDelimitedJson in the future
+    public override string OutputFormat => StorageConfigurationConstants.OutputFormats.Json;
+
     // Snowpipe Streaming pipes are bound to a fixed target table, so the transient/landing
     // table and its pipe use stable, deterministic names per (resolved) target table rather
     // than a fresh name per export run. A leftover transient table from a crashed run is

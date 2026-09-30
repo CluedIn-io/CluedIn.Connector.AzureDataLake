@@ -128,7 +128,8 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
         bool isArrayColumnOptionEnabled = false,
         bool isReducedFormats = false,
         bool isDeltaOptionEnabled = false,
-        bool isForceStreamCache = false)
+        bool isForceStreamCache = false,
+        bool isOutputFormatHidden = false)
     {
         string connectionString = null;
         if (applicationContext.System.ConnectionStrings.ConnectionStringExists(StreamCacheConnectionStringKey))
@@ -157,18 +158,21 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
             UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
         };
 
-        controls.Add(new()
+        if (!isOutputFormatHidden)
         {
-            Name = OutputFormat,
-            DisplayName = "Output Format",
-            Type = "option",
-            IsRequired = true,
-            SourceType = ControlSourceType.Dynamic,
-            Source = isReducedFormats
-                    ? FileStorageExtendedConfigurationProvider.ReducedFormatsSourceName
-                    : FileStorageExtendedConfigurationProvider.DefaultSourceName,
-            DisplayDependencies = isForceStreamCache ? [] : [streamCacheDependency],
-        });
+            controls.Add(new()
+            {
+                Name = OutputFormat,
+                DisplayName = "Output Format",
+                Type = "option",
+                IsRequired = true,
+                SourceType = ControlSourceType.Dynamic,
+                Source = isReducedFormats
+                        ? FileStorageExtendedConfigurationProvider.ReducedFormatsSourceName
+                        : FileStorageExtendedConfigurationProvider.DefaultSourceName,
+                DisplayDependencies = isForceStreamCache ? [] : [streamCacheDependency],
+            });
+        }
 
         if (!isForceStreamCache && string.IsNullOrWhiteSpace(connectionString))
         {

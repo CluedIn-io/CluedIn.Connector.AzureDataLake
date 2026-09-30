@@ -121,9 +121,9 @@ public class SnowflakeConfigurationConstants : StorageConfigurationConstants, IS
             GetAuthMethods(
                 applicationContext,
                 isCustomFileNamePatternSupported: false,
-                isReducedFormats: true,
                 isArrayColumnOptionEnabled: false,
-                isForceStreamCache: true));
+                isForceStreamCache: true,
+                isOutputFormatHidden: true));
 
         return new AuthMethods
         {
