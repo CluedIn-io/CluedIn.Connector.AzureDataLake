@@ -22,12 +22,22 @@ public class SnowflakeApiClientTests
         return new SnowflakeConnectionSettings(
             "qs30799",
             "cluedin_svc",
-            rsa.ExportPkcs8PrivateKeyPem(),
+            ExportPkcs8PrivateKeyPem(rsa),
             null,
             "SNOWFLAKE_LEARNING_DB",
             "TESTSCHEMA",
             "COMPUTE_WH",
             "ACCOUNTADMIN");
+    }
+
+    // RSA.ExportPkcs8PrivateKeyPem() isn't available on net6.0 (added in .NET 7) - this repo
+    // also builds unit tests against net6.0 for CluedIn 4.6.0/4.7.0/4.8.0 (see
+    // Directory.Build.props), so the PEM has to be built by hand from the lower-level,
+    // net5.0+ ExportPkcs8PrivateKey()/PemEncoding APIs instead.
+    private static string ExportPkcs8PrivateKeyPem(RSA rsa)
+    {
+        var pkcs8 = rsa.ExportPkcs8PrivateKey();
+        return new string(PemEncoding.Write("PRIVATE KEY", pkcs8));
     }
 
     [Fact]

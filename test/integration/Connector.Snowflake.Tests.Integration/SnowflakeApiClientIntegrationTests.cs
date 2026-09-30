@@ -15,24 +15,22 @@ namespace CluedIn.Connector.Snowflake.Tests.Integration;
 /// SNOWFLAKE_ROLE (optional - a blank role uses the user's default role). Tests skip when
 /// any required variable is not set, rather than failing - see SnowflakeTestCredentials.
 /// </summary>
-public class SnowflakeApiClientIntegrationTests : IAsyncLifetime
+// IAsyncLifetime.InitializeAsync()/DisposeAsync() return Task on xunit v2 (CluedIn <5.0.0,
+// net6.0) but ValueTask on xunit v3 (CluedIn 5.0.0+) - implemented in the version-specific
+// partials (SnowflakeApiClientIntegrationTests.v46_to_v48.cs / .v50_to_Latest.cs) rather
+// than here, matching AmazonS3WriteStreamTests's pattern for the same split.
+public partial class SnowflakeApiClientIntegrationTests : IAsyncLifetime
 {
     private SnowflakeApiClient _client;
     private string _transientTableName;
 
-    public ValueTask InitializeAsync()
+    private void InitializeClient()
     {
-        if (!SnowflakeTestCredentials.IsAvailable)
-        {
-            return ValueTask.CompletedTask;
-        }
-
         _client = new SnowflakeApiClient(SnowflakeTestCredentials.Load());
         _transientTableName = $"CLUEDIN_INTEGRATION_TEST_{Guid.NewGuid():N}".ToUpperInvariant();
-        return ValueTask.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
+    private async Task DisposeClientAsync()
     {
         if (_client == null)
         {
@@ -56,7 +54,7 @@ public class SnowflakeApiClientIntegrationTests : IAsyncLifetime
     {
         if (!SnowflakeTestCredentials.IsAvailable)
         {
-            Assert.Skip(SnowflakeTestCredentials.SkipReason);
+            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
             return;
         }
 
@@ -72,7 +70,7 @@ public class SnowflakeApiClientIntegrationTests : IAsyncLifetime
     {
         if (!SnowflakeTestCredentials.IsAvailable)
         {
-            Assert.Skip(SnowflakeTestCredentials.SkipReason);
+            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
             return;
         }
 
@@ -95,7 +93,7 @@ public class SnowflakeApiClientIntegrationTests : IAsyncLifetime
     {
         if (!SnowflakeTestCredentials.IsAvailable)
         {
-            Assert.Skip(SnowflakeTestCredentials.SkipReason);
+            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
             return;
         }
 
@@ -161,7 +159,7 @@ public class SnowflakeApiClientIntegrationTests : IAsyncLifetime
                 await Task.Delay(TimeSpan.FromSeconds(2));
             }
 
-            Assert.Fail($"Channel '{channelName}' did not commit offset '1' within 30 seconds.");
+            Assert.True(false, $"Channel '{channelName}' did not commit offset '1' within 30 seconds.");
         }
 
         async Task AssertRowLandsWithinTimeout()
@@ -179,7 +177,7 @@ public class SnowflakeApiClientIntegrationTests : IAsyncLifetime
                 await Task.Delay(TimeSpan.FromSeconds(2));
             }
 
-            Assert.Fail($"Streamed row did not land in \"{_transientTableName}\" within 10 seconds of its offset committing.");
+            Assert.True(false, $"Streamed row did not land in \"{_transientTableName}\" within 10 seconds of its offset committing.");
         }
     }
 }

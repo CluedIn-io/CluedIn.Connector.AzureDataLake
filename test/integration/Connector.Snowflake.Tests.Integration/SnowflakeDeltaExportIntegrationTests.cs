@@ -79,14 +79,14 @@ public class SnowflakeDeltaExportIntegrationTests
     {
         if (!SnowflakeTestCredentials.IsAvailable)
         {
-            Assert.Skip(SnowflakeTestCredentials.SkipReason);
+            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
             return;
         }
 
         var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
         if (string.IsNullOrWhiteSpace(streamCacheConnectionStringEncoded))
         {
-            Assert.Skip("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
+            DynamicSkip.Request("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
             return;
         }
 
@@ -395,7 +395,13 @@ public class SnowflakeDeltaExportIntegrationTests
             OrganizationId = organization.Id,
         };
         var streamRepositoryMock = new Mock<IStreamRepository>();
+        // IStreamRepository.GetStream gained an ExecutionContext parameter in CluedIn 4.7.0 -
+        // see StorageConnectorTestsBase.v46.cs/.v47_to_Latest.cs for the same split.
+#if CLUEDIN_V47_OR_GREATER
         streamRepositoryMock.Setup(x => x.GetStream(It.IsAny<ExecutionContext>(), streamModel.Id)).ReturnsAsync(streamModel);
+#else
+        streamRepositoryMock.Setup(x => x.GetStream(streamModel.Id)).ReturnsAsync(streamModel);
+#endif
         container.Register(Component.For<IStreamRepository>().Instance(streamRepositoryMock.Object));
 
         var constantsMock = new Mock<ISnowflakeConfigurationConstants>();
