@@ -105,7 +105,15 @@ public class SnowflakeConfigurationConstants : StorageConfigurationConstants, IS
                 DisplayName = "Table Name",
                 Type = "input",
                 IsRequired = true,
-                Help = "The target table in Snowflake that rows will be merged into.",
+                Help = """
+                       The target table in Snowflake that rows will be merged into. Supports the
+                       same pattern variables as other connectors' file name pattern, e.g.
+                       {ContainerName}_Table. Available variables are {StreamId}, {DataTime},
+                       {OutputFormat} and {ContainerName}; variables can also be formatted using a
+                       formatString modifier. For more information, please refer to the
+                       documentation. Avoid {DataTime} here specifically: unlike a file name, the
+                       target table name is expected to stay the same across export runs.
+                       """,
             },
         };
 

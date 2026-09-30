@@ -22,14 +22,23 @@ internal class SnowflakeConnectorConfiguration : StorageConfigurationBase
     public string Schema => GetConfigurationTrimmedStringValue(SnowflakeConfigurationConstants.Schema);
     public string Warehouse => GetConfigurationTrimmedStringValue(SnowflakeConfigurationConstants.Warehouse);
     public string Role => GetConfigurationTrimmedStringValue(SnowflakeConfigurationConstants.Role);
+    // May be a pattern (e.g. "{ContainerName}_Table") - callers resolve it via
+    // PatternHelper.ReplaceNameUsingPatternAsync (see SnowflakeExportEntitiesJob/
+    // SnowflakeConnector.ArchiveContainer) before using it as an actual Snowflake object
+    // name. {DataTime} is deliberately not supported for this pattern - unlike a file name,
+    // the resolved name is expected to stay the same across export runs (see
+    // GetTransientTableName/GetPipeName below), which only holds for the other variables
+    // (StreamId, ContainerName, OutputFormat).
     public string TableName => GetConfigurationTrimmedStringValue(SnowflakeConfigurationConstants.TableName);
 
     // Snowpipe Streaming pipes are bound to a fixed target table, so the transient/landing
-    // table and its pipe use stable, deterministic names per target table rather than a
-    // fresh name per export run. A leftover transient table from a crashed run is
-    // recognised by this same name and its rows are cleared out at the start of the next run.
-    public string TransientTableName => $"{TableName}__CLUEDIN_TRANSIENT";
-    public string PipeName => $"{TableName}__CLUEDIN_PIPE";
+    // table and its pipe use stable, deterministic names per (resolved) target table rather
+    // than a fresh name per export run. A leftover transient table from a crashed run is
+    // recognised by this same name and its rows are cleared out at the start of the next
+    // run. Takes the already-resolved table name (not the raw pattern) so these track
+    // whatever the actual MERGE target is.
+    public static string GetTransientTableName(string resolvedTableName) => $"{resolvedTableName}__CLUEDIN_TRANSIENT";
+    public static string GetPipeName(string resolvedTableName) => $"{resolvedTableName}__CLUEDIN_PIPE";
 
     public override bool IsStreamCacheEnabled => true;
     public override bool ShouldWriteGuidAsString => true;

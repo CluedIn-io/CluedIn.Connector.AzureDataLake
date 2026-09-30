@@ -31,6 +31,7 @@ public class SnowflakeConnector : StorageConnectorBase
     internal const string InvalidSchemaErrorMessage = "Schema cannot be empty.";
     internal const string InvalidWarehouseErrorMessage = "Warehouse cannot be empty.";
     internal const string InvalidTableNameErrorMessage = "Table name cannot be empty.";
+    internal const string TableNameDataTimeNotSupportedErrorMessage = "Table name cannot use the {DataTime} pattern variable - the resolved name is reused as the transient table/pipe name too, so it must stay the same across export runs. Supported variables are {StreamId}, {ContainerName} and {OutputFormat}.";
     internal const string WarehouseNotAccessibleErrorMessageFormat = "Warehouse '{0}' does not exist, or role '{1}' does not have access to it.";
     internal const string DatabaseNotAccessibleErrorMessageFormat = "Database '{0}' does not exist, or role '{1}' does not have access to it.";
     internal const string SchemaNotAccessibleErrorMessageFormat = "Schema '{0}' does not exist, or role '{1}' does not have access to it.";
@@ -71,24 +72,41 @@ public class SnowflakeConnector : StorageConnectorBase
         var configuration = await StorageFactory.CreateStorageConfiguration(executionContext, streamModel);
         if (configuration is SnowflakeConnectorConfiguration snowflakeConfiguration)
         {
+            // TableName can be a pattern (see SnowflakeConfigurationConstants) - resolve it
+            // the same way SnowflakeExportEntitiesJob does, so the transient table/pipe/
+            // target this drops are the same ones that export run created/used.
+            // {DataTime} isn't a supported variable (rejected in VerifyDataLakeConnection),
+            // so - unlike a file name pattern - this always resolves to the same name a
+            // given stream's export runs have been using, regardless of when archive runs.
+            // Upper-cased for the same reason as SnowflakeExportEntitiesJob - see there.
+            var resolvedTableName = (await PatternHelper.ReplaceNameUsingPatternAsync(
+                executionContext,
+                snowflakeConfiguration.TableName,
+                streamModel.Id,
+                streamModel.ContainerName,
+                _timeProvider.GetUtcNow(),
+                snowflakeConfiguration.OutputFormat)).ToUpperInvariant();
+            var transientTableName = SnowflakeConnectorConfiguration.GetTransientTableName(resolvedTableName);
+            var pipeName = SnowflakeConnectorConfiguration.GetPipeName(resolvedTableName);
+
             var apiClient = new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(snowflakeConfiguration));
             try
             {
                 await apiClient.ExecuteStatementAsync(
-                    SnowflakeSqlBuilder.DropPipeIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.PipeName));
+                    SnowflakeSqlBuilder.DropPipeIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, pipeName));
                 await apiClient.ExecuteStatementAsync(
-                    SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName));
+                    SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName));
 
-                if (await OwnsTargetTableAsync(apiClient, snowflakeConfiguration))
+                if (await OwnsTargetTableAsync(apiClient, snowflakeConfiguration, resolvedTableName))
                 {
                     await apiClient.ExecuteStatementAsync(
-                        SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName));
+                        SnowflakeSqlBuilder.DropTableIfExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, resolvedTableName));
                 }
                 else
                 {
                     _logger.LogInformation(
                         "Not dropping Snowflake target table '{TableName}' on archive - it wasn't created by this connector (or ownership couldn't be confirmed).",
-                        snowflakeConfiguration.TableName);
+                        resolvedTableName);
                 }
             }
             finally
@@ -100,10 +118,10 @@ public class SnowflakeConnector : StorageConnectorBase
         await base.ArchiveContainer(executionContext, streamModel);
     }
 
-    private static async Task<bool> OwnsTargetTableAsync(SnowflakeApiClient apiClient, SnowflakeConnectorConfiguration snowflakeConfiguration)
+    private static async Task<bool> OwnsTargetTableAsync(SnowflakeApiClient apiClient, SnowflakeConnectorConfiguration snowflakeConfiguration, string resolvedTableName)
     {
         var result = await apiClient.ExecuteStatementAsync(
-            SnowflakeSqlBuilder.ShowTablesLikeInSchema(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName),
+            SnowflakeSqlBuilder.ShowTablesLikeInSchema(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, resolvedTableName),
             SnowflakeStatementScope.None);
 
         var commentIndex = result.ColumnNames
@@ -221,6 +239,11 @@ public class SnowflakeConnector : StorageConnectorBase
         if (string.IsNullOrWhiteSpace(casted.TableName))
         {
             return CreateFailedConnectionVerification(InvalidTableNameErrorMessage);
+        }
+
+        if (SnowflakeSqlBuilder.ContainsDataTimePatternVariable(casted.TableName))
+        {
+            return CreateFailedConnectionVerification(TableNameDataTimeNotSupportedErrorMessage);
         }
 
         var apiClient = new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(casted));

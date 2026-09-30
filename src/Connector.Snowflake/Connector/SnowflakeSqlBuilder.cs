@@ -21,6 +21,19 @@ namespace CluedIn.Connector.Snowflake.Connector;
 internal static class SnowflakeSqlBuilder
 {
     private static readonly Regex NonAlphaNumericRegex = new("[^a-zA-Z0-9_]", RegexOptions.Compiled);
+    private static readonly Regex DataTimePatternVariableRegex = new(@"\{DataTime(\:[^}]*)?\}", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // The configured TableName pattern is resolved once per export run and then reused as
+    // the transient table/pipe name too (see SnowflakeConnectorConfiguration.
+    // GetTransientTableName/GetPipeName) - unlike a file name pattern, it's expected to
+    // resolve to the same value every run for a given stream, which only holds for
+    // {StreamId}/{ContainerName}/{OutputFormat}. {DataTime} is rejected outright rather than
+    // silently producing a different transient table/pipe (and therefore a new,
+    // never-truncated one) every run.
+    public static bool ContainsDataTimePatternVariable(string tableNamePattern)
+    {
+        return !string.IsNullOrEmpty(tableNamePattern) && DataTimePatternVariableRegex.IsMatch(tableNamePattern);
+    }
 
     // Marks a target table as created (and therefore owned) by this connector, so
     // SnowflakeConnector.ArchiveContainer can tell it apart from a table the user pointed
@@ -178,6 +191,11 @@ internal static class SnowflakeSqlBuilder
     public static string ShowTablesLikeInSchema(string database, string schema, string tableName)
     {
         return $"SHOW TABLES LIKE '{EscapeLikePattern(tableName)}' IN SCHEMA \"{EscapeIdentifier(database)}\".\"{EscapeIdentifier(schema)}\"";
+    }
+
+    public static string ShowPipesLikeInSchema(string database, string schema, string pipeName)
+    {
+        return $"SHOW PIPES LIKE '{EscapeLikePattern(pipeName)}' IN SCHEMA \"{EscapeIdentifier(database)}\".\"{EscapeIdentifier(schema)}\"";
     }
 
     // Escaping only the single quote that terminates the string literal isn't enough to

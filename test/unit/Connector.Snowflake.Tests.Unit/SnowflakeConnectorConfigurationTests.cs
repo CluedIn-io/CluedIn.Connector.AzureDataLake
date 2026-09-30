@@ -54,13 +54,15 @@ public class SnowflakeConnectorConfigurationTests
         Assert.True(configuration.IsSoftDelete);
     }
 
+    // TransientTableName/PipeName are no longer instance properties - callers resolve
+    // TableName's pattern first (see SnowflakeExportEntitiesJob/SnowflakeConnector.
+    // ArchiveContainer) and pass the resolved name into these static helpers, so the
+    // transient table/pipe track whatever the actual MERGE target is.
     [Fact]
-    public void TransientTableAndPipeNames_AreDerivedFromTargetTableName()
+    public void GetTransientTableNameAndGetPipeName_AreDerivedFromResolvedTableName()
     {
-        var configuration = new SnowflakeConnectorConfiguration(CreateConfigurationValues());
-
-        Assert.Equal("MYTESTTABLE__CLUEDIN_TRANSIENT", configuration.TransientTableName);
-        Assert.Equal("MYTESTTABLE__CLUEDIN_PIPE", configuration.PipeName);
+        Assert.Equal("MYTESTTABLE__CLUEDIN_TRANSIENT", SnowflakeConnectorConfiguration.GetTransientTableName("MYTESTTABLE"));
+        Assert.Equal("MYTESTTABLE__CLUEDIN_PIPE", SnowflakeConnectorConfiguration.GetPipeName("MYTESTTABLE"));
     }
 
     [Fact]

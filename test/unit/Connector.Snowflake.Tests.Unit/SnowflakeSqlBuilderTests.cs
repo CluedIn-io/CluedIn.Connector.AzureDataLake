@@ -35,6 +35,26 @@ public class SnowflakeSqlBuilderTests
         Assert.Equal("\"DB\"\"; DROP TABLE X; --\".\"SCHEMA\".\"TABLE\"", qualified);
     }
 
+    // TableName's resolved value is reused as the transient table/pipe name (see
+    // SnowflakeConnectorConfiguration.GetTransientTableName/GetPipeName), so it must stay
+    // the same across export runs for a given stream - {DataTime} is the only pattern
+    // variable that wouldn't, so it's rejected outright.
+    [Theory]
+    [InlineData("{DataTime}", true)]
+    [InlineData("{DataTime:yyyyMMdd}", true)]
+    [InlineData("{datatime}", true)]
+    [InlineData("PREFIX_{DataTime}_SUFFIX", true)]
+    [InlineData("{StreamId}", false)]
+    [InlineData("{ContainerName}_TABLE", false)]
+    [InlineData("{OutputFormat}", false)]
+    [InlineData("MYTESTTABLE", false)]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    public void ContainsDataTimePatternVariable_DetectsDataTimeVariableOnly(string tableNamePattern, bool expected)
+    {
+        Assert.Equal(expected, SnowflakeSqlBuilder.ContainsDataTimePatternVariable(tableNamePattern));
+    }
+
     [Theory]
     [InlineData("Id", "ID")]
     [InlineData("__ChangeType__", "__CHANGETYPE__")]
@@ -132,6 +152,14 @@ public class SnowflakeSqlBuilderTests
         var sql = SnowflakeSqlBuilder.ShowTablesLikeInSchema(Database, Schema, TargetTableName);
 
         Assert.Equal($"SHOW TABLES LIKE '{TargetTableName}' IN SCHEMA \"{Database}\".\"{Schema}\"", sql);
+    }
+
+    [Fact]
+    public void ShowPipesLikeInSchema_FiltersByExactNameWithinSchema()
+    {
+        var sql = SnowflakeSqlBuilder.ShowPipesLikeInSchema(Database, Schema, PipeName);
+
+        Assert.Equal("SHOW PIPES LIKE 'MYTESTTABLE\\_\\_CLUEDIN\\_PIPE' IN SCHEMA \"SNOWFLAKE_LEARNING_DB\".\"TESTSCHEMA\"", sql);
     }
 
     [Fact]

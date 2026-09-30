@@ -30,8 +30,15 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
     private static readonly TimeSpan CommitTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan CommitPollInterval = TimeSpan.FromSeconds(2);
 
-    public SnowflakeSnowpipeSqlDataWriter()
+    private readonly string _pipeName;
+
+    // Takes the already-resolved pipe name (see SnowflakeConnectorConfiguration.GetPipeName)
+    // as a constructor argument rather than reading configuration.PipeName internally -
+    // WriteOutputAsync overrides SqlDataWriterBase's fixed signature, so it can't take the
+    // resolved name as a method parameter directly.
+    public SnowflakeSnowpipeSqlDataWriter(string pipeName)
     {
+        _pipeName = pipeName ?? throw new ArgumentNullException(nameof(pipeName));
     }
 
     public override async Task<long> WriteOutputAsync(
@@ -53,7 +60,7 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
 
         try
         {
-            var channel = await apiClient.OpenChannelAsync(snowflakeConfiguration.PipeName, channelName);
+            var channel = await apiClient.OpenChannelAsync(_pipeName, channelName);
             var batch = new List<IReadOnlyDictionary<string, object>>(BatchSize);
 
             while (await reader.ReadAsync())
@@ -75,19 +82,19 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
 
                 if (batch.Count >= BatchSize)
                 {
-                    channel = await apiClient.AppendRowsAsync(snowflakeConfiguration.PipeName, channelName, channel.ContinuationToken, totalProcessed.ToString(CultureInfo.InvariantCulture), batch);
+                    channel = await apiClient.AppendRowsAsync(_pipeName, channelName, channel.ContinuationToken, totalProcessed.ToString(CultureInfo.InvariantCulture), batch);
                     batch.Clear();
                 }
 
                 if (totalProcessed % LoggingThreshold == 0)
                 {
-                    context.Log.LogDebug("Streamed {Total} rows to Snowflake transient table {TransientTable}.", totalProcessed, snowflakeConfiguration.TransientTableName);
+                    context.Log.LogDebug("Streamed {Total} rows to Snowflake via pipe {PipeName}.", totalProcessed, _pipeName);
                 }
             }
 
             if (batch.Count > 0)
             {
-                await apiClient.AppendRowsAsync(snowflakeConfiguration.PipeName, channelName, channel.ContinuationToken, totalProcessed.ToString(CultureInfo.InvariantCulture), batch);
+                await apiClient.AppendRowsAsync(_pipeName, channelName, channel.ContinuationToken, totalProcessed.ToString(CultureInfo.InvariantCulture), batch);
             }
 
             // Appending only buffers rows - verified live that closing the channel right
@@ -97,12 +104,12 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
             // this run appended before the finally block below closes the channel.
             if (totalProcessed > 0)
             {
-                await WaitForCommitAsync(context, apiClient, snowflakeConfiguration, channelName, totalProcessed.ToString(CultureInfo.InvariantCulture));
+                await WaitForCommitAsync(context, apiClient, _pipeName, channelName, totalProcessed.ToString(CultureInfo.InvariantCulture));
             }
         }
         finally
         {
-            await apiClient.CloseChannelAsync(snowflakeConfiguration.PipeName, channelName);
+            await apiClient.CloseChannelAsync(_pipeName, channelName);
             (apiClient as IDisposable)?.Dispose();
         }
 
@@ -112,14 +119,14 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
     private static async Task WaitForCommitAsync(
         ExecutionContext context,
         ISnowflakeApiClient apiClient,
-        SnowflakeConnectorConfiguration configuration,
+        string pipeName,
         string channelName,
         string expectedOffsetToken)
     {
         var deadline = DateTimeOffset.UtcNow.Add(CommitTimeout);
         while (true)
         {
-            var status = await apiClient.GetChannelStatusAsync(configuration.PipeName, channelName);
+            var status = await apiClient.GetChannelStatusAsync(pipeName, channelName);
             if (status.RowsErrorCount > 0)
             {
                 throw new SnowflakeApiException(
@@ -136,7 +143,7 @@ internal class SnowflakeSnowpipeSqlDataWriter : SqlDataWriterBase
             if (DateTimeOffset.UtcNow >= deadline)
             {
                 throw new TimeoutException(
-                    $"Snowpipe Streaming channel '{channelName}' on pipe '{configuration.PipeName}' did not commit offset '{expectedOffsetToken}' within {CommitTimeout}. Last committed offset was '{status.LastCommittedOffsetToken}'.");
+                    $"Snowpipe Streaming channel '{channelName}' on pipe '{pipeName}' did not commit offset '{expectedOffsetToken}' within {CommitTimeout}. Last committed offset was '{status.LastCommittedOffsetToken}'.");
             }
 
             context.Log.LogDebug(

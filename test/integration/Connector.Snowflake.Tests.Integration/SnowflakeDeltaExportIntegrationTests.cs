@@ -152,6 +152,91 @@ public class SnowflakeDeltaExportIntegrationTests
         }
     }
 
+    // Verifies TableName pattern support (SnowflakeConfigurationConstants.TableName /
+    // SnowflakeExportEntitiesJob/SnowflakeConnector.ArchiveContainer): the target table
+    // lands at the resolved name, and - since GetTransientTableName/GetPipeName derive from
+    // the resolved name, not the raw pattern - so do the transient table and pipe.
+    [Fact]
+    public async Task TableNamePattern_ResolvesConsistentlyForTargetTransientAndPipe()
+    {
+        if (!SnowflakeTestCredentials.IsAvailable)
+        {
+            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
+            return;
+        }
+
+        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
+        if (string.IsNullOrWhiteSpace(streamCacheConnectionStringEncoded))
+        {
+            DynamicSkip.Request("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
+            return;
+        }
+
+        var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
+        var uniqueSuffix = Guid.NewGuid().ToString("N").ToUpperInvariant();
+        var tableNamePattern = $"XUNIT_PATTERN_{{ContainerName}}_{uniqueSuffix}";
+        var setup = await SetupAsync(streamCacheConnectionString, tableNamePattern);
+
+        // Mirrors exactly what SnowflakeExportEntitiesJob resolves (and upper-cases)
+        // TableName to - SetupAsync always sets the stream's ContainerName to "test".
+        var expectedResolvedTableName = $"XUNIT_PATTERN_{setup.StreamModel.ContainerName}_{uniqueSuffix}".ToUpperInvariant();
+        var expectedTransientTableName = SnowflakeConnectorConfiguration.GetTransientTableName(expectedResolvedTableName);
+        var expectedPipeName = SnowflakeConnectorConfiguration.GetPipeName(expectedResolvedTableName);
+
+        try
+        {
+            var entityId = Guid.NewGuid();
+            await StoreAsync(setup, entityId, "pattern-test-a", "Car A", persistVersion: 1, VersionChangeType.Added);
+
+            var total = await RunExportAsync(setup);
+            Assert.Equal(1, total);
+
+            var qualifiedTarget = SnowflakeSqlBuilder.QualifiedName(setup.Configuration.Database, setup.Configuration.Schema, expectedResolvedTableName);
+            var idColumn = SnowflakeSqlBuilder.SanitizeColumnName(StorageConfigurationConstants.IdKey);
+            var nameColumn = SnowflakeSqlBuilder.SanitizeColumnName("name");
+            var targetResult = await setup.ApiClient.ExecuteStatementAsync($"SELECT {nameColumn} FROM {qualifiedTarget} WHERE {idColumn} = '{entityId}'");
+            var row = Assert.Single(targetResult.Rows);
+            Assert.Equal("Car A", Assert.Single(row));
+
+            var transientResult = await setup.ApiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.ShowTablesLikeInSchema(setup.Configuration.Database, setup.Configuration.Schema, expectedTransientTableName));
+            Assert.Single(transientResult.Rows);
+
+            var pipeResult = await setup.ApiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.ShowPipesLikeInSchema(setup.Configuration.Database, setup.Configuration.Schema, expectedPipeName));
+            Assert.Single(pipeResult.Rows);
+        }
+        finally
+        {
+            try
+            {
+                await setup.ApiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropPipeIfExists(setup.Configuration.Database, setup.Configuration.Schema, expectedPipeName));
+                await setup.ApiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, expectedTransientTableName));
+                await setup.ApiClient.ExecuteStatementAsync(
+                    SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, expectedResolvedTableName));
+            }
+            catch (Exception ex)
+            {
+                _testOutputHelper.WriteLine($"Best-effort Snowflake cleanup failed: {ex.Message}");
+            }
+            finally
+            {
+                (setup.ApiClient as IDisposable)?.Dispose();
+            }
+
+            try
+            {
+                await DeleteCacheTablesAsync(setup.StreamModel.Id, setup.StreamCacheConnectionString);
+            }
+            catch (Exception ex)
+            {
+                _testOutputHelper.WriteLine($"Best-effort SQL Server cleanup failed: {ex.Message}");
+            }
+        }
+    }
+
     private async Task<long?> RunExportAsync(TestSetup setup)
     {
         var jobArgs = new StorageJobArgs
@@ -251,9 +336,9 @@ public class SnowflakeDeltaExportIntegrationTests
         try
         {
             await setup.ApiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.DropPipeIfExists(setup.Configuration.Database, setup.Configuration.Schema, setup.Configuration.PipeName));
+                SnowflakeSqlBuilder.DropPipeIfExists(setup.Configuration.Database, setup.Configuration.Schema, SnowflakeConnectorConfiguration.GetPipeName(setup.Configuration.TableName)));
             await setup.ApiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, setup.Configuration.TransientTableName));
+                SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, SnowflakeConnectorConfiguration.GetTransientTableName(setup.Configuration.TableName)));
             await setup.ApiClient.ExecuteStatementAsync(
                 SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, setup.Configuration.TableName));
         }
@@ -320,7 +405,7 @@ public class SnowflakeDeltaExportIntegrationTests
     // Windsor container, with only the handful of dependencies those types actually touch
     // mocked out (stream repository, component health, provider definition/organization
     // plumbing that ExecutionContext/Organization need to construct).
-    private async Task<TestSetup> SetupAsync(string streamCacheConnectionString)
+    private async Task<TestSetup> SetupAsync(string streamCacheConnectionString, string tableNamePattern = null)
     {
         var organizationId = Guid.NewGuid();
         var providerDefinitionId = Guid.NewGuid();
@@ -415,7 +500,7 @@ public class SnowflakeDeltaExportIntegrationTests
         constantsMock.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
         constantsMock.Setup(x => x.ProviderId).Returns(SnowflakeConfigurationConstants.SnowflakeProviderId);
 
-        var tableName = $"CLUEDIN_DELTA_TEST_{Guid.NewGuid():N}".ToUpperInvariant();
+        var tableName = tableNamePattern ?? $"CLUEDIN_DELTA_TEST_{Guid.NewGuid():N}".ToUpperInvariant();
         var configurationDictionary = CreateConfigurationDictionary(tableName, streamCacheConnectionString);
         var configuration = new SnowflakeConnectorConfiguration(configurationDictionary, "test");
         var apiClient = new SnowflakeApiClient(SnowflakeConnectionSettings.FromConfiguration(configuration));

@@ -54,6 +54,30 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         // generating a table with duplicate columns and a writer that drops one value.
         SnowflakeSqlBuilder.EnsureNoColumnNameCollisions(fieldNames);
 
+        // TableName can be a pattern (e.g. "{ContainerName}_Table") - same
+        // {StreamId}/{OutputFormat}/{ContainerName} variables
+        // OneLakeExportEntitiesJob.PostExportAsync resolves its own TableName pattern with
+        // ({DataTime} isn't supported here - see VerifyDataLakeConnection - since, unlike a
+        // file name, this resolved name is reused as the transient table/pipe name below
+        // too, and is expected to stay the same across runs for a given stream).
+        //
+        // Upper-cased afterwards (verified live): substituted variables like
+        // {ContainerName} aren't necessarily upper-case, but the created pipe/table are
+        // referenced via QualifiedName's double-quoted (case-preserving) identifiers for
+        // DDL/MERGE, while the Snowpipe Streaming REST API's pipe lookup 404s unless given
+        // the canonical, Snowflake-default (upper-case) form - so a mixed-case resolved name
+        // could create the pipe successfully via the SQL API yet fail to open a channel on
+        // it via the streaming API.
+        var resolvedTableName = (await PatternHelper.ReplaceNameUsingPatternAsync(
+            context,
+            snowflakeConfiguration.TableName,
+            exportJobData.StreamId,
+            exportJobData.StreamModel.ContainerName,
+            exportJobData.AsOfTime,
+            exportJobData.OutputFormat)).ToUpperInvariant();
+        var transientTableName = SnowflakeConnectorConfiguration.GetTransientTableName(resolvedTableName);
+        var pipeName = SnowflakeConnectorConfiguration.GetPipeName(resolvedTableName);
+
         var apiClient = CreateApiClient(snowflakeConfiguration);
         long totalProcessed;
 
@@ -61,12 +85,12 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         {
             // The transient table (and its Snowpipe Streaming pipe) is stable/reused
             // across runs rather than recreated per run - see
-            // SnowflakeConnectorConfiguration.TransientTableName/PipeName - so its column
-            // shape must be able to grow as new CluedIn properties are seen over time.
+            // SnowflakeConnectorConfiguration.GetTransientTableName/GetPipeName - so its
+            // column shape must be able to grow as new CluedIn properties are seen over time.
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.CreateTransientTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName, fieldNames));
+                SnowflakeSqlBuilder.CreateTransientTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName, fieldNames));
 
-            foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName, fieldNames))
+            foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName, fieldNames))
             {
                 await apiClient.ExecuteStatementAsync(alterStatement);
             }
@@ -82,28 +106,28 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
                 .ToList();
 
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.CreateTargetTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName, targetFieldNames));
+                SnowflakeSqlBuilder.CreateTargetTableIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, resolvedTableName, targetFieldNames));
 
-            foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TableName, targetFieldNames))
+            foreach (var alterStatement in SnowflakeSqlBuilder.GetAddMissingColumnsStatements(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, resolvedTableName, targetFieldNames))
             {
                 await apiClient.ExecuteStatementAsync(alterStatement);
             }
 
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.CreatePipeIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.PipeName, snowflakeConfiguration.TransientTableName));
+                SnowflakeSqlBuilder.CreatePipeIfNotExists(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, pipeName, transientTableName));
 
             // Clear out any rows left behind by a previous run that crashed before
             // reaching the truncate at the end of this method.
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.TruncateTransientTable(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName));
+                SnowflakeSqlBuilder.TruncateTransientTable(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName));
 
-            var writer = new SnowflakeSnowpipeSqlDataWriter();
+            var writer = new SnowflakeSnowpipeSqlDataWriter(pipeName);
             totalProcessed = await writer.WriteOutputAsync(context, configuration, null, fieldNames, exportJobData.IsInitialExport, reader);
 
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.MergeTransientIntoTarget(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName, snowflakeConfiguration.TableName, fieldNames));
+                SnowflakeSqlBuilder.MergeTransientIntoTarget(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName, resolvedTableName, fieldNames));
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.TruncateTransientTable(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, snowflakeConfiguration.TransientTableName));
+                SnowflakeSqlBuilder.TruncateTransientTable(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName));
         }
         finally
         {
