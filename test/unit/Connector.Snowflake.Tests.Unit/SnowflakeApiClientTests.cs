@@ -95,6 +95,67 @@ public class SnowflakeApiClientTests
         Assert.Contains("\"statement\":\"SELECT 1\"", request.Body);
         Assert.Contains("\"database\":\"SNOWFLAKE_LEARNING_DB\"", request.Body);
         Assert.Contains("\"warehouse\":\"COMPUTE_WH\"", request.Body);
+        Assert.Contains("\"timeout\":60", request.Body);
+    }
+
+    // Snowflake cancels a statement's execution once its own timeout elapses (not just how
+    // long the caller waits for a response) - a caller expecting a statement to legitimately
+    // take longer than the 60s default (e.g. a large MERGE) must be able to ask for more.
+    [Fact]
+    public async Task ExecuteStatementAsync_CustomTimeoutSeconds_IsSentInRequestBody()
+    {
+        var handler = new RecordingHttpMessageHandler(
+            (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"resultSetMetaData":{"rowType":[]},"data":[]}""", Encoding.UTF8, "application/json"),
+            });
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://qs30799.snowflakecomputing.com") };
+        using var apiClient = new SnowflakeApiClient(CreateSettings(), httpClient);
+
+        await apiClient.ExecuteStatementAsync("MERGE INTO X", timeoutSeconds: 3600);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("\"timeout\":3600", request.Body);
+    }
+
+    // async=true (the ?async=true query parameter) makes Snowflake return the statement
+    // handle immediately instead of blocking the HTTP call synchronously trying to complete
+    // it inline first - better for a statement expected to run long.
+    [Fact]
+    public async Task ExecuteStatementAsync_AsyncTrue_AppendsAsyncQueryParameter()
+    {
+        var handler = new RecordingHttpMessageHandler(
+            (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"resultSetMetaData":{"rowType":[]},"data":[]}""", Encoding.UTF8, "application/json"),
+            });
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://qs30799.snowflakecomputing.com") };
+        using var apiClient = new SnowflakeApiClient(CreateSettings(), httpClient);
+
+        await apiClient.ExecuteStatementAsync("MERGE INTO X", async: true);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("/api/v2/statements", request.Uri.AbsolutePath);
+        Assert.Equal("async=true", request.Uri.Query.TrimStart('?'));
+    }
+
+    // async=false (the default) must not append the query parameter at all - confirms the
+    // two new tests above aren't just both passing by coincidence.
+    [Fact]
+    public async Task ExecuteStatementAsync_AsyncFalse_DoesNotAppendAsyncQueryParameter()
+    {
+        var handler = new RecordingHttpMessageHandler(
+            (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"resultSetMetaData":{"rowType":[]},"data":[]}""", Encoding.UTF8, "application/json"),
+            });
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://qs30799.snowflakecomputing.com") };
+        using var apiClient = new SnowflakeApiClient(CreateSettings(), httpClient);
+
+        await apiClient.ExecuteStatementAsync("SELECT 1");
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(string.Empty, request.Uri.Query);
     }
 
     [Fact]

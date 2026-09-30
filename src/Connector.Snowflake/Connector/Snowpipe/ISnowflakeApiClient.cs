@@ -6,7 +6,18 @@ namespace CluedIn.Connector.Snowflake.Connector.Snowpipe;
 
 internal interface ISnowflakeApiClient
 {
-    Task<SnowflakeStatementResult> ExecuteStatementAsync(string sql, SnowflakeStatementScope scope = SnowflakeStatementScope.All, CancellationToken cancellationToken = default);
+    // timeoutSeconds: max seconds Snowflake lets the statement run before cancelling it
+    // (not just how long this call waits for a response) - the 60s default matches
+    // SnowflakeApiClient.DefaultStatementTimeoutSeconds and suits DDL/metadata calls; a
+    // statement that can legitimately run longer (e.g. a large MERGE) needs a bigger value.
+    // async: true returns the statement handle immediately (?async=true) instead of
+    // blocking synchronously for up to 45s trying to complete inline first.
+    Task<SnowflakeStatementResult> ExecuteStatementAsync(
+        string sql,
+        SnowflakeStatementScope scope = SnowflakeStatementScope.All,
+        int timeoutSeconds = 60,
+        bool async = false,
+        CancellationToken cancellationToken = default);
 
     Task<SnowflakeChannelHandle> OpenChannelAsync(string pipeName, string channelName, CancellationToken cancellationToken = default);
 

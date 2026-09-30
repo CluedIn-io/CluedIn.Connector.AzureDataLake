@@ -17,6 +17,16 @@ namespace CluedIn.Connector.Snowflake.Connector;
 
 internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
 {
+    // The DDL/ALTER/truncate calls around it are fast and use SnowflakeApiClient's 60s
+    // default, but a MERGE against a large target table (or on a small warehouse) can
+    // legitimately take much longer - Snowflake cancels a statement's execution once its own
+    // timeout elapses (not just how long the client waits for a response), so the MERGE
+    // needs a timeout generous enough that a real one isn't mistaken for a stuck job.
+    // async: true avoids holding one HTTP request open for however long that takes,
+    // returning the statement handle immediately instead so SnowflakeApiClient's normal
+    // polling loop can track progress.
+    private const int MergeStatementTimeoutSeconds = 3600;
+
     public SnowflakeExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
@@ -125,7 +135,9 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
             totalProcessed = await writer.WriteOutputAsync(context, configuration, null, fieldNames, exportJobData.IsInitialExport, reader);
 
             await apiClient.ExecuteStatementAsync(
-                SnowflakeSqlBuilder.MergeTransientIntoTarget(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName, resolvedTableName, fieldNames));
+                SnowflakeSqlBuilder.MergeTransientIntoTarget(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName, resolvedTableName, fieldNames),
+                timeoutSeconds: MergeStatementTimeoutSeconds,
+                async: true);
             await apiClient.ExecuteStatementAsync(
                 SnowflakeSqlBuilder.TruncateTransientTable(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, transientTableName));
         }

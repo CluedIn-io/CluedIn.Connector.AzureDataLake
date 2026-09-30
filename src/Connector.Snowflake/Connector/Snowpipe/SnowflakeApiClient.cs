@@ -30,12 +30,18 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
 {
     private static readonly TimeSpan _tokenLifetime = TimeSpan.FromMinutes(59);
     private static readonly TimeSpan _statementPollInterval = TimeSpan.FromMilliseconds(500);
-    // Must stay comfortably above StatementTimeoutSeconds (the timeout submitted with the
-    // statement itself, below) - polling for less than that meant the client could give up
-    // and throw a spurious TimeoutException while Snowflake was still legitimately
+    // Default timeout (seconds) sent with a statement, for DDL/metadata calls that always
+    // complete quickly. Snowflake automatically CANCELS a statement's execution once this
+    // many seconds elapse (confirmed against Snowflake's SQL API documentation) - it isn't
+    // just a "how long to wait before returning a handle" value, so a statement that can
+    // legitimately run longer (e.g. a large MERGE) must be given a bigger timeoutSeconds
+    // explicitly, not rely on this default.
+    private const int DefaultStatementTimeoutSeconds = 60;
+    // The client-side poll deadline must stay comfortably above whatever timeoutSeconds was
+    // actually submitted for that call - polling for less than that meant the client could
+    // give up and throw a spurious TimeoutException while Snowflake was still legitimately
     // executing a long-running statement server-side.
-    private const int StatementTimeoutSeconds = 60;
-    private static readonly TimeSpan _statementPollTimeout = TimeSpan.FromSeconds(StatementTimeoutSeconds + 15);
+    private const int PollDeadlineBufferSeconds = 15;
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly MediaTypeHeaderValue _ndjsonMediaType = new("application/x-ndjson");
 
@@ -111,12 +117,28 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
         return host;
     }
 
-    public async Task<SnowflakeStatementResult> ExecuteStatementAsync(string sql, SnowflakeStatementScope scope = SnowflakeStatementScope.All, CancellationToken cancellationToken = default)
+    // timeoutSeconds is the maximum time Snowflake will let the statement itself run before
+    // automatically cancelling it - not just how long this call waits for a response (that's
+    // what async controls). A statement that can legitimately take longer than the ~60s a
+    // DDL/metadata call needs (e.g. a large MERGE) must be given a bigger value here.
+    //
+    // async=true (the ?async=true query parameter) makes Snowflake return the statement
+    // handle immediately instead of blocking the HTTP call synchronously for up to 45s
+    // trying to complete it inline first - better for a statement expected to run long,
+    // since a single long-lived HTTP request is more fragile (proxy/gateway timeouts, no
+    // visibility into progress) than a fast POST followed by polling GETs, which
+    // PollStatementAsync below already does regardless of why a 202 came back.
+    public async Task<SnowflakeStatementResult> ExecuteStatementAsync(
+        string sql,
+        SnowflakeStatementScope scope = SnowflakeStatementScope.All,
+        int timeoutSeconds = DefaultStatementTimeoutSeconds,
+        bool async = false,
+        CancellationToken cancellationToken = default)
     {
         var requestBody = new StatementRequest
         {
             Statement = sql,
-            Timeout = StatementTimeoutSeconds,
+            Timeout = timeoutSeconds,
             Database = scope is SnowflakeStatementScope.All or SnowflakeStatementScope.DatabaseOnly or SnowflakeStatementScope.DatabaseAndSchema
                 ? _settings.Database
                 : null,
@@ -129,7 +151,8 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
             Role = string.IsNullOrWhiteSpace(_settings.Role) ? null : _settings.Role,
         };
 
-        using var response = await SendControlHostAsync(HttpMethod.Post, "/api/v2/statements", requestBody, cancellationToken);
+        var path = async ? "/api/v2/statements?async=true" : "/api/v2/statements";
+        using var response = await SendControlHostAsync(HttpMethod.Post, path, requestBody, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Accepted)
@@ -141,7 +164,7 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
 
         if (response.StatusCode == System.Net.HttpStatusCode.Accepted && statementResponse?.StatementHandle != null)
         {
-            statementResponse = await PollStatementAsync(statementResponse.StatementHandle, cancellationToken);
+            statementResponse = await PollStatementAsync(statementResponse.StatementHandle, timeoutSeconds, cancellationToken);
         }
 
         var columnNames = statementResponse?.ResultSetMetaData?.RowType?.Select(field => field.Name).ToList()
@@ -152,9 +175,10 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
         return new SnowflakeStatementResult(true, columnNames, rows);
     }
 
-    private async Task<StatementResponse> PollStatementAsync(string statementHandle, CancellationToken cancellationToken)
+    private async Task<StatementResponse> PollStatementAsync(string statementHandle, int timeoutSeconds, CancellationToken cancellationToken)
     {
-        var deadline = DateTimeOffset.UtcNow + _statementPollTimeout;
+        var pollTimeout = TimeSpan.FromSeconds(timeoutSeconds + PollDeadlineBufferSeconds);
+        var deadline = DateTimeOffset.UtcNow + pollTimeout;
         while (DateTimeOffset.UtcNow < deadline)
         {
             await Task.Delay(_statementPollInterval, cancellationToken);
@@ -175,7 +199,7 @@ internal sealed class SnowflakeApiClient : ISnowflakeApiClient, IDisposable
             return JsonSerializer.Deserialize<StatementResponse>(body, _jsonOptions);
         }
 
-        throw new TimeoutException($"Snowflake statement '{statementHandle}' did not complete within {_statementPollTimeout}.");
+        throw new TimeoutException($"Snowflake statement '{statementHandle}' did not complete within {pollTimeout}.");
     }
 
     public async Task<SnowflakeChannelHandle> OpenChannelAsync(string pipeName, string channelName, CancellationToken cancellationToken = default)
