@@ -132,7 +132,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         }
         catch (Exception ex)
         {
-            await AddErrorToStreamIngestionLog(context, streamModel, $"Error exporting for StreamId {exportJobData.StreamId} to file {exportJobData.OutputFileName}.", exception: ex);
+            await AddErrorToStreamIngestionLog(context, streamModel, $"Error exporting for StreamId {exportJobData.StreamId} to {exportJobData.OutputFileName}.", exception: ex);
             throw;
         }
     }
@@ -252,7 +252,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.Message,
             args.Schedule);
 
-        await this.AddInformationToStreamIngestionLog(context, streamModel, $"Exported file {outputFileName} with {totalRows} rows.");
+        await this.AddInformationToStreamIngestionLog(context, streamModel, $"Exported {outputFileName} with {totalRows} rows.");
         return ExportResult.CreateSuccess(outputDirectoryPath.GetFilePath(outputFileName));
 
         static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null)
