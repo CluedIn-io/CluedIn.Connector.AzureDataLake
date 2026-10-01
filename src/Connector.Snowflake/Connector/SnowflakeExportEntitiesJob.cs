@@ -69,22 +69,9 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         // OneLakeExportEntitiesJob.PostExportAsync resolves its own TableName pattern with
         // ({DataTime} isn't supported here - see VerifyDataLakeConnection - since, unlike a
         // file name, this resolved name is reused as the transient table/pipe name below
-        // too, and is expected to stay the same across runs for a given stream).
-        //
-        // Upper-cased afterwards (verified live): substituted variables like
-        // {ContainerName} aren't necessarily upper-case, but the created pipe/table are
-        // referenced via QualifiedName's double-quoted (case-preserving) identifiers for
-        // DDL/MERGE, while the Snowpipe Streaming REST API's pipe lookup 404s unless given
-        // the canonical, Snowflake-default (upper-case) form - so a mixed-case resolved name
-        // could create the pipe successfully via the SQL API yet fail to open a channel on
-        // it via the streaming API.
-        var resolvedTableName = (await PatternHelper.ReplaceNameUsingPatternAsync(
-            context,
-            snowflakeConfiguration.TableName,
-            exportJobData.StreamId,
-            exportJobData.StreamModel.ContainerName,
-            exportJobData.AsOfTime,
-            exportJobData.OutputFormat)).ToUpperInvariant();
+        // too, and is expected to stay the same across runs for a given stream). See
+        // ResolveTableNameAsync for why it's also upper-cased.
+        var resolvedTableName = await ResolveTableNameAsync(context, snowflakeConfiguration, exportJobData);
         var transientTableName = SnowflakeConnectorConfiguration.GetTransientTableName(resolvedTableName);
         var pipeName = SnowflakeConnectorConfiguration.GetPipeName(resolvedTableName);
 
@@ -147,6 +134,69 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         }
 
         return totalProcessed;
+    }
+
+    // The base's default (lastExportedFile == null) relies on the SQL Server cache's
+    // export history, which the archive-and-recreate flow leaves behind - rebuilding (not
+    // truncating) a target table that was archived (renamed) or dropped out from under this
+    // connector would otherwise be treated as a delta export against a table that doesn't
+    // have the rows the delta assumes are already there. So, on top of the base check, an
+    // absent target table is always treated as the initial export regardless of history.
+    protected override async Task<bool> GetIsInitialExport(
+        ExecutionContext context,
+        ExportJobDataBase exportJobDataBase,
+        IStorageClient storageClient,
+        LastExportedFile? lastExportedFile,
+        DirectoryPath outputDirectoryPath)
+    {
+        if (exportJobDataBase.StorageConfiguration is not SnowflakeConnectorConfiguration snowflakeConfiguration)
+        {
+            throw new ArgumentException($"Configuration must be of type {nameof(SnowflakeConnectorConfiguration)}.", nameof(exportJobDataBase));
+        }
+
+        var resolvedTableName = await ResolveTableNameAsync(context, snowflakeConfiguration, exportJobDataBase);
+
+        var apiClient = CreateApiClient(snowflakeConfiguration);
+        try
+        {
+            var result = await apiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.ShowTablesLikeInSchema(snowflakeConfiguration.Database, snowflakeConfiguration.Schema, resolvedTableName),
+                SnowflakeStatementScope.None);
+
+            if (!result.HasExactNameMatch(resolvedTableName))
+            {
+                return true;
+            }
+        }
+        finally
+        {
+            (apiClient as IDisposable)?.Dispose();
+        }
+
+        return await base.GetIsInitialExport(context, exportJobDataBase, storageClient, lastExportedFile, outputDirectoryPath);
+    }
+
+    private static Task<string> ResolveTableNameAsync(ExecutionContext context, SnowflakeConnectorConfiguration snowflakeConfiguration, ExportJobDataBase exportJobDataBase)
+    {
+        return ResolveTableNameAsync(context, snowflakeConfiguration, exportJobDataBase.StreamId, exportJobDataBase.ContainerName, exportJobDataBase.AsOfTime, exportJobDataBase.OutputFormat);
+    }
+
+    // Upper-cased afterwards (verified live): substituted variables like {ContainerName}
+    // aren't necessarily upper-case, but the created pipe/table are referenced via
+    // QualifiedName's double-quoted (case-preserving) identifiers for DDL/MERGE, while the
+    // Snowpipe Streaming REST API's pipe lookup 404s unless given the canonical,
+    // Snowflake-default (upper-case) form - so a mixed-case resolved name could create the
+    // pipe successfully via the SQL API yet fail to open a channel on it via the streaming
+    // API.
+    private static async Task<string> ResolveTableNameAsync(ExecutionContext context, SnowflakeConnectorConfiguration snowflakeConfiguration, Guid streamId, string containerName, DateTimeOffset asOfTime, string outputFormat)
+    {
+        return (await PatternHelper.ReplaceNameUsingPatternAsync(
+            context,
+            snowflakeConfiguration.TableName,
+            streamId,
+            containerName,
+            asOfTime,
+            outputFormat)).ToUpperInvariant();
     }
 
     private static SnowflakeApiClient CreateApiClient(SnowflakeConnectorConfiguration configuration)

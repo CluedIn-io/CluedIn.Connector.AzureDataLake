@@ -153,6 +153,74 @@ public class SnowflakeDeltaExportIntegrationTests
         }
     }
 
+    // Verifies SnowflakeExportEntitiesJob.GetIsInitialExport: if the target table doesn't
+    // exist (e.g. it was dropped or archived out from under the connector, independent of
+    // the SQL Server export history that the base class's default GetIsInitialExport relies
+    // on), the next export must be treated as an initial export - i.e. a full snapshot, not
+    // a delta against history - since a delta MERGE into a freshly recreated (empty) table
+    // would only carry over whatever changed since the last export, silently losing every
+    // row that didn't change.
+    [Fact]
+    public async Task Export_TreatsRunAsInitial_WhenTargetTableIsMissing()
+    {
+        if (!SnowflakeTestCredentials.IsAvailable)
+        {
+            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
+            return;
+        }
+
+        var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
+        if (string.IsNullOrWhiteSpace(streamCacheConnectionStringEncoded))
+        {
+            DynamicSkip.Request("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
+            return;
+        }
+
+        var streamCacheConnectionString = Encoding.UTF8.GetString(Convert.FromBase64String(streamCacheConnectionStringEncoded));
+        var setup = await SetupAsync(streamCacheConnectionString);
+
+        try
+        {
+            var entityA = Guid.NewGuid();
+            var entityB = Guid.NewGuid();
+
+            // Run 1 (initial export): both rows go out, and export history now exists for
+            // this stream.
+            await StoreAsync(setup, entityA, "missing-table-a", "Car A", persistVersion: 1, VersionChangeType.Added);
+            await StoreAsync(setup, entityB, "missing-table-b", "Car B", persistVersion: 1, VersionChangeType.Added);
+
+            var totalRun1 = await RunExportAsync(setup);
+            Assert.Equal(2, totalRun1);
+            await AssertTargetRowAsync(setup, entityA, "Car A");
+            await AssertTargetRowAsync(setup, entityB, "Car B");
+
+            // Drop the target table directly (not via ArchiveContainer) to isolate this from
+            // the archive-rename behavior - export history in SQL Server still shows a
+            // successful prior export, so the base class's default GetIsInitialExport would
+            // treat run 2 as a delta if the Snowflake-specific override didn't also check for
+            // the table's existence.
+            await setup.ApiClient.ExecuteStatementAsync(
+                SnowflakeSqlBuilder.DropTableIfExists(setup.Configuration.Database, setup.Configuration.Schema, setup.Configuration.TableName));
+
+            // Run 2 (new insert, after the table went missing): only entity C is "new" per
+            // the stream cache, but the table being gone means run 2 must still ship A and B
+            // too - a delta of just C would recreate the table with C alone, silently losing
+            // A and B.
+            var entityC = Guid.NewGuid();
+            await StoreAsync(setup, entityC, "missing-table-c", "Car C", persistVersion: 1, VersionChangeType.Added);
+
+            var totalRun2 = await RunExportAsync(setup);
+            Assert.Equal(3, totalRun2);
+            await AssertTargetRowAsync(setup, entityA, "Car A");
+            await AssertTargetRowAsync(setup, entityB, "Car B");
+            await AssertTargetRowAsync(setup, entityC, "Car C");
+        }
+        finally
+        {
+            await CleanupAsync(setup);
+        }
+    }
+
     // Verifies TableName pattern support (SnowflakeConfigurationConstants.TableName /
     // SnowflakeExportEntitiesJob/SnowflakeConnector.ArchiveContainer): the target table
     // lands at the resolved name, and - since GetTransientTableName/GetPipeName derive from
