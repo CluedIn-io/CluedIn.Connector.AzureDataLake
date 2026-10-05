@@ -95,9 +95,9 @@ public class OneLakeConnector : StorageConnectorBase
 
     protected override Type ExportJobType => typeof(OneLakeExportEntitiesJob);
 
-    protected override async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException, bool isHealthCheck)
     {
-        var result = await base.VerifyConnectionInternal(executionContext, configuration, shouldLogException);
+        var result = await base.VerifyConnectionInternal(executionContext, configuration, shouldLogException, isHealthCheck);
 
         if (result?.Success != true || !configuration.IsStreamCacheEnabled)
         {
