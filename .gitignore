@@ -274,3 +274,6 @@ coverage.json
 .artifacts/
 .DS_Store
 /.mfractor
+
+# Developer only Runsettings (contain secrets for local test runs)
+devonly.runsettings
