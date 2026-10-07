@@ -115,7 +115,7 @@ internal class AzureDataLakeConnectorConfiguration
         return !string.IsNullOrWhiteSpace(AccountKey) && IsBase64String(AccountKey);
     }
 
-    internal bool IsValidSasTokenTime(IDateTimeOffsetProvider dateTimeOffsetProvider)
+    internal bool IsValidSasTokenTime(ITimeProvider timeProvider)
     {
         if (string.IsNullOrWhiteSpace(AccountKey))
         {
@@ -134,7 +134,7 @@ internal class AzureDataLakeConnectorConfiguration
                 return false;
             }
 
-            var now = dateTimeOffsetProvider.GetCurrentUtcTime();
+            var now = timeProvider.GetUtcNow();
             var parsedEnd = DateTimeOffset.MinValue;
             var isValidEnd = DateTimeOffset.TryParse(se, out parsedEnd) && parsedEnd.ToUniversalTime() > now; // Validate the end time format
 

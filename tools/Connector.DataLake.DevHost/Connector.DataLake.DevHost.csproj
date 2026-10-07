@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Connector.AzureAIStudio\Connector.AzureAIStudio.csproj" />
@@ -9,6 +10,7 @@
     <ProjectReference Include="..\..\src\Connector.DataLake.Common\Connector.DataLake.Common.csproj" />
     <ProjectReference Include="..\..\src\Connector.FabricOpenMirroring\Connector.FabricOpenMirroring.csproj" />
     <ProjectReference Include="..\..\src\Connector.OneLake\Connector.OneLake.csproj" />
+    <ProjectReference Include="..\..\src\Connector.Snowflake\Connector.Snowflake.csproj" />
     <ProjectReference Include="..\..\src\Connector.SynapseDataEngineering\Connector.SynapseDataEngineering.csproj" />
   </ItemGroup>
 </Project>

@@ -22,20 +22,20 @@ internal abstract class UpdateStreamScheduleBase
 
     protected Type ExportEntitiesJobType { get; }
     protected IScheduledJobQueue JobQueue { get; }
-    protected IDateTimeOffsetProvider DateTimeOffsetProvider { get; }
+    protected ITimeProvider TimeProvider { get; }
 
     protected UpdateStreamScheduleBase(
         ApplicationContext applicationContext,
         IStorageConfigurationConstants constants,
         IStorageFactory jobDataFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider,
+        ITimeProvider timeProvider,
         Type exportEntitiesJobType,
         IScheduledJobQueue jobQueue)
     {
         ApplicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
         Constants = constants ?? throw new ArgumentNullException(nameof(constants));
         JobDataFactory = jobDataFactory ?? throw new ArgumentNullException(nameof(jobDataFactory));
-        DateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        TimeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ExportEntitiesJobType = exportEntitiesJobType ?? throw new ArgumentNullException(nameof(exportEntitiesJobType));
         JobQueue = jobQueue ?? throw new ArgumentNullException(nameof(jobQueue));
     }
@@ -77,7 +77,7 @@ internal abstract class UpdateStreamScheduleBase
         else
         {
             executionContext.Log.LogDebug("Enable export for stream {StreamId} using schedule '{Schedule}'.", stream.Id, schedule.CronSchedule);
-            var queuedJob = new QueuedJob(jobKey, executionContext.Organization.Id, ExportEntitiesJobType, schedule, DateTimeOffsetProvider.GetCurrentUtcTime());
+            var queuedJob = new QueuedJob(jobKey, executionContext.Organization.Id, ExportEntitiesJobType, schedule, TimeProvider.GetUtcNow());
             JobQueue.AddOrUpdateJob(queuedJob);
         }
     }

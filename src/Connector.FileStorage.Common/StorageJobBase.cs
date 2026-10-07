@@ -8,10 +8,10 @@ namespace CluedIn.Connector.FileStorage.Common;
 
 internal abstract class StorageJobBase : JobBase, ICustomScheduledJob, IStorageJob
 {
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
-    protected StorageJobBase(ApplicationContext appContext, IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext, JobType.CustomScheduledJob)
+    private readonly ITimeProvider _timeProvider;
+    protected StorageJobBase(ApplicationContext appContext, ITimeProvider timeProvider) : base(appContext, JobType.CustomScheduledJob)
     {
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     protected override ExecutionContext CreateExecutionContext(ExecutionContext systemContext, JobArgs args)
@@ -21,7 +21,7 @@ internal abstract class StorageJobBase : JobBase, ICustomScheduledJob, IStorageJ
 
     protected override void DoRun(ExecutionContext context, JobArgs args)
     {
-        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var now = _timeProvider.GetUtcNow();
         var asOfTime = args.Schedule == CronSchedules.NeverCron || !CronSchedules.TryGetCronSchedule(args.Schedule, out _)
             ? now
             : CronSchedules.GetPreviousOccurrence(args.Schedule, now.AddSeconds(-1));

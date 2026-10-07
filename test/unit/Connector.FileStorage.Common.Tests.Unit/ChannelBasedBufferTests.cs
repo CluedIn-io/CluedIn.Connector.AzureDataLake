@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.FileStorage.Common.Buffers;
-using CluedIn.Core;
 
 namespace CluedIn.Connector.FileStorage.Common.Tests.Unit;
 
@@ -28,17 +27,12 @@ public class ChannelBasedBufferTests : BufferTestsBase
             actionHistory.Add((DateTime.Now, x));
             return Task.CompletedTask;
         },
-        new TestDateTimeOffsetProvider());
+        new TestTimeProvider());
     }
 
-    internal class TestDateTimeOffsetProvider : IDateTimeOffsetProvider
+    internal class TestTimeProvider : ITimeProvider
     {
-        public DateTimeOffset GetCurrentTime()
-        {
-            return DateTimeOffset.Now;
-        }
-
-        public DateTimeOffset GetCurrentUtcTime()
+        public DateTimeOffset GetUtcNow()
         {
             return DateTimeOffset.UtcNow;
         }

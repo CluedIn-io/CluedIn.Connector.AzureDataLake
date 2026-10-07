@@ -1,5 +1,6 @@
 using System;
 
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
@@ -14,8 +15,8 @@ public class SynapseDataEngineeringConnector : StorageConnectorBase
         ApplicationContext applicationContext,
         ISynapseDataEngineeringConfigurationConstants constants,
         SynapseDataEngineeringStorageFactory dataLakeJobDataStorageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, dataLakeJobDataStorageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(logger, applicationContext, constants, dataLakeJobDataStorageFactory, timeProvider)
     {
     }
 

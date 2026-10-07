@@ -40,12 +40,12 @@ public abstract class StorageConnectorComponentBase : ServiceApplicationComponen
 
             var dataLakeConstants = Container.Resolve<TConfigurationConstants>();
             var jobDataFactory = Container.Resolve<TClientFactory>();
-            var dateTimeOffsetProvider = Container.Resolve<IDateTimeOffsetProvider>();
+            var timeProvider = Container.Resolve<ITimeProvider>();
 
             var migrator = GetDataMigrator(dataLakeConstants, jobDataFactory);
             _ = Task.Run(migrator.MigrateAsync);
 
-            var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, dateTimeOffsetProvider);
+            var scheduler = GetScheduler(dataLakeConstants, jobDataFactory, timeProvider);
 
             _ = Task.Run(scheduler.RunAsync);
 
@@ -73,7 +73,7 @@ public abstract class StorageConnectorComponentBase : ServiceApplicationComponen
 
     private protected virtual void SubscribeToEvents(IStorageConfigurationConstants constants, IStorageFactory jobDataFactory, IScheduledJobQueue jobQueue)
     {
-        var dateTimeProvider = Container.Resolve<IDateTimeOffsetProvider>();
+        var dateTimeProvider = Container.Resolve<ITimeProvider>();
         _updateExportTargetEventHandler = new(ApplicationContext, constants, jobDataFactory, dateTimeProvider, ExportEntitiesJobType, jobQueue);
         _changeStreamStateEventHandler = new(ApplicationContext, constants, jobDataFactory, dateTimeProvider, ExportEntitiesJobType, jobQueue);
         _updateStreamEventHandler = new(ApplicationContext, constants, jobDataFactory, dateTimeProvider, ExportEntitiesJobType, jobQueue);
@@ -85,8 +85,8 @@ public abstract class StorageConnectorComponentBase : ServiceApplicationComponen
         return new StorageDataMigrator(Log, ApplicationContext, Container.Resolve<DbContextOptions<CluedInEntities>>(), ShortConnectorComponentName, constants, jobDataFactory);
     }
 
-    private protected virtual IScheduler GetScheduler(IStorageConfigurationConstants constants, IStorageFactory jobDataFactory, IDateTimeOffsetProvider dateTimeOffsetProvider)
+    private protected virtual IScheduler GetScheduler(IStorageConfigurationConstants constants, IStorageFactory jobDataFactory, ITimeProvider timeProvider)
     {
-        return new StorageScheduler(Log, ShortConnectorComponentName, ApplicationContext, dateTimeOffsetProvider, constants, jobDataFactory, ExportEntitiesJobType);
+        return new StorageScheduler(Log, ShortConnectorComponentName, ApplicationContext, timeProvider, constants, jobDataFactory, ExportEntitiesJobType);
     }
 }

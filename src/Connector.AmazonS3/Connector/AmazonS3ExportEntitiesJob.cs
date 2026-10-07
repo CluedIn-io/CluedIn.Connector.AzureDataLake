@@ -1,3 +1,4 @@
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
@@ -11,8 +12,8 @@ internal class AmazonS3ExportEntitiesJob : StorageExportEntitiesJobBase
         IStreamRepository streamRepository,
         IAmazonS3ConfigurationConstants configurationConstants,
         AmazonS3StorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, timeProvider)
     {
     }
 

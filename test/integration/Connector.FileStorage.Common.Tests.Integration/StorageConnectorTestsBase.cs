@@ -109,7 +109,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
     private protected Task<SetupContainerResult> SetupContainer<TConfiguration>(
         TConfiguration configuration,
         StreamMode streamMode,
-        Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null)
+        Action<Mock<ITimeProvider>> configureTimeProvider = null)
         where TConfiguration : StorageConfigurationBase
     {
         var organizationId = Guid.NewGuid();
@@ -133,7 +133,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             });
         container.Register(Component.For<IComponentHealthService>().Instance(componentHealthServiceMock.Object));
 
-        var mockDateTimeOffsetProvider = SetupDateTimeOffsetProvider(configureTimeProvider);
+        var mockTimeProvider = SetupTimeProvider(configureTimeProvider);
         _ = SetupApplicationCache(container);
         var providerDefinition = SetupProviderDefinition(providerDefinitionId, container);
         var organization = SetupOrganization(organizationId, container, applicationContext);
@@ -142,8 +142,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         SetupConfiguration(configuration);
 
         var constantsMock = CreateConstantsMock();
-        var storageFactoryMock = CreateStorageFactoryMock(container, applicationContext, mockDateTimeOffsetProvider, constantsMock);
-        var connectorMock = GetConnectorMock(applicationContext, mockDateTimeOffsetProvider, constantsMock, storageFactoryMock);
+        var storageFactoryMock = CreateStorageFactoryMock(container, applicationContext, mockTimeProvider, constantsMock);
+        var connectorMock = GetConnectorMock(applicationContext, mockTimeProvider, constantsMock, storageFactoryMock);
         storageFactoryMock.Setup(x => x.CreateStorageConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<IReadOnlyStreamModel>()))
             .ReturnsAsync(configuration);
         storageFactoryMock.Setup(x => x.CreateStorageConfiguration(It.IsAny<ExecutionContext>(), It.IsAny<Guid>()))
@@ -156,7 +156,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                 context,
                 connectorMock,
                 streamModel,
-                mockDateTimeOffsetProvider,
+                mockTimeProvider,
                 applicationContext,
                 organization,
                 storageFactoryMock,
@@ -169,14 +169,14 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
 
     protected abstract Mock<TConnector> GetConnectorMock(
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<TConfigurationConstants> constantsMock,
         Mock<TClientFactory> jobDataFactory);
 
     protected abstract Mock<TClientFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<TConfigurationConstants> constantsMock);
 
     protected virtual StreamModel CreateStreamModel(
@@ -218,7 +218,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         var jobData = setupContainerResult.StorageConfiguration;
         var connectionString = jobData.StreamCacheConnectionString;
         var streamModel = setupContainerResult.StreamModel;
-        var mockDateTimeOffsetProvider = setupContainerResult.DateTimeOffsetProviderMock;
+        var mockTimeProvider = setupContainerResult.TimeProviderMock;
 
         try
         {
@@ -227,7 +227,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             var tableName = CacheTableHelper.GetCacheTableName(streamModel.Id);
 
             await DisableHistory(connection, tableName);
-            await AlterHistory(mockDateTimeOffsetProvider, connection, tableName);
+            await AlterHistory(mockTimeProvider, connection, tableName);
             await EnableHistory(connection, tableName);
             await AssertRowCount(connection, tableName);
         }
@@ -281,10 +281,10 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             await disableHistoryCommand.ExecuteNonQueryAsync();
         }
 
-        async Task AlterHistory(Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider, SqlConnection connection, string tableName)
+        async Task AlterHistory(Mock<ITimeProvider> mockTimeProvider, SqlConnection connection, string tableName)
         {
 
-            var targetTime = mockDateTimeOffsetProvider.Object.GetCurrentUtcTime();
+            var targetTime = mockTimeProvider.Object.GetUtcNow();
             var getCurrentValidFromSql = $"""
                         SELECT
                             [ValidFrom]
@@ -440,19 +440,19 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         return cache.Object;
     }
 
-    private static Mock<IDateTimeOffsetProvider> SetupDateTimeOffsetProvider(Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider)
+    private static Mock<ITimeProvider> SetupTimeProvider(Action<Mock<ITimeProvider>> configureTimeProvider)
     {
-        var mockDateTimeOffsetProvider = new Mock<IDateTimeOffsetProvider>();
+        var mockTimeProvider = new Mock<ITimeProvider>();
         if (configureTimeProvider != null)
         {
-            configureTimeProvider(mockDateTimeOffsetProvider);
+            configureTimeProvider(mockTimeProvider);
         }
         else
         {
-            mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime()).Returns(DefaultCurrentTime.ToUniversalTime());
+            mockTimeProvider.Setup(x => x.GetUtcNow()).Returns(DefaultCurrentTime.ToUniversalTime());
         }
 
-        return mockDateTimeOffsetProvider;
+        return mockTimeProvider;
     }
 
     protected enum ArrayType
@@ -764,7 +764,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         ExecutionContext Context,
         Mock<TConnector> ConnectorMock,
         StreamModel StreamModel,
-        Mock<IDateTimeOffsetProvider> DateTimeOffsetProviderMock,
+        Mock<ITimeProvider> TimeProviderMock,
         ApplicationContext ApplicationContext,
         Organization Organization,
         Mock<TClientFactory> StorageFactoryMock,
@@ -893,7 +893,7 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
        string format,
        Func<SetupContainerResult, ExportedFilePath, Task> assertMethod,
        Func<ExecuteExportArg, Task<ExportedFilePath>> executeExport = null,
-       Action<Mock<IDateTimeOffsetProvider>> configureTimeProvider = null,
+       Action<Mock<ITimeProvider>> configureTimeProvider = null,
        Action<Dictionary<string, object>> configureAuthentication = null,
        Func<IEnumerable<ConnectorEntityData>> getConnectorEntityData = null,
        Func<SetupContainerResult, ConnectorEntityData, Task> storeData = null)

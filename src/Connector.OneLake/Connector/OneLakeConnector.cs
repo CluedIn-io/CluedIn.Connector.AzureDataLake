@@ -30,8 +30,8 @@ public class OneLakeConnector : StorageConnectorBase
         ApplicationContext applicationContext,
         IOneLakeConfigurationConstants constants,
         OneLakeStorageFactory dataLakeStorageJobDataFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(logger, applicationContext, constants, dataLakeStorageJobDataFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(logger, applicationContext, constants, dataLakeStorageJobDataFactory, timeProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -95,9 +95,9 @@ public class OneLakeConnector : StorageConnectorBase
 
     protected override Type ExportJobType => typeof(OneLakeExportEntitiesJob);
 
-    protected override async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
+    protected override async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException, bool isHealthCheck)
     {
-        var result = await base.VerifyConnectionInternal(executionContext, configuration, shouldLogException);
+        var result = await base.VerifyConnectionInternal(executionContext, configuration, shouldLogException, isHealthCheck);
 
         if (result?.Success != true || !configuration.IsStreamCacheEnabled)
         {

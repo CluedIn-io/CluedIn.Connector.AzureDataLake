@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- File name extension must be .runsettings -->
+<RunSettings>
+    <RunConfiguration>
+        <EnvironmentVariables>
+            <!-- Stream cache connection string (base64 encoded) to be used by all integration tests -->
+            <INTEGRATIONTEST_STREAMCACHE>dummy_base64_encoded</INTEGRATIONTEST_STREAMCACHE>
+            
+            <!-- Amazon S3 -->
+            <S3_ACCESSKEY>dummy</S3_ACCESSKEY>
+            <S3_SECRETKEY>dummy</S3_SECRETKEY>
+            <S3_REGION>dummy</S3_REGION>
+            <S3_BUCKETNAME>dummy</S3_BUCKETNAME>
+            
+            <!-- Azure Data Lake -->
+            <ADL2_ACCOUNTNAME>dummy</ADL2_ACCOUNTNAME>
+            <ADL2_ACCOUNTKEY>dummy</ADL2_ACCOUNTKEY>
+            <ADL2_TENANTID>dummy</ADL2_TENANTID>
+            <ADL2_CLIENTID>dummy</ADL2_CLIENTID>
+            <ADL2_CLIENTSECRET>dummy</ADL2_CLIENTSECRET>
+            <ADL2_KEYVAULTURI>dummy</ADL2_KEYVAULTURI>
+            <ADL2_KEYVAULTSECRETNAME>dummy</ADL2_KEYVAULTSECRETNAME>
+            
+            <!-- Fabric Open Mirroring -->
+            <FABRICOPENMIRRORING_TENANTID>dummy</FABRICOPENMIRRORING_TENANTID>
+            <FABRICOPENMIRRORING_CLIENTID>dummy</FABRICOPENMIRRORING_CLIENTID>
+            <!-- Base 64 encoded client secret -->
+            <FABRICOPENMIRRORING_CLIENTSECRET>dummy_base64_encoded</FABRICOPENMIRRORING_CLIENTSECRET>
+            <FABRICOPENMIRRORING_WORKSPACENAME>dummy</FABRICOPENMIRRORING_WORKSPACENAME>
+            <FABRICOPENMIRRORING_MIRROREDDATABASENAME>dummy</FABRICOPENMIRRORING_MIRROREDDATABASENAME>
+            
+            <!-- One Lake -->
+            <ONELAKE_TENANTID>dummy</ONELAKE_TENANTID>
+            <ONELAKE_CLIENTID>dummy</ONELAKE_CLIENTID>
+            <!-- Base 64 encoded client secret -->
+            <ONELAKE_CLIENTSECRET>dummy_base64_encoded</ONELAKE_CLIENTSECRET>
+            <ONELAKE_WORKSPACENAME>dummy</ONELAKE_WORKSPACENAME>
+            <ONELAKE_ITEMNAME>dummy</ONELAKE_ITEMNAME>
+
+            <!-- Snowflake -->
+            <!-- Account identifier, e.g. 'cluedin-ci12345' if a region suffix is required -->
+            <SNOWFLAKE_ACCOUNT>dummy</SNOWFLAKE_ACCOUNT>
+            <SNOWFLAKE_USER>dummy</SNOWFLAKE_USER>
+            <!-- PEM-encoded RSA private key for key-pair auth - real newlines, "\n"-escaped, or base64-encoded -->
+            <SNOWFLAKE_PRIVATE_KEY>dummy</SNOWFLAKE_PRIVATE_KEY>
+            <!-- Only required if the private key above is encrypted -->
+            <SNOWFLAKE_PRIVATE_KEY_PASSPHRASE>dummy</SNOWFLAKE_PRIVATE_KEY_PASSPHRASE>
+            <SNOWFLAKE_DATABASE>dummy</SNOWFLAKE_DATABASE>
+            <SNOWFLAKE_SCHEMA>dummy</SNOWFLAKE_SCHEMA>
+            <SNOWFLAKE_WAREHOUSE>dummy</SNOWFLAKE_WAREHOUSE>
+            <SNOWFLAKE_ROLE>dummy</SNOWFLAKE_ROLE>
+        </EnvironmentVariables>
+    </RunConfiguration>
+</RunSettings>

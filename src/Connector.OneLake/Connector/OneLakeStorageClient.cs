@@ -9,6 +9,7 @@ using Azure.Core;
 using Azure.Identity;
 
 using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
 using Microsoft.Extensions.Logging;
 using CluedIn.Core;
 
@@ -18,18 +19,18 @@ internal class OneLakeStorageClient : DataLakeStorageClient
 {
     private readonly OneLakeConnectorConfiguration _configuration;
     private readonly ApplicationContext _applicationContext;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
     public ILogger<OneLakeStorageClient> Logger { get; }
 
     public OneLakeStorageClient(
         ILogger<OneLakeStorageClient> logger,
         OneLakeConnectorConfiguration configuration,
         ApplicationContext applicationContext,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
         : base(logger, configuration)
     {
         _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
@@ -77,7 +78,7 @@ internal class OneLakeStorageClient : DataLakeStorageClient
         return await _applicationContext.System.Cache.GetItemAsync(
             $"OneLakeWorkspaceId_{_configuration.TenantId}_{_configuration.ClientId}_{_configuration.WorkspaceName}",
             GetWorkspaceIdFromServiceAsync,
-            cachePolicy: policy => policy.WithAbsoluteExpiration(_dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(30))
+            cachePolicy: policy => policy.WithAbsoluteExpiration(_timeProvider.GetUtcNow().AddSeconds(30))
         );
 
         async Task<Guid?> GetWorkspaceIdFromServiceAsync()

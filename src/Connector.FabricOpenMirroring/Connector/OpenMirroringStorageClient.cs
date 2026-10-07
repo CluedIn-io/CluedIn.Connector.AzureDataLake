@@ -13,6 +13,7 @@ using Azure.Core;
 using Azure.Identity;
 
 using CluedIn.Connector.DataLake.Common.Connector;
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 
@@ -26,7 +27,7 @@ internal class OpenMirroringStorageClient : DataLakeStorageClient
     private const int CreateMirroredDatabaseLockTimeoutInMilliseconds = 100;
     private readonly ApplicationContext _applicationContext;
     private readonly ILogger<OpenMirroringStorageClient> _logger;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
     private readonly OpenMirroringConnectorConfiguration _configuration;
     private static readonly TimeSpan CreationPollTimeOut = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan DelayBetweenCreationPolls = TimeSpan.FromSeconds(5);
@@ -44,12 +45,12 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
         ILogger<OpenMirroringStorageClient> logger,
         OpenMirroringConnectorConfiguration configuration,
         ApplicationContext applicationContext,
-        IDateTimeOffsetProvider dateTimeOffsetProvider):
+        ITimeProvider timeProvider):
         base(logger, configuration)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _applicationContext = applicationContext ?? throw new ArgumentNullException(nameof(applicationContext));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
@@ -101,7 +102,7 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
         return await _applicationContext.System.Cache.GetItemAsync(
             $"OpenMirroringWorkspaceId_{_configuration.TenantId}_{_configuration.ClientId}_{_configuration.WorkspaceName}",
             GetWorkspaceIdFromServiceAsync,
-            cachePolicy: policy => policy.WithAbsoluteExpiration(_dateTimeOffsetProvider.GetCurrentUtcTime().AddSeconds(30))
+            cachePolicy: policy => policy.WithAbsoluteExpiration(_timeProvider.GetUtcNow().AddSeconds(30))
         );
 
         async Task<Guid?> GetWorkspaceIdFromServiceAsync()
@@ -299,7 +300,7 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
 
     private async Task<SqlEndpointProvisioningStatus?> PollForCompletionAsync(HttpClient httpClient, string token, Guid workspaceId, Guid mirroredDatabaseId)
     {
-        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var start = _timeProvider.GetUtcNow();
         while (true)
         {
             var result = await GetMirroredDatabaseAsync(httpClient, token, workspaceId, mirroredDatabaseId);
@@ -309,7 +310,7 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
             {
                 return status.Value;
             }
-            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+            var now = _timeProvider.GetUtcNow();
             if (now - start > CreationPollTimeOut)
             {
                 return null;
@@ -417,6 +418,33 @@ private static readonly TimeSpan TotalCreationTimeOut = CreationPollTimeOut.Add(
             }
             while (!string.IsNullOrWhiteSpace(url));
         }
+    }
+
+    internal async Task DeleteMirroredDatabaseAsync()
+    {
+        var token = await GetToken();
+
+        using var httpClient = new HttpClient();
+
+        var workspace = await GetWorkspaceAsync(httpClient, token);
+        if (workspace == null)
+        {
+            throw new ApplicationException($"Failed to find workspace using {_configuration.WorkspaceName}.");
+        }
+        var mirroredDatabase = await GetMirroredDatabaseAsync(httpClient, token, workspace.Id);
+        if (mirroredDatabase == null)
+        {
+            throw new ApplicationException($"Failed to find mirrored database using workspace {_configuration.WorkspaceName} and mirrored database name {_configuration.MirroredDatabaseName}.");
+        }
+
+        var url = $"{GetApiUrl(workspace.Id)}/v1/workspaces/{workspace.Id}/mirroredDatabases/{mirroredDatabase.Id}";
+        var request = new HttpRequestMessage();
+        request.Method = HttpMethod.Delete;
+        request.RequestUri = new Uri(url);
+        request.Headers.Add("Authorization", $"Bearer {token}");
+        var response = await httpClient.SendAsync(request);
+
+        await EnsureSuccess(url, response);
     }
 
     private record Workspace(Guid Id, string DisplayName, string Description, string Type, Guid CapacityId);

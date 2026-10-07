@@ -341,9 +341,9 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -399,9 +399,9 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
                 Assert.NotEqual(firstDataTime, secondDataTime);
                 return secondPath;
             },
-            mockDateTimeOffsetProvider =>
+            mockTimeProvider =>
             {
-                mockDateTimeOffsetProvider.Setup(x => x.GetCurrentUtcTime())
+                mockTimeProvider.Setup(x => x.GetUtcNow())
                     .Returns(() =>
                     {
                         return dateTimeList[executionCount].ToUniversalTime();
@@ -448,7 +448,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
     {
         var configuration = CreateConfigurationWithoutStreamCache();
         // Use a unique directory that is guaranteed to be empty
-        configuration[AmazonS3ConfigurationConstants.DirectoryName] = $"xunit-empty-{DateTime.Now.Ticks}";
+        configuration[AmazonS3ConfigurationConstants.DirectoryName] = $"xunit-empty-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         var storageConfiguration = new AmazonS3ConnectorConfiguration(configuration);
 
         var setupResult = await SetupContainer(storageConfiguration, StreamMode.Sync);
@@ -465,7 +465,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             setupResult.StreamRepositoryMock.Object,
             setupResult.ConstantsMock.Object,
             setupResult.StorageFactoryMock.Object,
-            setupResult.DateTimeOffsetProviderMock.Object);
+            setupResult.TimeProviderMock.Object);
         return exportJob;
     }
 
@@ -489,7 +489,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
         Assert.NotNull(region);
         Assert.NotNull(bucketName);
 
-        var testPrefix = $"xunit-prefix-{DateTime.Now.Ticks}";
+        var testPrefix = $"xunit-prefix-{DateTime.Now.Ticks}-{Guid.NewGuid():N}";
         return new Dictionary<string, object>()
         {
             { AmazonS3ConfigurationConstants.AccessKey, accessKey },
@@ -502,7 +502,7 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
 
     protected override Mock<AmazonS3Connector> GetConnectorMock(
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IAmazonS3ConfigurationConstants> constantsMock,
         Mock<AmazonS3StorageFactory> storageConfigurationFactory)
     {
@@ -511,14 +511,14 @@ public class AmazonS3ConnectorTests : StorageConnectorTestsBase<AmazonS3Connecto
             applicationContext,
             constantsMock.Object,
             storageConfigurationFactory.Object,
-            mockDateTimeOffsetProvider.Object);
+            mockTimeProvider.Object);
         return mockConnector;
     }
 
     protected override Mock<AmazonS3StorageFactory> CreateStorageFactoryMock(
         WindsorContainer container,
         ApplicationContext applicationContext,
-        Mock<IDateTimeOffsetProvider> mockDateTimeOffsetProvider,
+        Mock<ITimeProvider> mockTimeProvider,
         Mock<IAmazonS3ConfigurationConstants> constantsMock)
     {
         var storageFactory = new Mock<AmazonS3StorageFactory>();

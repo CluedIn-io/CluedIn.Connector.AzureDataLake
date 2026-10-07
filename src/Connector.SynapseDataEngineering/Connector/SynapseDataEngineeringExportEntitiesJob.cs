@@ -1,3 +1,4 @@
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Streams;
@@ -11,8 +12,8 @@ internal class SynapseDataEngineeringExportEntitiesJob : StorageExportEntitiesJo
         IStreamRepository streamRepository,
         ISynapseDataEngineeringConfigurationConstants configurationConstants,
         SynapseDataEngineeringStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, timeProvider)
     {
     }
 }

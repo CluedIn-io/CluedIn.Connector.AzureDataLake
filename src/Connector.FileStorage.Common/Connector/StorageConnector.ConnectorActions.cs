@@ -108,7 +108,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
                 return GetConnectorVersion(executionContext, streamModel, request);
             }
 
-            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+            var now = _timeProvider.GetUtcNow();
             var notFoundResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "Not Found", "Connector", string.Empty);
             return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, false, false, now, null, [notFoundResult]);
         }
@@ -120,7 +120,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
 
     private ExecuteConnectorActionResult GetConnectorVersion(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, ExecuteConnectorActionRequest request)
     {
-        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var start = _timeProvider.GetUtcNow();
         return new ExecuteConnectorActionResult(
             streamModel.Id,
             request.ActionName,
@@ -146,7 +146,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
 
     private async Task<ExecuteConnectorActionResult> GetBufferStatus(ExecutionContext executionContext, IReadOnlyStreamModel streamModel, ExecuteConnectorActionRequest request)
     {
-        var start = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var start = _timeProvider.GetUtcNow();
         var systemEvents = executionContext.ApplicationContext.System.Events;
         var bufferStatus = new ConcurrentDictionary<string, BufferStatus>();
         var timeOutInMilliseconds =
@@ -184,7 +184,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
             await Task.Delay(timeOutInMilliseconds);
         }
 
-        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var now = _timeProvider.GetUtcNow();
         var resultEntries = bufferStatus.Select(kvp => new ExtendedOperationResultEntry(
             kvp.Key,
             ExtendedOperationResultEntryType.Json,
@@ -206,7 +206,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         Exception ex)
     {
         _logger.LogError(ex, "Failed to execute action {ActionName} for stream {StreamId}", request.ActionName, streamModel.Id);
-        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var now = _timeProvider.GetUtcNow();
         var failedResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, $"Failed: {ex.Message}{Environment.NewLine}{ex.StackTrace}", "Connector", string.Empty);
         return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: false, IsCompleted: true, now, now, [failedResult]);
     }
@@ -216,7 +216,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         IReadOnlyStreamModel streamModel,
         ExecuteConnectorActionRequest request)
     {
-        var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var startedAt = _timeProvider.GetUtcNow();
         var jobArgs = new JobArgs()
         {
             OrganizationId = executionContext.Organization.Id.ToString(),
@@ -234,7 +234,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         await exportJob.DoRunAsync(executionContext, new StorageJobArgs(jobArgs, isTriggeredFromJobServer: true, startedAt));
 
         var successResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "Success", "Connector", string.Empty);
-        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var now = _timeProvider.GetUtcNow();
         return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: true, IsCompleted: true, startedAt, now, [successResult]);
     }
 
@@ -243,7 +243,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         IReadOnlyStreamModel streamModel,
         ExecuteConnectorActionRequest request)
     {
-        var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var startedAt = _timeProvider.GetUtcNow();
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
@@ -275,7 +275,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
             }),
             "Connector",
             string.Empty);
-        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var now = _timeProvider.GetUtcNow();
         return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: true, IsCompleted: true, startedAt, now, [successResult]);
     }
 
@@ -295,7 +295,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
             }
         }
 
-        return (_dateTimeOffsetProvider.GetCurrentUtcTime(), true);
+        return (_timeProvider.GetUtcNow(), true);
     }
 
     private async Task<ExecuteConnectorActionResult> GetEntity(
@@ -303,7 +303,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         IReadOnlyStreamModel streamModel,
         ExecuteConnectorActionRequest request)
     {
-        var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var startedAt = _timeProvider.GetUtcNow();
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
@@ -317,7 +317,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
             || !Guid.TryParse(entityIdObj.ToString(), out var entityId))
         {
             var failedResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "EntityId parameter is required and must be a valid GUID", "Connector", string.Empty);
-            return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: false, IsCompleted: true, startedAt, _dateTimeOffsetProvider.GetCurrentUtcTime(), [failedResult]);
+            return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: false, IsCompleted: true, startedAt, _timeProvider.GetUtcNow(), [failedResult]);
         }
 
         var getDataSql = $"SELECT * FROM [{tableName}] FOR SYSTEM_TIME AS OF @AsOfTime WHERE {StorageConfigurationConstants.IdKey} = @{StorageConfigurationConstants.IdKey}";
@@ -347,7 +347,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
             }),
             "Connector",
             string.Empty);
-        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var now = _timeProvider.GetUtcNow();
         return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: true, IsCompleted: true, startedAt, now, [successResult]);
     }
 
@@ -356,14 +356,14 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         IReadOnlyStreamModel streamModel,
         ExecuteConnectorActionRequest request)
     {
-        var startedAt = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var startedAt = _timeProvider.GetUtcNow();
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
         var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
         await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
         await connection.OpenAsync();
         var streamId = streamModel.Id;
         var tableName = CacheTableHelper.GetExportHistoryTableName(streamId) + "_ExportHistory";
-        var asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var asOfTime = _timeProvider.GetUtcNow();
 
         var getDataSql = $"SELECT TOP (1000) * FROM [{tableName}] ORDER BY StartTime DESC";
         var command = new SqlCommand(getDataSql, connection)
@@ -391,7 +391,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         }),
         "Connector",
         string.Empty);
-        var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+        var now = _timeProvider.GetUtcNow();
         return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: true, IsCompleted: true, startedAt, now, [successResult]);
     }
 

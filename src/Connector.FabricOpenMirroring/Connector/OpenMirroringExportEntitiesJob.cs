@@ -22,22 +22,22 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
 {
     private const int PartnerEventsJsonLockInMilliseconds = 100;
     private static readonly AssemblyName _connectorAssemblyName = typeof(OpenMirroringExportEntitiesJob).Assembly.GetName();
-    private static readonly AssemblyName _cluedInCoreAssemblyName = typeof(IDateTimeOffsetProvider).Assembly.GetName();
+    private static readonly AssemblyName _cluedInCoreAssemblyName = typeof(CluedIn.Core.Data.Entity).Assembly.GetName();
     private static readonly FileVersionInfo _connectorFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(OpenMirroringExportEntitiesJob).Assembly.Location);
-    private static readonly FileVersionInfo _cluedInCoreFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(IDateTimeOffsetProvider).Assembly.Location);
+    private static readonly FileVersionInfo _cluedInCoreFileVersionInfo = FileVersionInfo.GetVersionInfo(typeof(CluedIn.Core.Data.Entity).Assembly.Location);
     private static readonly string _partnerName = "CluedIn ApS";
 
-    private IDateTimeOffsetProvider DateTimeOffsetProvider { get; }
+    private ITimeProvider TimeProvider { get; }
 
     public OpenMirroringExportEntitiesJob(
         ApplicationContext appContext,
         IStreamRepository streamRepository,
         IOpenMirroringConfigurationConstants configurationConstants,
         OpenMirroringStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider)
-        : base(appContext, streamRepository, configurationConstants, storageFactory, dateTimeOffsetProvider)
+        ITimeProvider timeProvider)
+        : base(appContext, streamRepository, configurationConstants, storageFactory, timeProvider)
     {
-        DateTimeOffsetProvider = dateTimeOffsetProvider;
+        TimeProvider = timeProvider;
     }
 
     protected override async Task<string> GetOutputFileNameAsync(
@@ -175,7 +175,7 @@ internal class OpenMirroringExportEntitiesJob : StorageExportEntitiesJobBase
                       "cluedInServerFileVersion": "{{_cluedInCoreFileVersionInfo.ProductVersion}}",
                       "organizationId": "{{exportJobData.StreamModel.OrganizationId:N}}",
                       "providerDefinitionId": "{{exportJobData.ProviderDefinition.Id:N}}",
-                      "createdAt": "{{DateTimeOffsetProvider.GetCurrentUtcTime().ToString("o")}}"
+                      "createdAt": "{{TimeProvider.GetUtcNow().ToString("o")}}"
                     }
                   }
                 }

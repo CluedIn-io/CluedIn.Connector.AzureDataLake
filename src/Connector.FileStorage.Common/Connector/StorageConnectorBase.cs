@@ -33,7 +33,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private const string InvalidFileNameStartsWithPeriodErrorMessage = "File name pattern cannot start with a period.";
         private readonly ILogger<StorageConnectorBase> _logger;
         private readonly ApplicationContext _applicationContext;
-        private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+        private readonly ITimeProvider _timeProvider;
         private readonly IStorageFactory _storageFactory;
         private readonly PartitionedBuffer<Partition, string> _buffer;
         private static readonly JsonSerializerSettings _immediateOutputSerializerSettings = GetJsonSerializerSettings(Formatting.Indented);
@@ -67,12 +67,12 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             ApplicationContext applicationContext,
             IStorageConfigurationConstants constants,
             IStorageFactory storageFactory,
-            IDateTimeOffsetProvider dateTimeOffsetProvider)
+            ITimeProvider timeProvider)
             : base(constants.ProviderId, false)
         {
             _logger = logger;
             _applicationContext = applicationContext;
-            _dateTimeOffsetProvider = dateTimeOffsetProvider;
+            _timeProvider = timeProvider;
             _storageFactory = storageFactory;
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
@@ -90,7 +90,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             }
 
             _buffer = new PartitionedBuffer<Partition, string>(cacheRecordsThreshold,
-                backgroundFlushMaxIdleDefaultValue, Flush, dateTimeOffsetProvider, cacheBufferStrategy);
+                backgroundFlushMaxIdleDefaultValue, Flush, timeProvider, cacheBufferStrategy);
             SetupBufferStatusSubscription();
         }
 
@@ -160,7 +160,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             AddToData("ProviderDefinitionId", providerDefinitionId);
             AddToData("ContainerName", containerName);
 
-            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+            var now = _timeProvider.GetUtcNow();
 
             if (!data.ContainsKey(StorageConfigurationConstants.TimestampKey))
             {
@@ -404,9 +404,18 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                     CommandType = CommandType.Text
                 };
                 command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.IdKey}", syncItem.EntityId));
-                command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.ChangeTypeKey}", syncItem.ChangeType.ToString()));
-                command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.TimestampKey}", syncItem.Data[StorageConfigurationConstants.TimestampKey]));
-                command.Parameters.Add(new SqlParameter($"@{StorageConfigurationConstants.EpochKey}", syncItem.Data[StorageConfigurationConstants.EpochKey]));
+                command.Parameters.Add(CacheTableParameterHelper.CreateParameter(
+                    $"@{StorageConfigurationConstants.ChangeTypeKey}",
+                    syncItem.ChangeType.ToString(),
+                    typeof(string)));
+                command.Parameters.Add(CacheTableParameterHelper.CreateParameter(
+                    $"@{StorageConfigurationConstants.TimestampKey}",
+                    syncItem.Data[StorageConfigurationConstants.TimestampKey],
+                    syncItem.DataValueTypes[StorageConfigurationConstants.TimestampKey]));
+                command.Parameters.Add(CacheTableParameterHelper.CreateParameter(
+                    $"@{StorageConfigurationConstants.EpochKey}",
+                    syncItem.Data[StorageConfigurationConstants.EpochKey],
+                    syncItem.DataValueTypes[StorageConfigurationConstants.EpochKey]));
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
                 if (rowsAffected != 1)
@@ -498,7 +507,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 for (var i = 0; i < propertyKeys.Count; i++)
                 {
                     var key = propertyKeys[i];
-                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
+                    command.Parameters.Add(CacheTableParameterHelper.CreateParameter($"@p{i}", GetDatabaseValue(syncItem, key), syncItem.DataValueTypes[key]));
                 }
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
@@ -545,7 +554,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 for (var i = 0; i < propertyKeys.Count; i++)
                 {
                     var key = propertyKeys[i];
-                    command.Parameters.Add(new SqlParameter($"@p{i}", GetDatabaseValue(syncItem, key)));
+                    command.Parameters.Add(CacheTableParameterHelper.CreateParameter($"@p{i}", GetDatabaseValue(syncItem, key), syncItem.DataValueTypes[key]));
                 }
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
@@ -665,8 +674,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 isHealthCheck = IsHealthCheckVerification(configuration);
                 shouldLogError = !isHealthCheck ||
                     !_lastHealthCheckErrorLogs.TryGetValue(connectorType, out var lastCheck) ||
-                    _dateTimeOffsetProvider.GetCurrentUtcTime() - lastCheck > _delayBetweenHealthCheckErrorLog;
-                var result = await VerifyConnectionInternal(executionContext, configuration, shouldLogError);
+                    _timeProvider.GetUtcNow() - lastCheck > _delayBetweenHealthCheckErrorLog;
+                var result = await VerifyConnectionInternal(executionContext, configuration, shouldLogError, isHealthCheck);
                 if (result.HasException)
                 {
                     UpdateLastHealthCheckErrorLogTime(isHealthCheck, shouldLogError, connectorType);
@@ -687,7 +696,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             {
                 if (isHealthCheck && shouldLogError)
                 {
-                    _lastHealthCheckErrorLogs[connectorType] = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                    _lastHealthCheckErrorLogs[connectorType] = _timeProvider.GetUtcNow();
                 }
             }
         }
@@ -702,7 +711,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             return false;
         }
 
-        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException)
+        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyConnectionInternal(ExecutionContext executionContext, IStorageConfiguration configuration, bool shouldLogException, bool isHealthCheck)
         {
             var verifyConnectionResult = await VerifyDataLakeConnection(executionContext, configuration, shouldLogException);
             if (!verifyConnectionResult.Success)
@@ -775,7 +784,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             var testTableName = GetCacheTableName(testStreamId, true);
 
             var entityId = Guid.NewGuid();
-            var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+            var now = _timeProvider.GetUtcNow();
             var data = new Dictionary<string, object>
             {
                 [StorageConfigurationConstants.IdKey] = entityId,
@@ -829,7 +838,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         {
             try
             {
-                var now = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                var now = _timeProvider.GetUtcNow();
                 syncItem.Data[StorageConfigurationConstants.ChangeTypeKey] = syncItem.ChangeType.ToString();
                 syncItem.Data[StorageConfigurationConstants.PersistVersionKey] = syncItem.PersistVersion;
                 syncItem.Data[StorageConfigurationConstants.TimestampKey] = now;

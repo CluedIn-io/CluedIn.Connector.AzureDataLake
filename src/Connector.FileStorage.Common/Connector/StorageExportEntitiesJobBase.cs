@@ -20,6 +20,8 @@ using CluedIn.Streams.StreamLog.History;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
+using static IdentityModel.CryptoRandom;
+
 using ProviderDefinition = CluedIn.Core.Data.Relational.ProviderDefinition;
 
 namespace CluedIn.Connector.FileStorage.Common.Connector;
@@ -29,7 +31,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     private readonly IStreamRepository _streamRepository;
     private readonly IStorageConfigurationConstants _dataLakeConstants;
     private readonly IStorageFactory _storageFactory;
-    private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+    private readonly ITimeProvider _timeProvider;
     private static readonly TimeSpan _exportTimeout = TimeSpan.MaxValue;
     private const int ExportEntitiesLockInMilliseconds = 100;
     private const string StreamIdKey = "StreamId";
@@ -55,12 +57,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         IStreamRepository streamRepository,
         IStorageConfigurationConstants configurationConstants,
         IStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider) : base(appContext, dateTimeOffsetProvider)
+        ITimeProvider timeProvider) : base(appContext, timeProvider)
     {
         _streamRepository = streamRepository ?? throw new ArgumentNullException(nameof(streamRepository));
         _dataLakeConstants = configurationConstants ?? throw new ArgumentNullException(nameof(configurationConstants));
         _storageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
-        _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     protected virtual string StreamIdDefaultStringFormat => "N";
@@ -130,7 +132,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         }
         catch (Exception ex)
         {
-            await AddErrorToStreamIngestionLog(context, streamModel, $"Error exporting for StreamId {exportJobData.StreamId} to file {exportJobData.OutputFileName}.", exception: ex);
+            await AddErrorToStreamIngestionLog(context, streamModel, $"Error exporting for StreamId {exportJobData.StreamId} to {exportJobData.OutputFileName}.", exception: ex);
             throw;
         }
     }
@@ -179,7 +181,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             CronSchedule: args.Schedule,
             FilePath: outputFileName,
             FileFormat: outputFormat,
-            StartTime: _dateTimeOffsetProvider.GetCurrentUtcTime(),
+            StartTime: _timeProvider.GetUtcNow(),
             EndTime: null,
             TotalRows: null,
             Status: "Starting",
@@ -219,8 +221,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return ExportResult.CreateSkipped(NoRowsReason);
         }
 
-        await InitializeBaseDirectoryAsync(context, connection, exportJobData, storageClient);
-        await InitializeOutputDirectoryAsync(context, connection, exportJobData, storageClient);
+        await InitializeOutputTargetAsync(context, connection, exportJobData, storageClient);
 
         var getDataCommand = GetDataSql(connection, asOfTime, tableName, validFrom);
 
@@ -229,17 +230,117 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
             .Select(reader.GetName)
             .ToList();
+
+        var totalRows = await ExportDataAsync(
+            context,
+            exportJobData,
+            configuration,
+            storageClient,
+            reader,
+            transactionScope,
+            fieldNames,
+            args.InstanceTime);
+
+        await reader.CloseAsync();
+
+        await UpdateHistoryWithStatus(CompleteStatus, totalRows: totalRows);
+        transactionScope.Complete();
+        transactionScope.Dispose();
+        context.Log.LogInformation(
+            "End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.",
+            GetType().Name,
+            args.Message,
+            args.Schedule);
+
+        await this.AddInformationToStreamIngestionLog(context, streamModel, $"Exported {outputFileName} with {totalRows} rows.");
+        return ExportResult.CreateSuccess(outputDirectoryPath.GetFilePath(outputFileName));
+
+        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null)
+        {
+            var limitClause = limit.HasValue ? $"TOP ({limit.Value}) " : string.Empty;
+            var getDataSql = validFrom.HasValue
+                ? $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}' WHERE ValidFrom > @ValidFrom"
+                : $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
+            var command = new SqlCommand(getDataSql, connection)
+            {
+                CommandType = CommandType.Text
+            };
+
+            if (validFrom.HasValue)
+            {
+                command.Parameters.Add(new SqlParameter("@ValidFrom", validFrom));
+            }
+
+            return command;
+        }
+
+        static async Task<bool> HasDataAsync(SqlCommand getDataCommandWithLimit)
+        {
+            await using var reader = await getDataCommandWithLimit.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        async Task AddInformationToStreamIngestionLogLocal(string message)
+        {
+            transactionScope.Complete();
+            transactionScope.Dispose();
+            await this.AddInformationToStreamIngestionLog(context, streamModel, message: message);
+        }
+
+        async Task UpdateHistoryWithStatus(string status, long? totalRows = null)
+        {
+            await UpdateHistory(context, connection, exportHistory with
+            {
+                Status = status,
+                TotalRows = totalRows,
+                EndTime = _timeProvider.GetUtcNow()
+            });
+        }
+    }
+
+    protected virtual async Task InitializeOutputTargetAsync(
+        ExecutionContext context,
+        SqlConnection connection,
+        ExportJobData exportJobData,
+        IStorageClient storageClient)
+    {
+        await InitializeBaseDirectoryAsync(context, connection, exportJobData, storageClient);
+        await InitializeOutputDirectoryAsync(context, connection, exportJobData, storageClient);
+    }
+
+    protected virtual async Task<long> ExportDataAsync(
+        ExecutionContext context,
+        ExportJobData exportJobData,
+        IStorageConfiguration configuration,
+        IStorageClient storageClient,
+        SqlDataReader reader,
+        TransactionScope transactionScope,
+        List<string> fieldNames,
+        DateTimeOffset instanceTime)
+    {
+        var asOfTime = exportJobData.AsOfTime;
+        var outputFormat = exportJobData.OutputFormat;
+        var outputFileName = exportJobData.OutputFileName;
         var temporaryOutputFileName = outputFileName + TemporaryFileSuffix;
+        var baseDirectoryPath = exportJobData.BaseDirectoryPath;
+        var outputDirectoryPath = exportJobData.OutputDirectoryPath;
+        var streamModel = exportJobData.StreamModel;
+        var streamId = exportJobData.StreamId;
+
         using var loggingScope = context.Log.BeginScope(new Dictionary<string, object>
         {
             ["FileName"] = outputFileName,
             ["TemporaryFileName"] = temporaryOutputFileName,
             ["Format"] = outputFormat,
-            ["StartTime"] = _dateTimeOffsetProvider.GetCurrentUtcTime(),
-            [InstanceTimeKey] = args.InstanceTime,
+            ["StartTime"] = _timeProvider.GetUtcNow(),
+            [InstanceTimeKey] = instanceTime,
             [DataTimeKey] = asOfTime,
         });
-
         var outputFilePath = outputDirectoryPath.GetFilePath(outputFileName);
         IStorageFileClient temporaryFileClient;
         var temporaryFilePath = outputDirectoryPath.GetFilePath(temporaryOutputFileName);
@@ -257,7 +358,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             await AddErrorToStreamIngestionLog(context, streamModel, $"Error creating file client for {temporaryOutputFileName}.", exception: getTemporaryFileClientException);
             throw;
         }
-
         context.Log.LogInformation(
             "Begin writing to file '{OutputFileName}' using data at {DataTime} and {TemporaryOutputFileName} ({TemporaryFileClientUri}).",
             outputFileName,
@@ -287,21 +387,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             outputFileName,
             asOfTime,
             temporaryOutputFileName);
-
-        await reader.CloseAsync();
-
-        await UpdateHistoryWithStatus(CompleteStatus, totalRows: totalRows);
-        transactionScope.Complete();
-        transactionScope.Dispose();
-        context.Log.LogInformation(
-            "End export entities job '{ExportJob}' for '{StreamId}' using {Schedule}.",
-            GetType().Name,
-            args.Message,
-            args.Schedule);
-
-        await this.AddInformationToStreamIngestionLog(context, streamModel, $"Exported file {outputFileName} with {totalRows} rows.");
-        return ExportResult.CreateSuccess(outputFilePath);
-
         async Task<long> writeFileContentsAsync()
         {
             var fieldNamesToUse = await GetFieldNamesAsync(context, exportJobData, configuration, fieldNames);
@@ -360,54 +445,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             await targetFileClient.DeleteIfExistsAsync();
         }
 
-        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null)
-        {
-            var limitClause = limit.HasValue ? $"TOP ({limit.Value}) " : string.Empty;
-            var getDataSql = validFrom.HasValue
-                ? $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}' WHERE ValidFrom > @ValidFrom"
-                : $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
-            var command = new SqlCommand(getDataSql, connection)
-            {
-                CommandType = CommandType.Text
-            };
-
-            if (validFrom.HasValue)
-            {
-                command.Parameters.Add(new SqlParameter("@ValidFrom", validFrom));
-            }
-
-            return command;
-        }
-
-        static async Task<bool> HasDataAsync(SqlCommand getDataCommandWithLimit)
-        {
-            await using var reader = await getDataCommandWithLimit.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        async Task AddInformationToStreamIngestionLogLocal(string message)
-        {
-            transactionScope.Complete();
-            transactionScope.Dispose();
-            await this.AddInformationToStreamIngestionLog(context, streamModel, message: message);
-        }
-
-        async Task UpdateHistoryWithStatus(string status, long? totalRows = null)
-        {
-            await UpdateHistory(context, connection, exportHistory with
-            {
-                Status = status,
-                TotalRows = totalRows,
-                EndTime = _dateTimeOffsetProvider.GetCurrentUtcTime()
-            });
-        }
+        return totalRows;
     }
-
     public override async Task<bool> CanRunAsync(ExecutionContext context, IStorageJobArgs args)
     {
         if (string.IsNullOrWhiteSpace(args.Message))
@@ -656,7 +695,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                     "Output file '{OutputFileName}' exists using data at {DataTime} and job is triggered from job server. Switching to using current time.",
                     outputFileName,
                     asOfTime);
-                asOfTime = _dateTimeOffsetProvider.GetCurrentUtcTime();
+                asOfTime = _timeProvider.GetUtcNow();
                 outputFileName = await GetOutputFileNameAsync(context, exportJobDataBase with { AsOfTime = asOfTime }, isInitialExport, lastExportedFile, outputDirectoryPath);
                 outputFileExists = false;
             }
@@ -855,7 +894,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         if (configuration.UseCurrentTimeForExport || args.Schedule == CronSchedules.NeverCron)
         {
             context.Log.LogDebug("Using current time for export.");
-            return _dateTimeOffsetProvider.GetCurrentUtcTime();
+            return _timeProvider.GetUtcNow();
         }
 
         return args.InstanceTime;

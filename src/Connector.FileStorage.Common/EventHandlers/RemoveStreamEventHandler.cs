@@ -14,7 +14,6 @@ using CluedIn.Core.Streams.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
-using Nest;
 
 namespace CluedIn.Connector.FileStorage.Common.EventHandlers;
 
@@ -28,14 +27,14 @@ internal class RemoveStreamEventHandler : UpdateStreamScheduleBase, IDisposable
         ApplicationContext applicationContext,
         IStorageConfigurationConstants constants,
         IStorageFactory storageFactory,
-        IDateTimeOffsetProvider dateTimeOffsetProvider,
+        ITimeProvider timeProvider,
         Type exportEntitiesJobType,
         IScheduledJobQueue jobQueue)
         : base(
             applicationContext,
             constants,
             storageFactory,
-            dateTimeOffsetProvider,
+            timeProvider,
             exportEntitiesJobType,
             jobQueue)
     {

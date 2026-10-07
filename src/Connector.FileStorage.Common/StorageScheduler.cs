@@ -21,10 +21,10 @@ internal class StorageScheduler : Scheduler
         ILogger logger,
         string dataLakeComponentName,
         ApplicationContext applicationContext,
-        IDateTimeOffsetProvider dateTimeOffsetProvider,
+        ITimeProvider timeProvider,
         IStorageConfigurationConstants configurationConstants,
         IStorageFactory fileStorageFactory,
-        Type exportEntitiesJobType) : base(logger, dataLakeComponentName, applicationContext, dateTimeOffsetProvider)
+        Type exportEntitiesJobType) : base(logger, dataLakeComponentName, applicationContext, timeProvider)
     {
         _configurationConstants = configurationConstants ?? throw new ArgumentNullException(nameof(configurationConstants));
         _fileStorageFactory = fileStorageFactory ?? throw new ArgumentNullException(nameof(fileStorageFactory));

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CluedIn.Connector.Snowflake provides the ability to post data to Snowflake via the Snowpipe Streaming REST API</Description>
+    <AssemblyName>CluedIn.Connector.Snowflake</AssemblyName>
+    <RootNamespace>CluedIn.Connector.Snowflake</RootNamespace>
+    <IsCluedInServerComponent>true</IsCluedInServerComponent>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CluedIn.Connector.Snowflake.Tests.Unit" />
+    <InternalsVisibleTo Include="CluedIn.Connector.Snowflake.Tests.Integration" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Resources\snowflake.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\snowflake.svg" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
+  </ItemGroup>
+</Project>

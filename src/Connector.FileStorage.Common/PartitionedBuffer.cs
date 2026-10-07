@@ -20,7 +20,7 @@ namespace CluedIn.Connector.FileStorage.Common
         private readonly int _maxSize;
         private readonly int _timeout;
         private readonly Func<TPartition, TItem[], Task> _bulkAction;
-        private readonly IDateTimeOffsetProvider _dateTimeOffsetProvider;
+        private readonly ITimeProvider _timeProvider;
         private readonly BufferStrategy _bufferStrategy;
         private readonly Dictionary<TPartition, IBuffer<TItem>> _buffers;
 
@@ -28,13 +28,13 @@ namespace CluedIn.Connector.FileStorage.Common
             int maxSize,
             int timeout,
             Func<TPartition, TItem[], Task> bulkAction,
-            IDateTimeOffsetProvider dateTimeOffsetProvider,
+            ITimeProvider timeProvider,
             BufferStrategy bufferStrategy)
         {
             _maxSize = maxSize;
             _timeout = timeout;
             _bulkAction = bulkAction ?? throw new ArgumentNullException(nameof(bulkAction));
-            _dateTimeOffsetProvider = dateTimeOffsetProvider ?? throw new ArgumentNullException(nameof(dateTimeOffsetProvider));
+            _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
             _bufferStrategy = bufferStrategy;
             _buffers = new Dictionary<TPartition, IBuffer<TItem>>();
         }
@@ -78,7 +78,7 @@ namespace CluedIn.Connector.FileStorage.Common
                     MaxPendingFlushBatches = 2,
                     EnableAutoTuneMaxBatchSize = true,
                 };
-                return new ChannelBasedBuffer<TItem>(options, (x, _) => _bulkAction(partition, x), _dateTimeOffsetProvider);
+                return new ChannelBasedBuffer<TItem>(options, (x, _) => _bulkAction(partition, x), _timeProvider);
             }
 
             return new SafeBuffer<TItem, TItem>(_maxSize, _timeout, async x =>

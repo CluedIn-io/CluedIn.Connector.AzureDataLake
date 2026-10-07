@@ -1,9 +1,45 @@
-# GitVersion.yml
 mode: ContinuousDeployment
-next-version: 4.0
+# The CluedIn version is now encoded in the published package suffix (e.g. .460/.470/.480/.500 -
+# see crawler.build.jobs.yml), so this repo's own version no longer needs to track CluedIn.
+# Started at 100.0 (not 1.0) so customers who saw this repo at 4.x/5.x under the old
+# single-version scheme never see it "go backwards" to 1.x under the new one. Unlike the original
+# 1.0 reset, no commits-before/ignore trick is needed here - next-version only needs help
+# overriding an existing tag when the new value is LOWER than that tag; 100.0 is already higher
+# than every pre-existing tag, so it wins on its own (verified via a real local
+# `dotnet-gitversion` run).
+next-version: 100.0
 branches:
-  master:
+  main:
     mode: ContinuousDelivery
-  pull-request:
-    tag: pr
+  develop:
+    tag: alpha
+    increment: Patch
+    # Do not track release branches, but rather look at the last merge commit
+    # when we got release branch merged into our branch and use it as a base
+    tracks-release-branches: false
+
+  release:
+    regex: ^releases?[\/-].*$
+    source-branches:
+      - main
+  support:
+    tag: update
     increment: None
+    source-branches:
+      - main
+  hotfix:
+    tag: useBranchName
+  pull-request:
+    tag: alpha.0.pr
+    increment: Patch
+  feature:
+    tag: alpha.0.{BranchName}
+  unknown:
+    regex: ^(?!master$|main$|develop$|releases?[\/-]|support[\/-]|hotfix(es)?[\/-]|features?[\/-]|(pull|pull\-requests|pr)[\/-]).*$
+    tag: alpha.0.{BranchName}
+    source-branches:
+    - develop
+    - main
+    - release
+    - support
+    - hotfix
