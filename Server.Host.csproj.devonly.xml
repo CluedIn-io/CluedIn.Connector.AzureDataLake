@@ -1,22 +1,27 @@
 <Project>
   <Target Name="CopyDevelopmentComponents" AfterTargets="AfterPublishPublishComponents">
     <ItemGroup>
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureDataLake\bin\Debug\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.OneLake\bin\Debug\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.FabricOpenMirroring\bin\Debug\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureAIStudio\bin\Debug\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureDatabricks\bin\Debug\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.SynapseDataEngineering\bin\Debug\net6.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureDataLake\bin\Debug\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.OneLake\bin\Debug\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.FabricOpenMirroring\bin\Debug\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureAIStudio\bin\Debug\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AzureDatabricks\bin\Debug\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.SynapseDataEngineering\bin\Debug\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.AmazonS3\bin\Debug\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)src\Connector.Snowflake\bin\Debug\net10.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.security.keyvault.secrets\4.7.0\lib\netstandard2.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.files.datalake\12.22.0\lib\netstandard2.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.common\12.23.0\lib\netstandard2.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.blobs\12.24.0\lib\netstandard2.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\microsoft.io.recyclablememorystream\3.0.0\lib\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\ironcompress\1.5.1\lib\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\snappier\1.1.1\lib\net6.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\zstdsharp.port\0.7.2\lib\net6.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.identity\1.13.2\lib\net8.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.files.datalake\12.22.0\lib\net8.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.common\12.26.0\lib\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\azure.storage.blobs\12.27.0\lib\net10.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\microsoft.io.recyclablememorystream\3.0.0\lib\netstandard2.1\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\ironcompress\1.5.1\lib\net7.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\snappier\1.1.1\lib\net7.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\zstdsharp.port\0.7.2\lib\net7.0\*.*" />
       <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\ncrontab\3.3.3\lib\netstandard2.0\*.*" />
-      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\parquet.net\4.23.5\lib\net6.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\parquet.net\4.23.5\lib\net8.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\awssdk.s3\4.0.23.3\lib\net8.0\*.*" />
+      <ConnectorFilesToCopy Include="$(MSBuildThisFileDirectory)packages\awssdk.core\4.0.7.1\lib\net8.0\*.*" />
     </ItemGroup>
     <Copy SourceFiles="@(ConnectorFilesToCopy)" DestinationFiles="@(ConnectorFilesToCopy -> '$(PublishDir)ServerComponent/%(Filename)%(Extension)')"  />
   </Target>
