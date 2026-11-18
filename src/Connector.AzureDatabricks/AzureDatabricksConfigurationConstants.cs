@@ -27,10 +27,13 @@ public class AzureDatabricksConfigurationConstants : StorageConfigurationConstan
         domain: "https://azure.microsoft.com/en-au/products/databricks",
         about: "Supports publishing of data to Azure Databricks via OneLake.",
         authMethods: GetAzureFileStorageAuthMethods(applicationContext),
+        properties: GetExportOptions(ExportSettings),
         guideDetails: "Supports publishing of data to Azure Databricks.",
         guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
     {
     }
+
+    private static readonly ExportOptionsSettings ExportSettings = new();
 
     protected override string CacheKeyword => "AzureDatabricksConnector";
 
@@ -89,7 +92,7 @@ public class AzureDatabricksConfigurationConstants : StorageConfigurationConstan
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext));
+        controls.AddRange(GetAuthMethods(applicationContext, ExportSettings));
 
         return new AuthMethods
         {

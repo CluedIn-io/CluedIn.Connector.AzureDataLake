@@ -11,6 +11,12 @@ namespace CluedIn.Connector.OneLake;
 
 public class OneLakeStorageFactory : StorageFactoryBase, IStorageFactory
 {
+    protected override IReadOnlySet<string> ExportOptionKeys { get; } = new HashSet<string>(StorageConfigurationConstants.ExportOptionKeys)
+    {
+        OneLakeConfigurationConstants.ShouldLoadToTable,
+        OneLakeConfigurationConstants.TableName,
+    };
+
     public override async Task<IStorageClient> CreateStorageClient(ExecutionContext executionContext, IStorageConfiguration configuration)
     {
         return await CreateDataLakeClient(executionContext, configuration as OneLakeConnectorConfiguration);

@@ -42,6 +42,12 @@ public abstract class StorageFactoryBase : IStorageFactory
             string.Empty);
     }
 
+    /// <summary>
+    /// Keys of the options that are configured on the stream when legacy options are not used.
+    /// Connectors with options of their own add them here.
+    /// </summary>
+    protected virtual IReadOnlySet<string> ExportOptionKeys => StorageConfigurationConstants.ExportOptionKeys;
+
     public virtual async Task<IStorageConfiguration> CreateStorageConfiguration(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
     {
         var providerDefinitionId = streamModel.ConnectorProviderDefinitionId!.Value;
@@ -49,15 +55,43 @@ public abstract class StorageFactoryBase : IStorageFactory
         var authenticationDetails = await GetAuthenticationDetails(executionContext, providerDefinitionId);
         var authenticationDetailsDict = authenticationDetails.Authentication.ToDictionary(detail => detail.Key, detail => detail.Value);
 
-        if (streamModel.ConnectorProperties != null)
+        MergeConnectorProperties(authenticationDetailsDict, streamModel.ConnectorProperties, ExportOptionKeys);
+
+        return await CreateStorageConfiguration(executionContext, authenticationDetailsDict, containerName);
+    }
+
+    /// <summary>
+    /// Export options come from the connector while legacy options are used, and from the stream otherwise.
+    /// Any other stream property overrides the connector's value.
+    /// </summary>
+    internal static void MergeConnectorProperties(
+        IDictionary<string, object> authenticationDetails,
+        IReadOnlyDictionary<string, object> connectorProperties,
+        IReadOnlySet<string> exportOptionKeys)
+    {
+        var useLegacyOptions = StorageConfigurationConstants.IsUsingLegacyOptions(authenticationDetails);
+        if (!useLegacyOptions)
         {
-            foreach (var property in streamModel.ConnectorProperties!)
+            foreach (var key in exportOptionKeys)
             {
-                authenticationDetailsDict[property.Key] = property.Value;
+                authenticationDetails.Remove(key);
             }
         }
 
-        return await CreateStorageConfiguration(executionContext, authenticationDetailsDict, containerName);
+        if (connectorProperties == null)
+        {
+            return;
+        }
+
+        foreach (var property in connectorProperties)
+        {
+            if (useLegacyOptions && exportOptionKeys.Contains(property.Key))
+            {
+                continue;
+            }
+
+            authenticationDetails[property.Key] = property.Value;
+        }
     }
 
     public virtual async Task<IStorageConfiguration> CreateStorageConfiguration(ExecutionContext executionContext, IDictionary<string, object> authenticationDetails, string containerName = null)

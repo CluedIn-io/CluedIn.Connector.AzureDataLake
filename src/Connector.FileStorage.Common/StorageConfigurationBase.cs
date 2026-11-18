@@ -10,6 +10,7 @@ internal abstract class StorageConfigurationBase : CrawlJobDataWrapper, IStorage
         ContainerName = containerName;
     }
 
+    public bool UseLegacyOptions => StorageConfigurationConstants.IsUsingLegacyOptions(Configurations);
     public virtual string OutputFormat => GetConfigurationValue(StorageConfigurationConstants.OutputFormat) as string ?? StorageConfigurationConstants.OutputFormats.Json;
     public virtual bool IsStreamCacheEnabled => GetConfigurationValue(StorageConfigurationConstants.IsStreamCacheEnabled) as bool? ?? false;
     public string StreamCacheConnectionString => GetConfigurationValue(StorageConfigurationConstants.StreamCacheConnectionString) as string;

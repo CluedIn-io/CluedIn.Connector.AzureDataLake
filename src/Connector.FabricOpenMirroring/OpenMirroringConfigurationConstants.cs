@@ -28,10 +28,13 @@ public class OpenMirroringConfigurationConstants : StorageConfigurationConstants
         domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
         about: "Supports publishing of data to Microsoft Fabric Mirrored Database using Open Mirroring.",
         authMethods: GetOpenMirroringAuthMethods(applicationContext),
+        properties: GetExportOptions(ExportSettings),
         guideDetails: "Supports publishing of data to Microsoft Fabric Mirrored Database using Open Mirroring.",
         guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
     {
     }
+
+    private static readonly ExportOptionsSettings ExportSettings = new(IsCustomFileNamePatternSupported: false, IsReducedFormats: true, IsForceStreamCache: true);
 
     protected override string CacheKeyword => "FabricOpenMirroringConnector";
 
@@ -109,12 +112,7 @@ public class OpenMirroringConfigurationConstants : StorageConfigurationConstants
         };
 
         controls.AddRange(
-            GetAuthMethods(
-                applicationContext,
-                isCustomFileNamePatternSupported: false,
-                isReducedFormats: true,
-                isArrayColumnOptionEnabled: false,
-                isForceStreamCache: true));
+            GetAuthMethods(applicationContext, ExportSettings));
 
         controls.Add(
             new()

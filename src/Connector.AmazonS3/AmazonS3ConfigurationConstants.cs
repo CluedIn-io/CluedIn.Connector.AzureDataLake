@@ -24,10 +24,13 @@ public class AmazonS3ConfigurationConstants : StorageConfigurationConstants, IAm
         domain: "https://aws.amazon.com/s3/",
         about: "Supports publishing of data to Amazon S3.",
         authMethods: GetAmazonS3AuthMethods(applicationContext),
+        properties: GetExportOptions(ExportSettings),
         guideDetails: "Supports publishing of data to Amazon S3.",
         guideInstructions: "Provide authentication instructions here, if applicable")
     {
     }
+
+    private static readonly ExportOptionsSettings ExportSettings = new(IsArrayColumnOptionEnabled: true);
 
     protected override string CacheKeyword => "AmazonS3Connector";
 
@@ -100,7 +103,7 @@ public class AmazonS3ConfigurationConstants : StorageConfigurationConstants, IAm
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext, isArrayColumnOptionEnabled: true));
+        controls.AddRange(GetAuthMethods(applicationContext, ExportSettings));
 
         return new AuthMethods
         {

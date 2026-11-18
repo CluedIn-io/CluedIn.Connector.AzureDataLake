@@ -202,7 +202,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Exception thrown. Returning SaveResult.ReQueue");
-                return SaveResult.ReQueue;
+                return new SaveResult(SaveResultState.ReQueue) { Exceptions = { ex } };
             }
         }
 
@@ -719,6 +719,33 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 return verifyConnectionResult;
             }
 
+            // When legacy options are not used, export options are configured (and verified) on each stream
+            return configuration.UseLegacyOptions
+                ? await VerifyExportOptions(configuration)
+                : SuccessfulConnectionVerification;
+        }
+
+        public virtual async Task<ConnectionVerificationResult> VerifyConnectorProperties(ExecutionContext executionContext, IReadOnlyStreamModel streamModel)
+        {
+            try
+            {
+                var configuration = await _storageFactory.CreateStorageConfiguration(executionContext, streamModel);
+                if (configuration.UseLegacyOptions)
+                {
+                    return SuccessfulConnectionVerification;
+                }
+
+                return await VerifyExportOptions(configuration);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error verifying connector properties");
+                return new ConnectionVerificationResult(false, e.Message);
+            }
+        }
+
+        protected virtual async Task<FileStorageConnectionVerificationResult> VerifyExportOptions(IStorageConfiguration configuration)
+        {
             if (configuration.IsStreamCacheEnabled)
             {
                 if (string.IsNullOrWhiteSpace(configuration.StreamCacheConnectionString))

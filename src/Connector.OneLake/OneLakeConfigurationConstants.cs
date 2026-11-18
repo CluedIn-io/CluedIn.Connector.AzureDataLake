@@ -29,12 +29,75 @@ public class OneLakeConfigurationConstants : StorageConfigurationConstants, IOne
         domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
         about: "Supports publishing of data to OneLake.",
         authMethods: GetOneLakeAuthMethods(applicationContext),
+        properties: [.. GetExportOptions(ExportSettings), .. GetLoadToTableControls()],
         guideDetails: "Supports publishing of data to OneLake.",
         guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
     {
     }
 
+    private static readonly ExportOptionsSettings ExportSettings = new(
+        IsArrayColumnOptionEnabled: true,
+        IsEscapeVocabularyKeysOptionEnabled: true,
+        EscapeVocabularyKeysHelp: """
+            Replaces characters in the column names that are not in this list ('a-z', 'A-Z', '0-9' and '_') with the character '_'.
+            Enable this if you plan to load the file to a table.
+            """);
+
     protected override string CacheKeyword => "OneLakeConnector";
+
+    /// <summary>
+    /// Creates the controls for loading exported files to a table. Each call returns new instances.
+    /// </summary>
+    private static List<Control> GetLoadToTableControls()
+    {
+        return
+        [
+            new()
+            {
+                Name = ShouldLoadToTable,
+                DisplayName = "Load to table after exporting",
+                Type = "checkbox",
+                Help = """
+                       Load data from file to table after exporting. Only applicable to CSV and Parquet export
+                       """,
+                IsRequired = false,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = IsStreamCacheEnabled,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                    new ControlDisplayDependency
+                    {
+                        Name = ShouldEscapeVocabularyKeys,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
+            },
+            new()
+            {
+                Name = TableName,
+                DisplayName = "Table Name",
+                Type = "input",
+                Help = """
+                       Table Name to load to after file export.
+                       """,
+                IsRequired = true,
+                DisplayDependencies = new[]
+                {
+                    new ControlDisplayDependency
+                    {
+                        Name = ShouldLoadToTable,
+                        Operator = ControlDependencyOperator.Exists,
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    },
+                },
+            },
+        ];
+    }
 
     private static AuthMethods GetOneLakeAuthMethods(ApplicationContext applicationContext)
     {
@@ -126,76 +189,11 @@ public class OneLakeConfigurationConstants : StorageConfigurationConstants, IOne
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext, isArrayColumnOptionEnabled: true));
+        controls.AddRange(GetAuthMethods(applicationContext, ExportSettings));
 
-        controls.Add(
-            new()
-            {
-                Name = ShouldEscapeVocabularyKeys,
-                DisplayName = "Replace Non-Alphanumeric Characters in Column Names",
-                Type = "checkbox",
-                IsRequired = false,
-                Help = """
-                    Replaces characters in the column names that are not in this list ('a-z', 'A-Z', '0-9' and '_') with the character '_'.
-                    Enable this if you plan to load the file to a table.
-                    """,
-                DisplayDependencies = new[]
-                {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                },
-            }
-        );
-        controls.Add(
-            new()
-            {
-                Name = ShouldLoadToTable,
-                DisplayName = "Load to table after exporting",
-                Type = "checkbox",
-                Help = """
-                       Load data from file to table after exporting. Only applicable to CSV and Parquet export
-                       """,
-                IsRequired = false,
-                DisplayDependencies = new[]
-                {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                    new ControlDisplayDependency
-                    {
-                        Name = ShouldEscapeVocabularyKeys,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                },
-            });
-        controls.Add(
-            new()
-            {
-                Name = TableName,
-                DisplayName = "Table Name",
-                Type = "input",
-                Help = """
-                       Table Name to load to after file export.
-                       """,
-                IsRequired = true,
-                DisplayDependencies = new[]
-                {
-                    new ControlDisplayDependency
-                    {
-                        Name = ShouldLoadToTable,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                },
-            });
+        var loadToTableControls = GetLoadToTableControls();
+        RequireLegacyOptions(loadToTableControls);
+        controls.AddRange(loadToTableControls);
         controls.Add(
             new()
             {
@@ -204,7 +202,7 @@ public class OneLakeConfigurationConstants : StorageConfigurationConstants, IOne
                 Type = "checkbox",
                 Help = """
                        When enabled, connection to fabric will use workspace level URLs.
-                       Private links should be setup according to https://learn.microsoft.com/en-us/fabric/security/security-workspace-level-private-links-set-up?tabs=fabric-portal
+                       Private links should be setup according to [https://learn.microsoft.com/en-us/fabric/security/security-workspace-level-private-links-set-up?tabs=fabric-portal](https://learn.microsoft.com/en-us/fabric/security/security-workspace-level-private-links-set-up?tabs=fabric-portal](https://learn.microsoft.com/en-us/fabric/security/security-workspace-level-private-links-set-up?tabs=fabric-portal)
                        """,
                 IsRequired = false,
             });

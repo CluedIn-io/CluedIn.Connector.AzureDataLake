@@ -26,10 +26,13 @@ public class AzureAIStudioConfigurationConstants : StorageConfigurationConstants
         domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
         about: "Supports publishing of data to Azure AI Studio via Onelake.",
         authMethods: GetOneLakeAuthMethods(applicationContext),
+        properties: GetExportOptions(ExportSettings),
         guideDetails: "Supports publishing of data to Azure AI Studio.",
         guideInstructions: "Provide authentication instructions here, if applicable")
     {
     }
+
+    private static readonly ExportOptionsSettings ExportSettings = new();
 
     protected override string CacheKeyword => "AzureAIStudioConnector";
 
@@ -88,7 +91,7 @@ public class AzureAIStudioConfigurationConstants : StorageConfigurationConstants
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext));
+        controls.AddRange(GetAuthMethods(applicationContext, ExportSettings));
 
         return new AuthMethods
         {

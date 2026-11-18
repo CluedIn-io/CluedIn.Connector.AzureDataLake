@@ -28,10 +28,13 @@ public class SnowflakeConfigurationConstants : StorageConfigurationConstants, IS
         domain: "https://www.snowflake.com/",
         about: "Supports publishing of data to Snowflake using the Snowpipe Streaming REST API.",
         authMethods: GetSnowflakeAuthMethods(applicationContext),
+        properties: GetExportOptions(ExportSettings),
         guideDetails: "Supports publishing of data to Snowflake using the Snowpipe Streaming REST API.",
         guideInstructions: "Provide a Snowflake account, key-pair authenticated user and target table to get started.")
     {
     }
+
+    private static readonly ExportOptionsSettings ExportSettings = new(IsCustomFileNamePatternSupported: false, IsForceStreamCache: true, IsOutputFormatHidden: true);
 
     protected override string CacheKeyword => "SnowflakeConnector";
 
@@ -118,12 +121,7 @@ public class SnowflakeConfigurationConstants : StorageConfigurationConstants, IS
         };
 
         controls.AddRange(
-            GetAuthMethods(
-                applicationContext,
-                isCustomFileNamePatternSupported: false,
-                isArrayColumnOptionEnabled: false,
-                isForceStreamCache: true,
-                isOutputFormatHidden: true));
+            GetAuthMethods(applicationContext, ExportSettings));
 
         return new AuthMethods
         {

@@ -27,10 +27,13 @@ public class SynapseDataEngineeringConfigurationConstants : StorageConfiguration
         domain: "https://www.microsoft.com/en-us/microsoft-fabric",
         about: "Supports publishing of data to Synapse Data Engineering via OneLake.",
         authMethods: GetAzureDataLakeAuthMethods(applicationContext),
+        properties: GetExportOptions(ExportSettings),
         guideDetails: "Supports publishing of data to Synapse Data Engineering.",
         guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
     {
     }
+
+    private static readonly ExportOptionsSettings ExportSettings = new();
 
     protected override string CacheKeyword => "SynapseDataEngineeringConnector";
 
@@ -90,7 +93,7 @@ public class SynapseDataEngineeringConfigurationConstants : StorageConfiguration
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext));
+        controls.AddRange(GetAuthMethods(applicationContext, ExportSettings));
 
         return new AuthMethods
         {

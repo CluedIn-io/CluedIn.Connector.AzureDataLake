@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 using CluedIn.Core;
 using CluedIn.Core.Providers;
+using CluedIn.Core.Streams.Models;
 // ReSharper disable ArgumentsStyleStringLiteral
 
 namespace CluedIn.Connector.FileStorage.Common;
@@ -29,6 +30,7 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     public const string IsSoftDelete = nameof(IsSoftDelete);
     public const string IsOverwriteEnabled = nameof(IsOverwriteEnabled);
     public const string IsArrayColumnsEnabled = nameof(IsArrayColumnsEnabled);
+    public const string UseLegacyOptions = nameof(UseLegacyOptions);
 
     public const string IdKey = "Id";
     public const string StreamCacheConnectionStringKey = "StreamCache";
@@ -122,20 +124,133 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
 
     protected abstract string CacheKeyword { get; }
 
-    protected static IEnumerable<Control> GetAuthMethods(
-        ApplicationContext applicationContext,
-        bool isCustomFileNamePatternSupported = true,
-        bool isArrayColumnOptionEnabled = false,
-        bool isReducedFormats = false,
-        bool isDeltaOptionEnabled = false,
-        bool isForceStreamCache = false,
-        bool isOutputFormatHidden = false)
+    /// <summary>
+    /// Shape of the export option controls. The same options are shown on the connector while legacy options are used
+    /// and on every stream (as connector properties) otherwise.
+    /// </summary>
+    protected readonly record struct ExportOptionsSettings(
+        bool IsCustomFileNamePatternSupported = true,
+        bool IsArrayColumnOptionEnabled = false,
+        bool IsReducedFormats = false,
+        bool IsDeltaOptionEnabled = false,
+        bool IsForceStreamCache = false,
+        bool IsOutputFormatHidden = false,
+        bool IsEscapeVocabularyKeysOptionEnabled = false,
+        string EscapeVocabularyKeysHelp = DefaultEscapeVocabularyKeysHelp,
+        bool IsWriteGuidAsStringOptionEnabled = false);
+
+    private const string DefaultEscapeVocabularyKeysHelp = """
+        Replaces characters in the column names that are not in this list ('a-z', 'A-Z', '0-9' and '_') with the character '_'.
+        Enable this if you plan to access the output file in Microsoft Purview.
+        """;
+
+    /// <summary>
+    /// Keys of the options that are configured on the connector while legacy options are used, and on the stream otherwise.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> ExportOptionKeys = new HashSet<string>
     {
+        IsStreamCacheEnabled,
+        OutputFormat,
+        Schedule,
+        CustomCron,
+        FileNamePattern,
+        IsArrayColumnsEnabled,
+        IsDeltaMode,
+        ShouldEscapeVocabularyKeys,
+        ShouldWriteGuidAsString,
+    };
+
+    /// <summary>
+    /// Legacy options are used unless <see cref="UseLegacyOptions"/> is explicitly set to false.
+    /// </summary>
+    internal static bool IsUsingLegacyOptions(IDictionary<string, object> configurations)
+    {
+        return !configurations.TryGetValue(UseLegacyOptions, out var value)
+            || value switch
+            {
+                bool useLegacyOptions => useLegacyOptions,
+                string text when bool.TryParse(text, out var useLegacyOptions) => useLegacyOptions,
+                _ => true,
+            };
+    }
+
+    /// <summary>
+    /// Makes the controls only visible while legacy options are used, i.e. when they are not configured on the stream.
+    /// </summary>
+    protected static void RequireLegacyOptions(IEnumerable<Control> controls)
+    {
+        foreach (var control in controls)
+        {
+            control.DisplayDependencies =
+            [
+                .. control.DisplayDependencies,
+                new ControlDisplayDependency
+                {
+                    Name = UseLegacyOptions,
+                    Operator = ControlDependencyOperator.NotEquals,
+                    Value = false.ToString().ToLowerInvariant(),
+                    UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                },
+            ];
+        }
+    }
+
+    /// <summary>
+    /// Creates the controls for the connector's authentication section: the "Use Legacy Options" switch,
+    /// the stream cache connection string and the export options, which are only visible while legacy options are used.
+    /// </summary>
+    protected static List<Control> GetAuthMethods(ApplicationContext applicationContext, ExportOptionsSettings settings)
+    {
+        var controls = new List<Control>
+        {
+            new()
+            {
+                Name = UseLegacyOptions,
+                DisplayName = "Use Legacy Options",
+                Type = "checkbox",
+                IsRequired = false,
+                Help = """
+                    When enabled, export options (e.g. output format and schedule) are configured here and apply to all streams.
+                    When disabled, they are configured on each stream instead.
+                    """,
+                Options = new Dictionary<string, object> { ["defaultValue"] = true },
+            },
+        };
+
+        var exportOptions = GetExportOptions(settings);
+        RequireLegacyOptions(exportOptions);
+
+        controls.AddRange(exportOptions);
+
         string connectionString = null;
         if (applicationContext.System.ConnectionStrings.ConnectionStringExists(StreamCacheConnectionStringKey))
         {
             connectionString = applicationContext.System.ConnectionStrings.GetConnectionString(StreamCacheConnectionStringKey);
         }
+
+        if (!settings.IsForceStreamCache && string.IsNullOrWhiteSpace(connectionString))
+        {
+            // The connection string is a credential, so it stays on the connector and is not gated by legacy options
+            controls.Insert(
+                controls.FindIndex(control => control.Name == Schedule),
+                new()
+                {
+                    Name = StreamCacheConnectionString,
+                    DisplayName = "Stream Cache Connection String (SQL Server)",
+                    Type = "password",
+                    IsRequired = false,
+                });
+        }
+
+        return controls;
+    }
+
+    /// <summary>
+    /// Creates the export option controls. Each call returns new instances.
+    /// </summary>
+    protected static List<Control> GetExportOptions(ExportOptionsSettings settings)
+    {
+        var (isCustomFileNamePatternSupported, isArrayColumnOptionEnabled, isReducedFormats, isDeltaOptionEnabled, isForceStreamCache, isOutputFormatHidden, isEscapeVocabularyKeysOptionEnabled, escapeVocabularyKeysHelp, isWriteGuidAsStringOptionEnabled) = settings;
 
         var utcExportHelpText = $"Files will be exported using {TimeZoneInfo.Utc.Id} time zone (offset {TimeZoneInfo.Utc.BaseUtcOffset:hh\\:mm})";
 
@@ -148,6 +263,16 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
                 DisplayName = "Enable Stream Cache (Sync mode only)",
                 Type = "checkbox",
                 IsRequired = false,
+                DisplayDependencies =
+                [
+                    new ControlDisplayDependency
+                    {
+                        Name = "__StreamProperty__StreamMode",
+                        Operator = ControlDependencyOperator.Equals,
+                        Value = nameof(StreamMode.Sync),
+                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
+                    }
+                ],
             });
         };
 
@@ -172,18 +297,6 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
                         : FileStorageExtendedConfigurationProvider.DefaultSourceName,
                 DisplayDependencies = isForceStreamCache ? [] : [streamCacheDependency],
             });
-        }
-
-        if (!isForceStreamCache && string.IsNullOrWhiteSpace(connectionString))
-        {
-            controls.Add(
-                new ()
-                {
-                    Name = StreamCacheConnectionString,
-                    DisplayName = "Stream Cache Connection String (SQL Server)",
-                    Type = "password",
-                    IsRequired = false,
-                });
         }
 
         controls.Add(
@@ -281,6 +394,35 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
                     DisplayDependencies = isForceStreamCache
                     ? [ parquetFormatDependency ]
                     : [ streamCacheDependency, parquetFormatDependency],
+                });
+        }
+        if (isEscapeVocabularyKeysOptionEnabled)
+        {
+            controls.Add(
+                new()
+                {
+                    Name = ShouldEscapeVocabularyKeys,
+                    DisplayName = "Replace Non-Alphanumeric Characters in Column Names",
+                    Type = "checkbox",
+                    IsRequired = false,
+                    Help = escapeVocabularyKeysHelp,
+                    DisplayDependencies = isForceStreamCache ? [] : [ streamCacheDependency ],
+                });
+        }
+        if (isWriteGuidAsStringOptionEnabled)
+        {
+            controls.Add(
+                new()
+                {
+                    Name = ShouldWriteGuidAsString,
+                    DisplayName = "Write Guid as string",
+                    Type = "checkbox",
+                    IsRequired = false,
+                    Help = """
+                        Write Guid values as string instead of byte array.
+                        Enable this if you plan to access the output file in Microsoft Purview.
+                        """,
+                    DisplayDependencies = [ parquetFormatDependency ],
                 });
         }
         return controls;

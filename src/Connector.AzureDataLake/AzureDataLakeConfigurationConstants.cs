@@ -38,10 +38,13 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
         domain: "https://azure.microsoft.com/en-us/services/data-lake-analytics/",
         about: "Supports publishing of data to Azure Data Lake Storage Gen2.",
         authMethods: GetAzureDataLakeAuthMethods(applicationContext),
+        properties: GetExportOptions(ExportSettings),
         guideDetails: "Supports publishing of data to Azure DataLake.",
         guideInstructions: "Provide authentication instructions here, if applicable") // TODO: ROK:
     {
     }
+
+    private static readonly ExportOptionsSettings ExportSettings = new(IsArrayColumnOptionEnabled: true, IsEscapeVocabularyKeysOptionEnabled: true, IsWriteGuidAsStringOptionEnabled: true);
 
     protected override string CacheKeyword => "AzureDataLakeConnector";
 
@@ -237,53 +240,7 @@ public class AzureDataLakeConfigurationConstants : StorageConfigurationConstants
             },
         };
 
-        controls.AddRange(GetAuthMethods(applicationContext, isArrayColumnOptionEnabled: true));
-        controls.Add(
-            new()
-            {
-                Name = ShouldEscapeVocabularyKeys,
-                DisplayName = "Replace Non-Alphanumeric Characters in Column Names",
-                Type = "checkbox",
-                IsRequired = false,
-                Help = """
-                    Replaces characters in the column names that are not in this list ('a-z', 'A-Z', '0-9' and '_') with the character '_'.
-                    Enable this if you plan to access the output file in Microsoft Purview.
-                    """,
-                DisplayDependencies = new[]
-                {
-                    new ControlDisplayDependency
-                    {
-                        Name = IsStreamCacheEnabled,
-                        Operator = ControlDependencyOperator.Exists,
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                },
-            }
-        );
-        controls.Add(
-            new()
-            {
-                Name = ShouldWriteGuidAsString,
-                DisplayName = "Write Guid as string",
-                Type = "checkbox",
-                IsRequired = false,
-                Help = """
-                    Write Guid values as string instead of byte array.
-                    Enable this if you plan to access the output file in Microsoft Purview.
-                    """,
-                DisplayDependencies = new[]
-                {
-                    new ControlDisplayDependency
-                    {
-                        Name = OutputFormat,
-                        Operator = ControlDependencyOperator.Equals,
-                        Value = OutputFormats.Parquet.ToLowerInvariant(),
-                        UnfulfilledAction = ControlDependencyUnfulfilledAction.Hidden,
-                    },
-                },
-            }
-        );
-
+        controls.AddRange(GetAuthMethods(applicationContext, ExportSettings));
         return new AuthMethods
         {
             Token = controls
