@@ -5,6 +5,14 @@ parameters:
     type: boolean
     default: true
 
+  # Snowflake integration tests hit a shared, externally-billed Snowflake test account
+  # (not something this pipeline provisions), so they're opt-in rather than running by
+  # default alongside the rest of the integration suite. See SnowflakeTestCredentials.cs.
+  - name: runSnowflakeTests
+    displayName: Run Snowflake Integration Tests
+    type: boolean
+    default: false
+
   - name: pipelineTemplateRef
     displayName: Pipeline Template Ref
     type: string
@@ -44,6 +52,8 @@ variables:
     value: true
   - name: buildConfiguration
     value: Release
+  - name: RUN_SNOWFLAKE_TESTS
+    value: ${{ parameters.runSnowflakeTests }}
   - group: AzureDataLakeConnector_BuildLock
     # Requires variable group 'AzureDataLakeConnector_BuildLock' to exist and be authorized for this pipeline.
     # Configure an 'Exclusive lock' check on this variable group in Azure DevOps; the lockBehavior below relies on it for serialization.

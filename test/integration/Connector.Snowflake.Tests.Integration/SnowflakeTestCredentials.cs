@@ -13,6 +13,10 @@ namespace CluedIn.Connector.Snowflake.Tests.Integration;
 // variables. SNOWFLAKE_ROLE and SNOWFLAKE_PRIVATE_KEY_PASSPHRASE are optional (a blank
 // role uses the user's default role - see SnowflakeConfigurationConstants). Tests skip
 // when any required variable is absent, rather than failing.
+//
+// Also gated behind RUN_SNOWFLAKE_TESTS (set from the pipeline's runSnowflakeTests
+// parameter, default false) so these tests don't run - and fail the whole job - against
+// the shared Snowflake test account by default; see azure-pipelines.yml.
 internal static class SnowflakeTestCredentials
 {
     // Generated once per test run rather than read from an env var - matching how
@@ -22,6 +26,7 @@ internal static class SnowflakeTestCredentials
     public static string TargetTable { get; } = $"XUNIT_{DateTime.Now.Ticks}_{Guid.NewGuid():N}".ToUpperInvariant();
 
     public static bool IsAvailable =>
+        string.Equals(Environment.GetEnvironmentVariable("RUN_SNOWFLAKE_TESTS"), "true", StringComparison.OrdinalIgnoreCase) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_ACCOUNT")) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_USER")) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_PRIVATE_KEY")) &&
@@ -30,6 +35,7 @@ internal static class SnowflakeTestCredentials
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SNOWFLAKE_WAREHOUSE"));
 
     public static string SkipReason =>
+        "RUN_SNOWFLAKE_TESTS is not 'true' (pipeline's 'Run Snowflake Integration Tests' parameter defaults to false), or the " +
         "SNOWFLAKE_ACCOUNT/USER/PRIVATE_KEY/DATABASE/SCHEMA/WAREHOUSE environment variables are not all set - see docs/snowflake-connector-plan.md.";
 
     public static SnowflakeConnectionSettings Load()
