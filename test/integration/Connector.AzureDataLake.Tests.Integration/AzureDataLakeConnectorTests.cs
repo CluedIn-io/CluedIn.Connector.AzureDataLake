@@ -560,7 +560,6 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -601,7 +600,6 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -656,7 +654,6 @@ public class AzureDataLakeConnectorTests : DataLakeConnectorTestsBase<AzureDataL
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,

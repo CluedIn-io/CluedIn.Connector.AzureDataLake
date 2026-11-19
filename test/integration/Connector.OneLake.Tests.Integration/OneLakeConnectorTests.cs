@@ -357,7 +357,6 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -398,7 +397,6 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -453,7 +451,6 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,

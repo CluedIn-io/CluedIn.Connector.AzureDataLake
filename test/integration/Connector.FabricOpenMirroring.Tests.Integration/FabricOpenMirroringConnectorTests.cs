@@ -181,7 +181,6 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 executionCount = 0;
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -248,7 +247,6 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = isTriggeredFromJobServer,
@@ -318,7 +316,6 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 executionCount = 0;
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = isTriggeredFromJobServer,
@@ -395,7 +392,6 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = isTriggeredFromJobServer,
@@ -468,7 +464,6 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 executionCount = 0;
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -578,7 +573,6 @@ public class OpenMirroringConnectorTests : DataLakeConnectorTestsBase<OpenMirror
                 executionCount = 0;
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0 1-31 * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
