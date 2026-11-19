@@ -407,7 +407,6 @@ public class SnowflakeDeltaExportIntegrationTests
     {
         var jobArgs = new StorageJobArgs
         {
-            OrganizationId = setup.Organization.Id.ToString(),
             Schedule = "0 0/1 * * *",
             Message = setup.StreamModel.Id.ToString(),
             IsTriggeredFromJobServer = false,
