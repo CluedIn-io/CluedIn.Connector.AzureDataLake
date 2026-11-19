@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using CluedIn.Core;
 using CluedIn.Core.Connectors.ExtendedOperations;
 using CluedIn.Core.Events;
-using CluedIn.Core.Jobs;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
@@ -217,12 +216,6 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
         ExecuteConnectorActionRequest request)
     {
         var startedAt = _timeProvider.GetUtcNow();
-        var jobArgs = new JobArgs()
-        {
-            OrganizationId = executionContext.Organization.Id.ToString(),
-            Schedule = CronSchedules.NeverCron,
-            Message = streamModel.Id.ToString(),
-        };
 
         var exportJob = executionContext.ApplicationContext.Container.Resolve(ExportJobType) as StorageExportEntitiesJobBase;
         if (exportJob == null)
@@ -231,7 +224,7 @@ public abstract partial class StorageConnectorBase : ICustomActionConnector
             return new ExecuteConnectorActionResult(streamModel.Id, request.ActionName, IsSuccessful: false, IsCompleted: true, startedAt, startedAt, [failedResult]);
         }
 
-        await exportJob.DoRunAsync(executionContext, new StorageJobArgs(jobArgs, isTriggeredFromJobServer: true, startedAt));
+        await exportJob.DoRunAsync(executionContext, new StorageJobArgs(streamModel.Id.ToString(), CronSchedules.NeverCron, isTriggeredFromJobServer: true, startedAt));
 
         var successResult = new ExtendedOperationResultEntry("Result", ExtendedOperationResultEntryType.String, "Success", "Connector", string.Empty);
         var now = _timeProvider.GetUtcNow();
