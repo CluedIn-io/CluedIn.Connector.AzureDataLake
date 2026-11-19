@@ -49,15 +49,9 @@ public partial class SnowflakeApiClientIntegrationTests : IAsyncLifetime
         _client.Dispose();
     }
 
-    [Fact]
+    [SnowflakeFact]
     public async Task ExecuteStatementAsync_SelectOne_ReturnsOneRow()
     {
-        if (!SnowflakeTestCredentials.IsAvailable)
-        {
-            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
-            return;
-        }
-
         var result = await _client.ExecuteStatementAsync("SELECT 1 AS ONE");
 
         Assert.True(result.Success);
@@ -65,15 +59,9 @@ public partial class SnowflakeApiClientIntegrationTests : IAsyncLifetime
         Assert.Equal("1", Assert.Single(row));
     }
 
-    [Fact]
+    [SnowflakeFact]
     public async Task ExecuteStatementAsync_CreateInsertAndQueryTransientTable_RoundTrips()
     {
-        if (!SnowflakeTestCredentials.IsAvailable)
-        {
-            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
-            return;
-        }
-
         await _client.ExecuteStatementAsync($"""
             CREATE TRANSIENT TABLE "{_transientTableName}" (ID VARCHAR, DATA VARIANT)
             """);
@@ -88,15 +76,9 @@ public partial class SnowflakeApiClientIntegrationTests : IAsyncLifetime
         Assert.Equal("entity-1", Assert.Single(row));
     }
 
-    [Fact]
+    [SnowflakeFact]
     public async Task StreamingChannel_OpenAppendAndClose_LandsRowsInTransientTable()
     {
-        if (!SnowflakeTestCredentials.IsAvailable)
-        {
-            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
-            return;
-        }
-
         var pipeName = $"{_transientTableName}_PIPE";
         await _client.ExecuteStatementAsync($"""
             CREATE TRANSIENT TABLE "{_transientTableName}" (ENTITY_ID VARCHAR, CHANGE_TYPE VARCHAR, PERSIST_VERSION NUMBER, ROW_DATA VARIANT)
