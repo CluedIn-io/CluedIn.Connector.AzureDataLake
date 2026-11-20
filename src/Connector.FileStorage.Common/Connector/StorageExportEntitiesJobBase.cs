@@ -32,6 +32,9 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
     private readonly IStorageConfigurationConstants _dataLakeConstants;
     private readonly IStorageFactory _storageFactory;
     private readonly ITimeProvider _timeProvider;
+    // The effective timeout the whole export transaction had before it was split up (TimeSpan.MaxValue, capped to the
+    // default TransactionManager.MaximumTimeout of 10 minutes). It is still capped to MaximumTimeout if that is lower.
+    private static readonly TimeSpan OutputTargetInitializationTimeout = TimeSpan.FromMinutes(10);
     private const int ExportEntitiesLockInMilliseconds = 100;
     private const string StreamIdKey = "StreamId";
     private const string DataTimeKey = "DataTime";
@@ -135,12 +138,9 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                 return ExportResult.CreateSkipped("Failed to acquire lock");
             }
 
-            // Short queries and history rows use a separate connection without a transaction.
-            await using var connection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
-            await connection.OpenAsync();
             try
             {
-                return await DoRunInternalAsync(context, args, exportJobData, connection, exportConnection, exportTransaction);
+                return await DoRunInternalAsync(context, args, exportJobData, exportConnection, exportTransaction);
             }
             catch
             {
@@ -159,7 +159,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         ExecutionContext context,
         IStorageJobArgs args,
         ExportJobData exportJobData,
-        SqlConnection connection,
         SqlConnection exportConnection,
         SqlTransaction exportTransaction)
     {
@@ -177,6 +176,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         using var storageClient = await CreateStorageClient(context, configuration);
         await storageClient.CreateDirectoryIfNotExistsAsync(outputDirectoryPath);
+
+        // Short queries and the first history row use their own connection, without a transaction. It is released as soon
+        // as those checks are done (below), so that an idle pooled connection isn't held for the whole export: with enough
+        // concurrent exports that would exhaust the pool and leave no connection for the final history update.
+        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
+        await connection.OpenAsync();
 
         if (await HasExported(context, connection, streamId, asOfTime, GetTriggerSource(args), args.Schedule))
         {
@@ -224,6 +229,9 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return ExportResult.CreateSkipped(TableNotFoundReason);
         }
 
+        // Nothing below needs this connection (the history updates open their own), and disposing it twice is harmless.
+        await connection.DisposeAsync();
+
         if (!configuration.IsOverwriteEnabled && exportJobData.OutputFileExists)
         {
             await UpdateHistoryWithStatus(SkippedStatus);
@@ -241,8 +249,9 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         }
 
         // Overrides may take transaction-owned application locks on the connection (e.g. Open Mirroring's partner
-        // events file), so they get a short transaction of their own.
-        using (var initializeScope = new TransactionScope(TransactionScopeOption.Required, TransactionScopeAsyncFlowOption.Enabled))
+        // events file), so they get a short transaction of their own. They can also call slow remote storage while
+        // holding that lock, so the timeout is explicit: the default (1 minute) would abort the transaction mid-initialization.
+        using (var initializeScope = new TransactionScope(TransactionScopeOption.Required, OutputTargetInitializationTimeout, TransactionScopeAsyncFlowOption.Enabled))
         {
             await using var initializeConnection = new SqlConnection(configuration.StreamCacheConnectionString);
             await initializeConnection.OpenAsync();
@@ -316,7 +325,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         async Task UpdateHistoryWithStatus(string status, long? totalRows = null)
         {
-            // A fresh connection: the final update comes after the export, when `connection` may have been idle for a long time.
+            // A short-lived connection of its own: the setup connection is released before the export starts streaming, and
+            // the lock/read connection is busy (and transaction-bound) until the export ends.
             await using var historyConnection = new SqlConnection(configuration.StreamCacheConnectionString);
             await historyConnection.OpenAsync();
             await UpdateHistory(context, historyConnection, exportHistory with

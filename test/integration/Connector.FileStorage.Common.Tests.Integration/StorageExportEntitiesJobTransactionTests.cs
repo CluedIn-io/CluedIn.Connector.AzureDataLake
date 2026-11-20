@@ -190,6 +190,50 @@ public class StorageExportEntitiesJobTransactionTests
         Assert.Equal("Complete", Assert.Single(await harness.ReadHistoryAsync()).Status);
     }
 
+    [Fact]
+    public async Task Export_DoesNotHoldItsSetupConnectionWhileStreaming()
+    {
+        // While streaming, an export should only hold the connection that owns the lock and runs the read. Anything else
+        // held for the whole export is wasted: with enough concurrent exports it exhausts the pool and leaves no connection
+        // for the final history update. With a pool of 2 that update can only succeed if the connection used for the
+        // initial checks was released before streaming started.
+        await using var harness = await ExportHarness.CreateAsync(jobConnectionStringOptions: "Max Pool Size=2;Connect Timeout=3");
+
+        var result = await harness.RunExportAsync();
+
+        Assert.True(result.HasExported, $"Export did not run. Reason: {result.Reason}");
+        var history = Assert.Single(await harness.ReadHistoryAsync());
+        Assert.Equal("Complete", history.Status);
+        Assert.Equal(RowCount, history.TotalRows);
+    }
+
+    [Fact]
+    public async Task Export_OutputTargetInitializationLongerThanTheDefaultTransactionTimeout_StillSucceeds()
+    {
+        // Initializing the output target runs in its own transaction and may call slow remote storage (Open Mirroring
+        // creates directories and writes metadata files while holding a transaction-owned application lock). It needs an
+        // explicit timeout rather than System.Transactions' default (1 minute), which would abort it mid-initialization.
+        var originalDefaultTimeout = TransactionManager.DefaultTimeout;
+        TransactionManager.DefaultTimeout = TimeSpan.FromSeconds(1);
+        try
+        {
+            await using var harness = await ExportHarness.CreateAsync();
+            harness.Job.OutputTargetInitializationDelay = TimeSpan.FromSeconds(3);
+
+            var result = await harness.RunExportAsync();
+
+            Assert.True(result.HasExported, $"Export did not run. Reason: {result.Reason}");
+            Assert.True(harness.Job.OutputTargetWasInitializedInAmbientTransaction);
+            var history = Assert.Single(await harness.ReadHistoryAsync());
+            Assert.Equal("Complete", history.Status);
+            Assert.Equal(RowCount, history.TotalRows);
+        }
+        finally
+        {
+            TransactionManager.DefaultTimeout = originalDefaultTimeout;
+        }
+    }
+
     private sealed record HistoryRow(string Status, int? TotalRows, DateTimeOffset? EndTime);
 
     private sealed class TestExportJob : StorageExportEntitiesJobBase
@@ -208,6 +252,8 @@ public class StorageExportEntitiesJobTransactionTests
 
         public bool OutputTargetWasInitializedInAmbientTransaction { get; private set; }
 
+        public TimeSpan OutputTargetInitializationDelay { get; set; }
+
         protected override ISqlDataWriter GetSqlDataWriter(string outputFormat) => Writer;
 
         protected override async Task InitializeOutputTargetAsync(
@@ -218,6 +264,10 @@ public class StorageExportEntitiesJobTransactionTests
         {
             OutputTargetWasInitializedInAmbientTransaction = Transaction.Current != null;
             await base.InitializeOutputTargetAsync(context, connection, exportJobData, storageClient);
+            if (OutputTargetInitializationDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(OutputTargetInitializationDelay);
+            }
         }
     }
 
@@ -301,7 +351,11 @@ public class StorageExportEntitiesJobTransactionTests
 
         public string HistoryTableName { get; }
 
-        public static async Task<ExportHarness> CreateAsync()
+        /// <param name="jobConnectionStringOptions">
+        /// Extra connection string options for the connection string the export job itself uses (for example a small
+        /// "Max Pool Size"). Its connection pool is separate from the one the harness uses to set up and inspect the database.
+        /// </param>
+        public static async Task<ExportHarness> CreateAsync(string jobConnectionStringOptions = null)
         {
             var encodedConnectionString = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
             Assert.False(
@@ -403,7 +457,10 @@ public class StorageExportEntitiesJobTransactionTests
             var constants = new Mock<IStorageConfigurationConstants>();
             constants.Setup(x => x.ProviderId).Returns(providerId);
 
-            var configuration = new TestStorageConfiguration(connectionString);
+            var jobConnectionString = string.IsNullOrEmpty(jobConnectionStringOptions)
+                ? connectionString
+                : $"{connectionString.TrimEnd(';')};{jobConnectionStringOptions}";
+            var configuration = new TestStorageConfiguration(jobConnectionString);
             var storage = new InMemoryStorage();
             var storageFactory = new Mock<IStorageFactory>();
             storageFactory
