@@ -862,11 +862,11 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
 
     private protected async Task<ExportedFilePath> DefaultExecuteExport(ExecuteExportArg executeExportArg)
     {
-        executeExportArg.ExportJob.Run(new Core.Jobs.JobArgs
+        await executeExportArg.ExportJob.DoRunAsync(executeExportArg.ExecutionContext, new StorageJobArgs
         {
-            OrganizationId = executeExportArg.Organization.Id.ToString(),
             Schedule = "* * * * *",
             Message = executeExportArg.StreamId.ToString(),
+            IsTriggeredFromJobServer = true,
         });
 
         var path = await WaitForFileToBeCreated(executeExportArg.SetupContainerResult);
@@ -967,7 +967,6 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                     });
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -1091,7 +1090,6 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
                     });
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -1116,7 +1114,6 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,
@@ -1142,7 +1139,6 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
             {
                 var jobArgs = new StorageJobArgs
                 {
-                    OrganizationId = executeExportArg.Organization.Id.ToString(),
                     Schedule = "0 0/1 * * *",
                     Message = executeExportArg.StreamId.ToString(),
                     IsTriggeredFromJobServer = false,

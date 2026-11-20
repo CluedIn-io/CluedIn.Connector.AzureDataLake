@@ -5,7 +5,6 @@ using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Core;
 using CluedIn.Core.Data.Relational;
 using CluedIn.Core.Events;
-using CluedIn.Core.Jobs;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 
@@ -65,8 +64,6 @@ internal abstract class UpdateStreamScheduleBase
             return;
         }
 
-        UpdateJobServerClientSchedule(stream);
-
         var schedule = await JobDataFactory.GetScheduleAsync(executionContext, stream);
         var jobKey = stream.Id.ToString();
         if (schedule.IsNeverCron)
@@ -80,13 +77,6 @@ internal abstract class UpdateStreamScheduleBase
             var queuedJob = new QueuedJob(jobKey, executionContext.Organization.Id, ExportEntitiesJobType, schedule, TimeProvider.GetUtcNow());
             JobQueue.AddOrUpdateJob(queuedJob);
         }
-    }
-
-    private void UpdateJobServerClientSchedule(StreamModel stream)
-    {
-        var jobServerClient = ApplicationContext.Container.Resolve<IJobServerClient>();
-        var exportJob = ApplicationContext.Container.Resolve(ExportEntitiesJobType) as StorageExportEntitiesJobBase;
-        exportJob.Schedule(jobServerClient, CronSchedules.NeverCron, stream.Id.ToString());
     }
 
     private async Task<bool> IsDataLakeProvider(ExecutionContext executionContext, StreamModel stream)
