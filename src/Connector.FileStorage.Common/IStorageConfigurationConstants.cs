@@ -42,5 +42,37 @@ namespace CluedIn.Connector.FileStorage.Common
         /// Default value for health-check error log interval in milliseconds.
         /// </summary>
         int HealthCheckErrorLogIntervalDefaultValue { get; }
+
+        /// <summary>
+        /// Environment key name for the switch that batches the stream cache writes of concurrent entities
+        /// into one connection and transaction (and set based statements) instead of one each.
+        /// </summary>
+        string CacheBatchingEnabledKeyName { get; }
+
+        /// <summary>
+        /// Default value for the stream cache write batching switch.
+        /// </summary>
+        bool CacheBatchingEnabledDefaultValue { get; }
+
+        /// <summary>
+        /// Environment key name for the maximum number of entities written to the stream cache in one batch.
+        /// </summary>
+        string CacheBatchSizeKeyName { get; }
+
+        /// <summary>
+        /// Default value for the maximum number of entities written to the stream cache in one batch.
+        /// </summary>
+        int CacheBatchSizeDefaultValue { get; }
+
+        /// <summary>
+        /// Environment key name for how long, in milliseconds, a batch of entities written to the stream cache waits for more
+        /// entities before it is written. 0 writes what is there without waiting.
+        /// </summary>
+        string CacheBatchTimeoutKeyName { get; }
+
+        /// <summary>
+        /// Default value for how long a batch of entities written to the stream cache waits for more entities, in milliseconds.
+        /// </summary>
+        int CacheBatchTimeoutDefaultValue { get; }
     }
 }

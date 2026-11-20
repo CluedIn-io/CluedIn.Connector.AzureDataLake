@@ -1,0 +1,199 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+using BenchmarkDotNet.Columns;
+using BenchmarkDotNet.Reports;
+using BenchmarkDotNet.Running;
+
+using Microsoft.Data.SqlClient;
+
+namespace CluedIn.Connector.FileStorage.Common.Benchmarks;
+
+/// <summary>
+/// What a measurement cost SQL Server in connections: the most this process had open at the same time,
+/// and how many it logged in (pooled connections that are reused do not log in again).
+/// </summary>
+internal readonly record struct ConnectionUsage(int PeakConnections, int NewLogins);
+
+/// <summary>
+/// Counts the connections of this process to SQL Server while a measurement runs, from a connection of its own.
+/// </summary>
+internal sealed class ConnectionMonitor : IAsyncDisposable
+{
+    private static readonly TimeSpan _samplingInterval = TimeSpan.FromMilliseconds(5);
+
+    private const string SessionsSql = """
+        SELECT COUNT(*) FROM sys.dm_exec_sessions
+        WHERE is_user_process = 1 AND host_process_id = @processId AND session_id <> @@SPID
+        """;
+
+    private const string LoginsSql = """
+        SELECT cntr_value FROM sys.dm_os_performance_counters
+        WHERE counter_name = 'Logins/sec' AND object_name LIKE '%General Statistics%'
+        """;
+
+    private readonly SqlConnection _connection;
+    private readonly CancellationTokenSource _stop = new();
+    private Task _sampling;
+    private long _loginsAtStart;
+    private int _peakConnections;
+
+    private ConnectionMonitor(SqlConnection connection)
+    {
+        _connection = connection;
+    }
+
+    public static async Task<ConnectionMonitor> StartAsync(string connectionString)
+    {
+        // Not pooled, so that the monitor is not one of the connections it counts (it is left out of the count by session too)
+        var builder = new SqlConnectionStringBuilder(connectionString) { Pooling = false };
+        var connection = new SqlConnection(builder.ConnectionString);
+        await connection.OpenAsync();
+
+        var monitor = new ConnectionMonitor(connection);
+        monitor._loginsAtStart = await monitor.ReadLoginsAsync();
+        monitor._peakConnections = await monitor.ReadConnectionsAsync();
+        monitor._sampling = Task.Run(monitor.SampleAsync);
+        return monitor;
+    }
+
+    public async Task<ConnectionUsage> StopAsync()
+    {
+        await _stop.CancelAsync();
+        await _sampling;
+
+        var peak = Math.Max(_peakConnections, await ReadConnectionsAsync());
+        var logins = await ReadLoginsAsync() - _loginsAtStart;
+        return new ConnectionUsage(peak, (int)logins);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _stop.CancelAsync();
+        await _connection.DisposeAsync();
+        _stop.Dispose();
+    }
+
+    private async Task SampleAsync()
+    {
+        while (!_stop.IsCancellationRequested)
+        {
+            var connections = await ReadConnectionsAsync();
+            if (connections > _peakConnections)
+            {
+                _peakConnections = connections;
+            }
+
+            try
+            {
+                await Task.Delay(_samplingInterval, _stop.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
+    private async Task<int> ReadConnectionsAsync()
+    {
+        await using var command = new SqlCommand(SessionsSql, _connection);
+        command.Parameters.AddWithValue("@processId", Environment.ProcessId);
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    private async Task<long> ReadLoginsAsync()
+    {
+        await using var command = new SqlCommand(LoginsSql, _connection);
+        return Convert.ToInt64(await command.ExecuteScalarAsync());
+    }
+}
+
+/// <summary>
+/// Keeps the connection usage of each measured iteration, per benchmark case, for the summary columns.
+/// </summary>
+internal static class ConnectionUsages
+{
+    private static readonly ConcurrentDictionary<string, List<ConnectionUsage>> _usages = new();
+
+    public static void Add(string caseKey, ConnectionUsage usage)
+    {
+        var usages = _usages.GetOrAdd(caseKey, _ => new List<ConnectionUsage>());
+        lock (usages)
+        {
+            usages.Add(usage);
+        }
+    }
+
+    /// <summary>The usage of the measured iterations: the first one of a case is its warmup.</summary>
+    public static IReadOnlyCollection<ConnectionUsage> Get(string caseKey)
+    {
+        if (!_usages.TryGetValue(caseKey, out var usages))
+        {
+            return [];
+        }
+
+        lock (usages)
+        {
+            return usages.Skip(1).ToArray();
+        }
+    }
+
+    public static string CaseKey(string method, WriteMode mode, bool softDelete, int concurrency) =>
+        $"{method}|{mode}|{softDelete}|{concurrency}";
+
+    public static string CaseKey(BenchmarkCase benchmarkCase)
+    {
+        string Parameter(string name) => benchmarkCase.Parameters.Items.Single(item => item.Name == name).Value.ToString();
+
+        return $"{benchmarkCase.Descriptor.WorkloadMethod.Name}|{Parameter(nameof(CacheWriteBenchmarks.Mode))}|{Parameter(nameof(CacheWriteBenchmarks.SoftDelete))}|{Parameter(nameof(CacheWriteBenchmarks.Concurrency))}";
+    }
+}
+
+/// <summary>
+/// A summary column of the connections to SQL Server, averaged over the measured iterations.
+/// </summary>
+internal sealed class ConnectionsColumn : IColumn
+{
+    private readonly Func<ConnectionUsage, int> _select;
+
+    public ConnectionsColumn(string id, string columnName, string legend, Func<ConnectionUsage, int> select)
+    {
+        Id = id;
+        ColumnName = columnName;
+        Legend = legend;
+        _select = select;
+    }
+
+    public string Id { get; }
+
+    public string ColumnName { get; }
+
+    public string Legend { get; }
+
+    public bool AlwaysShow => true;
+
+    public ColumnCategory Category => ColumnCategory.Custom;
+
+    public int PriorityInCategory => 0;
+
+    public bool IsNumeric => true;
+
+    public UnitType UnitType => UnitType.Dimensionless;
+
+    public bool IsAvailable(Summary summary) => true;
+
+    public bool IsDefault(Summary summary, BenchmarkCase benchmarkCase) => false;
+
+    public string GetValue(Summary summary, BenchmarkCase benchmarkCase) => GetValue(summary, benchmarkCase, SummaryStyle.Default);
+
+    public string GetValue(Summary summary, BenchmarkCase benchmarkCase, SummaryStyle style)
+    {
+        var usages = ConnectionUsages.Get(ConnectionUsages.CaseKey(benchmarkCase));
+        return usages.Count == 0 ? "N/A" : usages.Average(_select).ToString("0.#");
+    }
+}

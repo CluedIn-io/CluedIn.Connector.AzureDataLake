@@ -209,6 +209,12 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         constants.Setup(x => x.CacheBufferStrategyDefaultValue).Returns(nameof(BufferStrategy.Safe));
         constants.Setup(x => x.HealthCheckErrorLogIntervalKeyName).Returns("HealthCheckErrorLogInterval");
         constants.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
+        constants.Setup(x => x.CacheBatchingEnabledKeyName).Returns("CacheBatchingEnabled");
+        constants.Setup(x => x.CacheBatchingEnabledDefaultValue).Returns(true);
+        constants.Setup(x => x.CacheBatchSizeKeyName).Returns("CacheBatchSize");
+        constants.Setup(x => x.CacheBatchSizeDefaultValue).Returns(100);
+        constants.Setup(x => x.CacheBatchTimeoutKeyName).Returns("CacheBatchTimeout");
+        constants.Setup(x => x.CacheBatchTimeoutDefaultValue).Returns(0);
         constants.Setup(x => x.ProviderId).Returns(StorageProviderId);
         return constants;
     }
