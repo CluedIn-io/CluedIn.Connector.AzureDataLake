@@ -52,7 +52,7 @@ public class StorageConnectorCacheBatchingTests
         await StoreAllAsync(harness, Enumerable.Range(0, 100).Select(_ => CacheWriteHarness.CreateEntity(Guid.NewGuid())));
 
         Assert.Equal(105, await harness.CountRowsAsync());
-        Assert.True(await CountStatementExecutionsAsync(harness, "#CacheWriteStage") > 0, "Expected the set based statements to have run.");
+        Assert.True(await CountStatementExecutionsAsync(harness, "INNER LOOP JOIN") > 0, "Expected the set based statements to have run.");
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class StorageConnectorCacheBatchingTests
         await StoreAllAsync(harness, Enumerable.Range(0, 100).Select(_ => CacheWriteHarness.CreateEntity(Guid.NewGuid())));
 
         Assert.Equal(105, await harness.CountRowsAsync());
-        Assert.Equal(0, await CountStatementExecutionsAsync(harness, "#CacheWriteStage"));
+        Assert.Equal(0, await CountStatementExecutionsAsync(harness, "INNER LOOP JOIN"));
     }
 
     [Fact]

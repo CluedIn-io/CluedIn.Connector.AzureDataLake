@@ -52,30 +52,6 @@ internal static class CacheTableParameterHelper
     }
 
     /// <summary>
-    /// The column definition that holds exactly what a parameter declared with <paramref name="sqlDbType"/> sends,
-    /// so that a column of it can be converted into a cache table column by the server like such a parameter is.
-    /// </summary>
-    internal static string GetColumnTypeDeclaration(SqlDbType sqlDbType)
-    {
-        return sqlDbType switch
-        {
-            SqlDbType.Bit => "BIT",
-            SqlDbType.TinyInt => "TINYINT",
-            SqlDbType.SmallInt => "SMALLINT",
-            SqlDbType.Int => "INT",
-            SqlDbType.BigInt => "BIGINT",
-            SqlDbType.Real => "REAL",
-            SqlDbType.Float => "FLOAT",
-            SqlDbType.Decimal => $"DECIMAL({DecimalPrecision},{DecimalScale})",
-            SqlDbType.DateTime => "DATETIME",
-            SqlDbType.DateTimeOffset => "DATETIMEOFFSET",
-            SqlDbType.Time => "TIME",
-            SqlDbType.UniqueIdentifier => "UNIQUEIDENTIFIER",
-            _ => "NVARCHAR(MAX)",
-        };
-    }
-
-    /// <summary>
     /// Creates a parameter whose declaration depends only on the value's type, never on the value itself.
     /// </summary>
     /// <param name="parameterName">Name of the parameter, including the '@' prefix.</param>
