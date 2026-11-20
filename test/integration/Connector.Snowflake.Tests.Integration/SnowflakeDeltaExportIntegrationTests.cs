@@ -75,15 +75,9 @@ public class SnowflakeDeltaExportIntegrationTests
         _testOutputHelper = testOutputHelper ?? throw new ArgumentNullException(nameof(testOutputHelper));
     }
 
-    [Fact]
+    [SnowflakeFact]
     public async Task Export_OnlySendsDeltaRows_ForInsertsUpdatesAndDeletes()
     {
-        if (!SnowflakeTestCredentials.IsAvailable)
-        {
-            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
-            return;
-        }
-
         var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
         if (string.IsNullOrWhiteSpace(streamCacheConnectionStringEncoded))
         {
@@ -160,15 +154,9 @@ public class SnowflakeDeltaExportIntegrationTests
     // a delta against history - since a delta MERGE into a freshly recreated (empty) table
     // would only carry over whatever changed since the last export, silently losing every
     // row that didn't change.
-    [Fact]
+    [SnowflakeFact]
     public async Task Export_TreatsRunAsInitial_WhenTargetTableIsMissing()
     {
-        if (!SnowflakeTestCredentials.IsAvailable)
-        {
-            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
-            return;
-        }
-
         var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
         if (string.IsNullOrWhiteSpace(streamCacheConnectionStringEncoded))
         {
@@ -225,15 +213,9 @@ public class SnowflakeDeltaExportIntegrationTests
     // SnowflakeExportEntitiesJob/SnowflakeConnector.ArchiveContainer): the target table
     // lands at the resolved name, and - since GetTransientTableName/GetPipeName derive from
     // the resolved name, not the raw pattern - so do the transient table and pipe.
-    [Fact]
+    [SnowflakeFact]
     public async Task TableNamePattern_ResolvesConsistentlyForTargetTransientAndPipe()
     {
-        if (!SnowflakeTestCredentials.IsAvailable)
-        {
-            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
-            return;
-        }
-
         var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
         if (string.IsNullOrWhiteSpace(streamCacheConnectionStringEncoded))
         {
@@ -311,15 +293,9 @@ public class SnowflakeDeltaExportIntegrationTests
     // StorageConnectorBase.RenameCacheTableIfExists's convention for the SQL Server cache
     // table) rather than dropped - the original name no longer exists, and the row exported
     // to it is still readable under the renamed table.
-    [Fact]
+    [SnowflakeFact]
     public async Task ArchiveContainer_RenamesOwnedTargetTableInsteadOfDroppingIt()
     {
-        if (!SnowflakeTestCredentials.IsAvailable)
-        {
-            DynamicSkip.Request(SnowflakeTestCredentials.SkipReason);
-            return;
-        }
-
         var streamCacheConnectionStringEncoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
         if (string.IsNullOrWhiteSpace(streamCacheConnectionStringEncoded))
         {
