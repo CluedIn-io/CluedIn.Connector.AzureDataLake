@@ -45,7 +45,7 @@ namespace CluedIn.Connector.FileStorage.Common
 
         /// <summary>
         /// Environment key name for the switch that batches the stream cache writes of concurrent entities
-        /// into one connection and transaction (and set based statements) instead of one each.
+        /// into one connection and transaction (and set based statements) instead of one each. Only streams that use soft delete are batched.
         /// </summary>
         string CacheBatchingEnabledKeyName { get; }
 
@@ -74,5 +74,15 @@ namespace CluedIn.Connector.FileStorage.Common
         /// Default value for how long a batch of entities written to the stream cache waits for more entities, in milliseconds.
         /// </summary>
         int CacheBatchTimeoutDefaultValue { get; }
+
+        /// <summary>
+        /// Environment key name for the number of threads that write batches of entities to the stream cache at the same time.
+        /// </summary>
+        string CacheBatchOutputThreadsKeyName { get; }
+
+        /// <summary>
+        /// Default value for the number of threads that write batches of entities to the stream cache at the same time.
+        /// </summary>
+        int CacheBatchOutputThreadsDefaultValue { get; }
     }
 }
