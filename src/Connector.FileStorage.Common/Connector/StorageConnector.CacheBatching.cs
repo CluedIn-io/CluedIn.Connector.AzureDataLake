@@ -27,16 +27,12 @@ namespace CluedIn.Connector.FileStorage.Common.Connector;
 // the set based statements are needed for, so those are always written with the single entity path.
 public abstract partial class StorageConnectorBase
 {
-    // A set based write costs a fixed number of round trips (stage, copy, write, read back), which a
-    // single entity does not need.
+    // A single entity is written with the single entity path, which has simpler statements than the set based ones
     private const int MinimumEntitiesForSetBasedWrite = 2;
 
     // SqlClient allows 2100 parameters in a command, and a VALUES clause 1000 rows
     private const int MaximumParametersPerCommand = 2000;
-    private const int MaximumRowsPerInsert = 1000;
-
-    private const string StageTableName = "#CacheWriteStage";
-    private const string HandledTableName = "#CacheWriteHandled";
+    private const int MaximumRowsPerCommand = 1000;
 
     private enum CacheWriteKind
     {
@@ -253,64 +249,39 @@ public abstract partial class StorageConnectorBase
         string tableName,
         SetBasedWriteGroup group)
     {
-        const string id = StorageConfigurationConstants.IdKey;
-
-        var stageColumnDefinitions = group.Columns
-            .Select((column, index) => $"[{column}] {CacheTableParameterHelper.GetColumnTypeDeclaration(group.ColumnTypes[index])}")
-            .Prepend($"[{id}] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY CLUSTERED");
-        var stageColumns = string.Join(", ", group.Columns.Prepend(id).Select(column => $"[{column}]"));
-
-        // The entities go to the stage as parameters, with the types the single entity path sends them as, so the server
-        // converts them into the cache table's columns like it does for that path. The stage, the statements, what they
-        // wrote and the clean up are the same command when the parameters fit in one, which is one round trip for the batch.
-        var rowsPerCommand = Math.Clamp(MaximumParametersPerCommand / (group.Columns.Count + 1), 1, MaximumRowsPerInsert);
-        var chunkCount = (group.Requests.Count + rowsPerCommand - 1) / rowsPerCommand;
+        var rowsPerCommand = Math.Clamp(MaximumParametersPerCommand / (group.Columns.Count + 1), 1, MaximumRowsPerCommand);
 
         var handledEntityIds = new HashSet<Guid>();
-        for (var i = 0; i < chunkCount; i++)
+        for (var firstRow = 0; firstRow < group.Requests.Count; firstRow += rowsPerCommand)
         {
-            var isFirst = i == 0;
-            var isLast = i == chunkCount - 1;
-
-            var sql = new StringBuilder();
-            if (isFirst)
-            {
-                sql.AppendLine($"CREATE TABLE {StageTableName} ({string.Join(", ", stageColumnDefinitions)});");
-                sql.AppendLine($"CREATE TABLE {HandledTableName} ([{id}] UNIQUEIDENTIFIER NOT NULL);");
-            }
+            var rowCount = Math.Min(rowsPerCommand, group.Requests.Count - firstRow);
 
             await using var command = new SqlCommand { Connection = connection, Transaction = transaction, CommandType = CommandType.Text };
-            AppendStageRows(sql, command.Parameters, group, i * rowsPerCommand, Math.Min(rowsPerCommand, group.Requests.Count - i * rowsPerCommand), stageColumns);
+            var rows = GetRows(command.Parameters, group, firstRow, rowCount);
+            command.CommandText = GetSetBasedWriteSql(group, tableName, rows);
 
-            if (!isLast)
-            {
-                command.CommandText = sql.ToString();
-                await command.ExecuteNonQueryAsync();
-                continue;
-            }
-
-            sql.AppendLine(GetSetBasedWriteSql(group, tableName));
-            sql.AppendLine($"SELECT [{id}] FROM {HandledTableName}; DROP TABLE {StageTableName}; DROP TABLE {HandledTableName};");
-            command.CommandText = sql.ToString();
+            // The statements return the ids of the entities they wrote, one result for each of them
             await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            do
             {
-                handledEntityIds.Add(reader.GetGuid(0));
+                while (await reader.ReadAsync())
+                {
+                    handledEntityIds.Add(reader.GetGuid(0));
+                }
             }
+            while (await reader.NextResultAsync());
         }
 
         return group.Requests.Where(request => !handledEntityIds.Contains(request.EntityId)).ToList();
     }
 
-    private static void AppendStageRows(
-        StringBuilder sql,
-        SqlParameterCollection parameters,
-        SetBasedWriteGroup group,
-        int firstRow,
-        int rowCount,
-        string stageColumns)
+    /// <summary>
+    /// The rows of the entities as a table of the statements. The values are parameters of the types the single entity path
+    /// sends them as, so the server converts them into the cache table's columns like it does for that path.
+    /// </summary>
+    private static string GetRows(SqlParameterCollection parameters, SetBasedWriteGroup group, int firstRow, int rowCount)
     {
-        sql.Append($"INSERT INTO {StageTableName} ({stageColumns}) VALUES ");
+        var sql = new StringBuilder("(VALUES ");
         for (var row = 0; row < rowCount; row++)
         {
             var source = firstRow + row;
@@ -327,13 +298,14 @@ public abstract partial class StorageConnectorBase
             sql.Append(')');
         }
 
-        sql.AppendLine(";");
+        sql.Append($") AS s ({string.Join(", ", group.Columns.Prepend(StorageConfigurationConstants.IdKey).Select(column => $"[{column}]"))})");
+        return sql.ToString();
     }
 
-    private static string GetSetBasedWriteSql(SetBasedWriteGroup group, string tableName)
+    private static string GetSetBasedWriteSql(SetBasedWriteGroup group, string tableName, string rows)
     {
         const string id = StorageConfigurationConstants.IdKey;
-        var handled = $"OUTPUT inserted.[{id}] INTO {HandledTableName} ([{id}])";
+        var output = $"OUTPUT inserted.[{id}]";
 
         switch (group.Kind)
         {
@@ -341,8 +313,8 @@ public abstract partial class StorageConnectorBase
                 return $"""
                     UPDATE t SET
                         {string.Join(",\n    ", group.Columns.Select(column => $"t.[{column}] = s.[{column}]"))}
-                    {handled}
-                    FROM {StageTableName} AS s INNER LOOP JOIN [{tableName}] AS t ON t.[{id}] = s.[{id}];
+                    {output}
+                    FROM {rows} INNER LOOP JOIN [{tableName}] AS t ON t.[{id}] = s.[{id}];
                     """;
 
             default:
@@ -359,25 +331,16 @@ public abstract partial class StorageConnectorBase
                 return $"""
                     UPDATE t SET
                         {string.Join(",\n    ", group.Columns.Select(column => $"t.[{column}] = s.[{column}]"))}
-                    {handled}
-                    FROM {StageTableName} AS s INNER LOOP JOIN [{tableName}] AS t ON t.[{id}] = s.[{id}]
+                    {output}
+                    FROM {rows} INNER LOOP JOIN [{tableName}] AS t ON t.[{id}] = s.[{id}]
                     {versionCondition};
 
                     INSERT INTO [{tableName}] ({string.Join(", ", allColumns.Select(column => $"[{column}]"))})
-                    {handled}
+                    {output}
                     SELECT {string.Join(", ", allColumns.Select(column => $"s.[{column}]"))}
-                    FROM {StageTableName} AS s
+                    FROM {rows}
                     WHERE NOT EXISTS (SELECT 1 FROM [{tableName}] AS t WHERE t.[{id}] = s.[{id}]);
                     """;
         }
-    }
-
-    private static async Task ExecuteNonQuery(SqlConnection connection, SqlTransaction transaction, string sql)
-    {
-        await using var command = new SqlCommand(sql, connection, transaction)
-        {
-            CommandType = CommandType.Text,
-        };
-        await command.ExecuteNonQueryAsync();
     }
 }
