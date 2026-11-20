@@ -13,6 +13,7 @@
     <PackageReference Update="CluedIn.Streams" Version="$(_CluedIn)" />
     <PackageReference Update="CluedIn.Integration.PrivateServices" Version="$(_CluedIn)" />
     <PackageReference Update="CluedIn.ComponentHealth" Version="$(_CluedIn)" />
+    <PackageReference Update="Microsoft.Bcl.TimeProvider" Version="8.0.1" />
     <PackageReference Update="NCrontab" Version="3.3.3" />
     <PackageReference Update="Parquet.Net" Version="4.23.5" />
     <PackageReference Update="IgnoresAccessChecksToGenerator" Version="0.8.0" PrivateAssets="All" />
@@ -25,6 +26,8 @@
         MUST SPECIFY IN CSPROJ AS <PackageReference Name="<depName>" />
     -->
     <PackageReference Update="coverlet.msbuild" Version="2.8.0" />
+    <PackageReference Update="BenchmarkDotNet" Version="0.15.8" />
+    <PackageReference Update="Microsoft.Extensions.TimeProvider.Testing" Version="8.0.0" />
     <PackageReference Update="Moq" Version="4.13.1" />
     <PackageReference Update="ParquetSharp" Version="15.0.2.1" />
   </ItemGroup>

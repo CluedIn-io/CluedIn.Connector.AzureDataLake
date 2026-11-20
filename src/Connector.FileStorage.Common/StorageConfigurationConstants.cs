@@ -112,6 +112,38 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     /// </summary>
     public int HealthCheckErrorLogIntervalDefaultValue => 60 * 60 * 1000; // 1 hour in milliseconds
 
+    /// <summary>
+    /// Environment key name for the switch that batches the stream cache writes of concurrent entities
+    /// into one connection and transaction (and set based statements) instead of one each.
+    /// </summary>
+    public string CacheBatchingEnabledKeyName => $"Streams.{CacheKeyword}.CacheBatching.Enabled";
+
+    /// <summary>
+    /// Default value for the stream cache write batching switch.
+    /// </summary>
+    public bool CacheBatchingEnabledDefaultValue => true;
+
+    /// <summary>
+    /// Environment key name for the maximum number of entities written to the stream cache in one batch.
+    /// </summary>
+    public string CacheBatchSizeKeyName => $"Streams.{CacheKeyword}.CacheBatching.BatchSize";
+
+    /// <summary>
+    /// Default value for the maximum number of entities written to the stream cache in one batch.
+    /// </summary>
+    public int CacheBatchSizeDefaultValue => 100;
+
+    /// <summary>
+    /// Environment key name for how long, in milliseconds, a batch of entities written to the stream cache waits for more
+    /// entities before it is written. 0 writes what is there without waiting.
+    /// </summary>
+    public string CacheBatchTimeoutKeyName => $"Streams.{CacheKeyword}.CacheBatching.BatchTimeout";
+
+    /// <summary>
+    /// Default value for how long a batch of entities written to the stream cache waits for more entities, in milliseconds.
+    /// </summary>
+    public int CacheBatchTimeoutDefaultValue => 0;
+
     public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
 
     public string CacheBufferStrategyDefaultValue => nameof(BufferStrategy.Safe);

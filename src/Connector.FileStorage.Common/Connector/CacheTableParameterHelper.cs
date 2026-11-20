@@ -42,6 +42,40 @@ internal static class CacheTableParameterHelper
     };
 
     /// <summary>
+    /// The type a parameter for <paramref name="value"/> is declared with.
+    /// A null or <see cref="DBNull"/> value takes it from <paramref name="columnType"/>.
+    /// </summary>
+    internal static SqlDbType GetSqlDbType(object value, Type columnType)
+    {
+        var valueType = value is null || value is DBNull ? columnType : value.GetType();
+        return _dotNetToSqlDbTypeMap.TryGetValue(valueType, out var mappedType) ? mappedType : SqlDbType.NVarChar;
+    }
+
+    /// <summary>
+    /// The column definition that holds exactly what a parameter declared with <paramref name="sqlDbType"/> sends,
+    /// so that a column of it can be converted into a cache table column by the server like such a parameter is.
+    /// </summary>
+    internal static string GetColumnTypeDeclaration(SqlDbType sqlDbType)
+    {
+        return sqlDbType switch
+        {
+            SqlDbType.Bit => "BIT",
+            SqlDbType.TinyInt => "TINYINT",
+            SqlDbType.SmallInt => "SMALLINT",
+            SqlDbType.Int => "INT",
+            SqlDbType.BigInt => "BIGINT",
+            SqlDbType.Real => "REAL",
+            SqlDbType.Float => "FLOAT",
+            SqlDbType.Decimal => $"DECIMAL({DecimalPrecision},{DecimalScale})",
+            SqlDbType.DateTime => "DATETIME",
+            SqlDbType.DateTimeOffset => "DATETIMEOFFSET",
+            SqlDbType.Time => "TIME",
+            SqlDbType.UniqueIdentifier => "UNIQUEIDENTIFIER",
+            _ => "NVARCHAR(MAX)",
+        };
+    }
+
+    /// <summary>
     /// Creates a parameter whose declaration depends only on the value's type, never on the value itself.
     /// </summary>
     /// <param name="parameterName">Name of the parameter, including the '@' prefix.</param>
@@ -53,9 +87,14 @@ internal static class CacheTableParameterHelper
     /// </remarks>
     internal static SqlParameter CreateParameter(string parameterName, object value, Type columnType)
     {
-        var valueType = value is null || value is DBNull ? columnType : value.GetType();
-        var sqlDbType = _dotNetToSqlDbTypeMap.TryGetValue(valueType, out var mappedType) ? mappedType : SqlDbType.NVarChar;
+        return CreateParameter(parameterName, value, GetSqlDbType(value, columnType));
+    }
 
+    /// <summary>
+    /// Creates a parameter declared with <paramref name="sqlDbType"/>, as <see cref="GetSqlDbType"/> returns it for the value.
+    /// </summary>
+    internal static SqlParameter CreateParameter(string parameterName, object value, SqlDbType sqlDbType)
+    {
         var parameter = new SqlParameter(parameterName, sqlDbType)
         {
             Value = value,

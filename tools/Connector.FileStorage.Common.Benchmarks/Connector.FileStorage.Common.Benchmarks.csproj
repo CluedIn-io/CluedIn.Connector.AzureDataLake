@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>Benchmarks of the stream cache writes of CluedIn.Connector.FileStorage.Common</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Moq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Connector.FileStorage.Common\Connector.FileStorage.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The connector and stream cache setup is shared with the integration tests -->
+    <Compile Include="..\..\test\integration\Connector.FileStorage.Common.Tests.Integration\CacheWriteHarness.cs" Link="CacheWriteHarness.cs" />
+  </ItemGroup>
+</Project>
