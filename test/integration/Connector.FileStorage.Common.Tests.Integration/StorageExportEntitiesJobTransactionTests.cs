@@ -80,6 +80,10 @@ public class StorageExportEntitiesJobTransactionTests
         Assert.DoesNotContain(harness.Storage.Files.Keys, key => key.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase));
     }
 
+    // TransactionManager.MaximumTimeout and TransactionManager.DefaultTimeout are read-only on net6.0 (the CluedIn 4.x
+    // lines), so the two tests that shrink them only exist where they can be set. The export code under test is the same
+    // on every line, and the other tests in this class run on all of them.
+#if !NET6_0
     [Fact]
     public async Task Export_RunningLongerThanTheTransactionTimeout_StillRecordsCompleteHistory()
     {
@@ -104,6 +108,7 @@ public class StorageExportEntitiesJobTransactionTests
             TransactionManager.MaximumTimeout = originalMaximumTimeout;
         }
     }
+#endif
 
     [Fact]
     public async Task Export_HoldsThePerStreamLockForTheWholeExport()
@@ -207,6 +212,7 @@ public class StorageExportEntitiesJobTransactionTests
         Assert.Equal(RowCount, history.TotalRows);
     }
 
+#if !NET6_0
     [Fact]
     public async Task Export_OutputTargetInitializationLongerThanTheDefaultTransactionTimeout_StillSucceeds()
     {
@@ -233,6 +239,7 @@ public class StorageExportEntitiesJobTransactionTests
             TransactionManager.DefaultTimeout = originalDefaultTimeout;
         }
     }
+#endif
 
     private sealed record HistoryRow(string Status, int? TotalRows, DateTimeOffset? EndTime);
 
