@@ -129,8 +129,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             // read keeps the connection busy for the whole export, so it isn't dropped as idle (an idle connection holding
             // the lock was closed after ~30 minutes, releasing the lock and letting a second export of the stream start),
             // and an explicit SqlTransaction isn't subject to the System.Transactions timeout. Disposing it releases the lock.
-            await using var exportConnection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
-            await exportConnection.OpenAsync();
+            await using var exportConnection = await OpenStreamCacheConnectionAsync(exportJobData.StorageConfiguration);
             await using var exportTransaction = exportConnection.BeginTransaction();
             if (!await DistributedLockHelper.TryAcquireExclusiveLock(exportTransaction, $"{GetType().Name}_{streamId}", ExportEntitiesLockInMilliseconds))
             {
@@ -180,8 +179,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         // Short queries and the first history row use their own connection, without a transaction. It is released as soon
         // as those checks are done (below), so that an idle pooled connection isn't held for the whole export: with enough
         // concurrent exports that would exhaust the pool and leave no connection for the final history update.
-        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
-        await connection.OpenAsync();
+        await using var connection = await OpenStreamCacheConnectionAsync(configuration);
 
         if (await HasExported(context, connection, streamId, asOfTime, GetTriggerSource(args), args.Schedule))
         {
@@ -253,8 +251,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         // holding that lock, so the timeout is explicit: the default (1 minute) would abort the transaction mid-initialization.
         using (var initializeScope = new TransactionScope(TransactionScopeOption.Required, OutputTargetInitializationTimeout, TransactionScopeAsyncFlowOption.Enabled))
         {
-            await using var initializeConnection = new SqlConnection(configuration.StreamCacheConnectionString);
-            await initializeConnection.OpenAsync();
+            await using var initializeConnection = await OpenStreamCacheConnectionAsync(configuration);
             await InitializeOutputTargetAsync(context, initializeConnection, exportJobData, storageClient);
             initializeScope.Complete();
         }
@@ -327,8 +324,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         {
             // A short-lived connection of its own: the setup connection is released before the export starts streaming, and
             // the lock/read connection is busy (and transaction-bound) until the export ends.
-            await using var historyConnection = new SqlConnection(configuration.StreamCacheConnectionString);
-            await historyConnection.OpenAsync();
+            await using var historyConnection = await OpenStreamCacheConnectionAsync(configuration);
             await UpdateHistory(context, historyConnection, exportHistory with
             {
                 Status = status,
@@ -690,8 +686,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return null;
         }
 
-        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
-        await connection.OpenAsync();
+        await using var connection = await OpenStreamCacheConnectionAsync(configuration);
 
         var asOfTime = GetAsOfTime(context, args, configuration);
         var outputFormat = configuration.OutputFormat.ToLowerInvariant();
@@ -839,8 +834,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             return false;
         }
 
-        await using var connection = new SqlConnection(configuration.StreamCacheConnectionString);
-        await connection.OpenAsync();
+        await using var connection = await OpenStreamCacheConnectionAsync(configuration);
         var hasMissed = !await HasExported(context, connection, streamId, asOfTime, GetTriggerSource(args), args.Schedule);
         context.Log.LogInformation(
             "End checking export entities job '{ExportJob}' for '{StreamId}' using {Schedule} at {InstanceTime}, HasMissed {HasMissed}.",
@@ -1164,8 +1158,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                     """;
         try
         {
-            await using var connection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
-            await connection.OpenAsync();
+            await using var connection = await OpenStreamCacheConnectionAsync(exportJobData.StorageConfiguration);
             var command = new SqlCommand(updateSql, connection)
             {
                 CommandType = CommandType.Text
@@ -1237,6 +1230,25 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
             var count = (int)await command.ExecuteScalarAsync();
             return count > 0;
+        }
+    }
+
+    /// <summary>
+    /// Opens a new connection to the stream cache database. The caller owns it and must dispose it. It is opened in the
+    /// caller's ambient transaction (if any), so it enlists in it exactly as if it had been opened by the caller.
+    /// </summary>
+    private static async Task<SqlConnection> OpenStreamCacheConnectionAsync(IStorageConfiguration configuration)
+    {
+        var connection = new SqlConnection(configuration.StreamCacheConnectionString);
+        try
+        {
+            await connection.OpenAsync();
+            return connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
         }
     }
 
