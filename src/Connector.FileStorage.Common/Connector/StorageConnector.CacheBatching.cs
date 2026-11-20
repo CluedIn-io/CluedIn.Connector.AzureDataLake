@@ -91,6 +91,18 @@ public abstract partial class StorageConnectorBase
     {
         var results = new Dictionary<CacheWriteRequest, OperationResult<bool>>(requests.Count);
 
+        // When an entity occurs more than once and none of them removes it, only the one with the highest persist version
+        // has an effect (it is only written over a lower persist version), so the others, adds included, are skipped.
+        // The first of equal persist versions is the one, as it is the one that is written first without batching.
+        var superseded = new HashSet<CacheWriteRequest>();
+        foreach (var sameEntity in requests
+            .GroupBy(request => request.EntityId)
+            .Where(group => group.Count() > 1 && !group.Any(request => request.Item.ChangeType == VersionChangeType.Removed)))
+        {
+            var newest = sameEntity.MaxBy(request => request.Item.PersistVersion ?? int.MinValue);
+            superseded.UnionWith(sameEntity.Where(request => request != newest));
+        }
+
         // Only the first occurrence of an entity is written set based. Later occurrences are written afterwards,
         // one by one and in order, so the last write of an entity still wins, as it does without batching.
         var seenEntityIds = new HashSet<Guid>();
@@ -98,7 +110,14 @@ public abstract partial class StorageConnectorBase
         var laterOccurrences = new List<CacheWriteRequest>();
         foreach (var request in requests)
         {
-            (seenEntityIds.Add(request.EntityId) ? firstOccurrences : laterOccurrences).Add(request);
+            if (superseded.Contains(request))
+            {
+                results[request] = new OperationResult<bool>(true, null);
+            }
+            else
+            {
+                (seenEntityIds.Add(request.EntityId) ? firstOccurrences : laterOccurrences).Add(request);
+            }
         }
 
         var writeOneByOne = new List<CacheWriteRequest>();
