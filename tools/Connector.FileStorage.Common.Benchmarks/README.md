@@ -16,7 +16,7 @@ $env:INTEGRATIONTEST_STREAMCACHE = [Convert]::ToBase64String([Text.Encoding]::UT
 dotnet run -c Release --project tools/Connector.FileStorage.Common.Benchmarks -- --filter "*"
 ```
 
-`--filter "*SoftDelete: True*"` runs a part of it (`--list flat` lists the cases). The benchmarks run in the benchmark
+`--filter "*Batched*"` runs a part of it (`--list flat` lists the cases). The benchmarks run in the benchmark
 process (no project is built per benchmark), and every iteration writes to a table of its own, that is dropped after it.
 
 ## What is measured
@@ -24,9 +24,9 @@ process (no project is built per benchmark), and every iteration writes to a tab
 | Parameter | |
 |---|---|
 | `Mode` | `Single`: batching is off, every entity is written on a connection and transaction of its own. `Batched`: batching is on and writes what is there. `BatchedWaiting`: batching is on and a batch waits 100 ms (the shortest wait the batcher has) for more entities. |
-| `SoftDelete` | The cache table is written with soft deletes (delta mode), which adds the persist version check, or with hard deletes. |
-| `Concurrency` | How many `StoreData` calls are in flight at the same time. This is what decides how many entities there are to write together. |
-| `Entities` | The entities written in an iteration (500). |
+| `SoftDelete` | Always `true`: only the writes of a stream with soft deletes (delta mode, which adds the persist version check) are batched, hard delete writes always go one by one. |
+| `Concurrency` | How many `StoreData` calls are in flight at the same time (80). This is what decides how many entities there are to write together. |
+| `Entities` | The entities written in an iteration (5000). |
 
 `Insert` writes entities the table does not have yet, `Update` writes a newer persist version of entities it has.
 
@@ -40,5 +40,7 @@ its own while an iteration runs (the connection pools are cleared before every i
 
 Run it against a SQL Server that is as far away as the one the stream cache is in production. Writing one entity at a
 time costs round trips, and what batching saves is round trips, so a SQL Server on the same machine hides most of what it
-is for. A delay can be added to a SQL Server in Docker with `tc qdisc add dev eth0 root netem delay 2ms` (the container
+is for. The batching settings are the connector defaults: batch size 50 (`Streams.<Connector>.CacheBatching.BatchSize`) and 10 output threads (`Streams.<Connector>.CacheBatching.OutputThreads`).
+
+A delay can be added to a SQL Server in Docker with `tc qdisc add dev eth0 root netem delay 2ms` (the container
 needs `--cap-add NET_ADMIN`).

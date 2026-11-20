@@ -44,7 +44,8 @@ public class StorageConnectorCacheBatchingTests
     [Fact]
     public async Task StoreData_WithBatching_WritesConcurrentEntitiesWithSetBasedStatements()
     {
-        await using var harness = CacheWriteHarness.Create(batching: true, softDelete: true);
+        // waits for the entities to come together, as how many of them are there to write together otherwise depends on timing
+        await using var harness = CacheWriteHarness.Create(batching: true, softDelete: true, batchTimeoutMilliseconds: 100);
 
         // the first wave creates the table; the second one is the one that can be written set based
         await StoreAllAsync(harness, Enumerable.Range(0, 5).Select(_ => CacheWriteHarness.CreateEntity(Guid.NewGuid())));
@@ -52,6 +53,25 @@ public class StorageConnectorCacheBatchingTests
 
         Assert.Equal(105, await harness.CountRowsAsync());
         Assert.True(await CountStatementExecutionsAsync(harness, "#CacheWriteStage") > 0, "Expected the set based statements to have run.");
+    }
+
+    [Fact]
+    public async Task StoreData_WithBatching_WhenABatchNeedsMoreThanOneCommand_WritesEveryEntityOnce()
+    {
+        // waits for the entities to come together, so that they are one batch that does not fit in one command
+        await using var harness = CacheWriteHarness.Create(batching: true, softDelete: true, batchSize: 1000, batchTimeoutMilliseconds: 100);
+        await StoreAllAsync(harness, Enumerable.Range(0, 3).Select(_ => CacheWriteHarness.CreateEntity(Guid.NewGuid())));
+
+        var ids = Enumerable.Range(0, 700).Select(_ => Guid.NewGuid()).ToList();
+        var results = await StoreAllAsync(harness, ids.Select((id, index) => CacheWriteHarness.CreateEntity(id, name: $"name{index}")));
+
+        Assert.All(results, result => Assert.Equal(SaveResultState.Success, result.State));
+        var rows = await harness.ReadRowsAsync();
+        Assert.Equal(703, rows.Count);
+        for (var index = 0; index < ids.Count; index++)
+        {
+            Assert.Equal($"name{index}", (string)rows.Single(row => (Guid)row["Id"] == ids[index])["Name"]);
+        }
     }
 
     [Fact]
@@ -102,6 +122,18 @@ public class StorageConnectorCacheBatchingTests
         var rows = await harness.ReadRowsAsync();
         Assert.Equal(26, rows.Count);
         Assert.Equal("second", (string)rows.Single(row => (Guid)row["Id"] == repeated)["Name"]);
+    }
+
+    [Fact]
+    public async Task StoreData_WithBatching_WithoutSoftDelete_DoesNotBatch()
+    {
+        await using var harness = CacheWriteHarness.Create(batching: true, softDelete: false);
+
+        await StoreAllAsync(harness, Enumerable.Range(0, 5).Select(_ => CacheWriteHarness.CreateEntity(Guid.NewGuid())));
+        await StoreAllAsync(harness, Enumerable.Range(0, 100).Select(_ => CacheWriteHarness.CreateEntity(Guid.NewGuid())));
+
+        Assert.Equal(105, await harness.CountRowsAsync());
+        Assert.Equal(0, await CountStatementExecutionsAsync(harness, "#CacheWriteStage"));
     }
 
     [Fact]

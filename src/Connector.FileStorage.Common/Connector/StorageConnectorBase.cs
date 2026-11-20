@@ -40,7 +40,14 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
         private static readonly ConcurrentDictionary<Type, DateTimeOffset> _lastHealthCheckErrorLogs = new ConcurrentDictionary<Type, DateTimeOffset>();
         private readonly TimeSpan _delayBetweenHealthCheckErrorLog;
-        private readonly OperationBatcher<CacheWriteRequest, bool> _cacheWriteBatcher;
+        private readonly bool _cacheBatchingEnabled;
+        private readonly int _cacheBatchSize;
+        private readonly int _cacheBatchTimeoutMilliseconds;
+        private readonly int _cacheBatchOutputThreads;
+
+        // One batcher per stream, so that the writes of a stream are batched with each other and not held up by other streams.
+        // Lazy, because a batcher starts its threads when it is created and GetOrAdd may run the factory more than once.
+        private readonly ConcurrentDictionary<Guid, Lazy<OperationBatcher<CacheWriteRequest, bool>>> _cacheWriteBatchers = new();
 
         // TODO: Handle ushort, ulong, uint
         private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new()
@@ -94,12 +101,13 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 backgroundFlushMaxIdleDefaultValue, Flush, timeProvider, cacheBufferStrategy);
             SetupBufferStatusSubscription();
 
-            if (!string.IsNullOrEmpty(constants.CacheBatchingEnabledKeyName)
-                && ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchingEnabledKeyName, constants.CacheBatchingEnabledDefaultValue))
+            _cacheBatchingEnabled = !string.IsNullOrEmpty(constants.CacheBatchingEnabledKeyName)
+                && ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchingEnabledKeyName, constants.CacheBatchingEnabledDefaultValue);
+            if (_cacheBatchingEnabled)
             {
-                var cacheBatchSize = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchSizeKeyName, constants.CacheBatchSizeDefaultValue);
-                var cacheBatchTimeout = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchTimeoutKeyName, constants.CacheBatchTimeoutDefaultValue);
-                _cacheWriteBatcher = CreateCacheWriteBatcher(cacheBatchSize, cacheBatchTimeout);
+                _cacheBatchSize = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchSizeKeyName, constants.CacheBatchSizeDefaultValue);
+                _cacheBatchTimeoutMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchTimeoutKeyName, constants.CacheBatchTimeoutDefaultValue);
+                _cacheBatchOutputThreads = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchOutputThreadsKeyName, constants.CacheBatchOutputThreadsDefaultValue);
             }
         }
 
@@ -116,7 +124,10 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 {
                     _buffer.Dispose();
                     _bufferStatusSubscription?.Dispose();
-                    _cacheWriteBatcher?.Dispose();
+                    foreach (var batcher in _cacheWriteBatchers.Values.Where(x => x.IsValueCreated))
+                    {
+                        batcher.Value.Dispose();
+                    }
                 }
 
                 _disposedValue = true;
@@ -298,12 +309,12 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             var useSoftDelete = GetUseSoftDelete(streamModel, configurations);
             try
             {
-                if (_cacheWriteBatcher != null)
+                // Only the writes with soft delete are batched
+                if (_cacheBatchingEnabled && useSoftDelete)
                 {
-                    await _cacheWriteBatcher.QueueAsync(new CacheWriteRequest(
+                    await GetCacheWriteBatcher(syncItem.StreamId).QueueAsync(new CacheWriteRequest(
                         configurations.StreamCacheConnectionString,
                         tableName,
-                        useSoftDelete,
                         syncItem));
                 }
                 else

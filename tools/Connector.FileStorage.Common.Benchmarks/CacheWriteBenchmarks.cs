@@ -47,13 +47,13 @@ public class CacheWriteBenchmarks
     [Params(WriteMode.Single, WriteMode.Batched, WriteMode.BatchedWaiting)]
     public WriteMode Mode { get; set; }
 
-    [Params(false, true)]
+    [Params(true)]
     public bool SoftDelete { get; set; }
 
-    [Params(1, 16, 64)]
+    [Params(80)]
     public int Concurrency { get; set; }
 
-    [Params(500)]
+    [Params(5000)]
     public int Entities { get; set; }
 
     [IterationSetup(Target = nameof(Insert))]

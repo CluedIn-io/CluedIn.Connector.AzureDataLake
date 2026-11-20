@@ -212,9 +212,11 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         constants.Setup(x => x.CacheBatchingEnabledKeyName).Returns("CacheBatchingEnabled");
         constants.Setup(x => x.CacheBatchingEnabledDefaultValue).Returns(true);
         constants.Setup(x => x.CacheBatchSizeKeyName).Returns("CacheBatchSize");
-        constants.Setup(x => x.CacheBatchSizeDefaultValue).Returns(100);
+        constants.Setup(x => x.CacheBatchSizeDefaultValue).Returns(50);
         constants.Setup(x => x.CacheBatchTimeoutKeyName).Returns("CacheBatchTimeout");
         constants.Setup(x => x.CacheBatchTimeoutDefaultValue).Returns(0);
+        constants.Setup(x => x.CacheBatchOutputThreadsKeyName).Returns("CacheBatchOutputThreads");
+        constants.Setup(x => x.CacheBatchOutputThreadsDefaultValue).Returns(10);
         constants.Setup(x => x.ProviderId).Returns(StorageProviderId);
         return constants;
     }

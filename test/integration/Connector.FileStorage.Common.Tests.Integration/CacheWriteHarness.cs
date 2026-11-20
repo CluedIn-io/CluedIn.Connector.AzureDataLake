@@ -74,7 +74,7 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
 
     public string TableName => CacheTableHelper.GetCacheTableName(StreamId);
 
-    public static CacheWriteHarness Create(bool batching, bool softDelete, int batchSize = 100, int batchTimeoutMilliseconds = 0)
+    public static CacheWriteHarness Create(bool batching, bool softDelete, int batchSize = 50, int batchTimeoutMilliseconds = 0, int outputThreads = 10)
     {
         var connectionString = StreamCacheConnectionString
             ?? throw new InvalidOperationException("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
@@ -103,6 +103,8 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
         constants.Setup(x => x.CacheBatchSizeDefaultValue).Returns(batchSize);
         constants.Setup(x => x.CacheBatchTimeoutKeyName).Returns("CacheBatchTimeout");
         constants.Setup(x => x.CacheBatchTimeoutDefaultValue).Returns(batchTimeoutMilliseconds);
+        constants.Setup(x => x.CacheBatchOutputThreadsKeyName).Returns("CacheBatchOutputThreads");
+        constants.Setup(x => x.CacheBatchOutputThreadsDefaultValue).Returns(outputThreads);
 
         var configuration = new TestStorageConfiguration(connectionString, softDelete);
         var storageFactory = new Mock<IStorageFactory>();

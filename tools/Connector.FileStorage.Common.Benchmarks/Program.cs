@@ -1,9 +1,7 @@
 using System;
-using System.Linq;
 
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Engines;
-using BenchmarkDotNet.Filters;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
 using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
@@ -33,13 +31,8 @@ internal static class Program
             .WithIterationCount(5)
             .WithInvocationCount(1)
             .WithUnrollFactor(1);
-        // Waiting for more entities with one call at a time means every entity waits out the whole timeout (~110 ms each,
-        // 55 s for an iteration), which says all there is to say about it without running it six times
         var config = DefaultConfig.Instance
             .AddJob(job.AsDefault())
-            .AddFilter(new SimpleFilter(benchmarkCase =>
-                !(benchmarkCase.Parameters.Items.Any(item => item.Name == nameof(CacheWriteBenchmarks.Mode) && Equals(item.Value, WriteMode.BatchedWaiting))
-                    && benchmarkCase.Parameters.Items.Any(item => item.Name == nameof(CacheWriteBenchmarks.Concurrency) && Equals(item.Value, 1)))))
             .AddColumn(
                 new ConnectionsColumn("PeakConnections", "Peak connections", "Most connections to SQL Server this process had open at the same time (mean of the iterations)", usage => usage.PeakConnections),
                 new ConnectionsColumn("NewLogins", "New logins", "Connections logged in to SQL Server during the iteration, as pooled ones are reused (mean of the iterations)", usage => usage.NewLogins));

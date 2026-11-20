@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
 
@@ -24,10 +22,11 @@ namespace CluedIn.Connector.FileStorage.Common.Connector;
 // anything else (the entity is already up to date, the table does not exist yet, a statement failed, the same
 // entity occurs twice in the batch) is written with the single entity path, which is also the path used when
 // batching is switched off. So the batched path never decides a corner case on its own.
+//
+// Only the writes of a stream that uses soft delete are batched: a hard delete removes the row, which is not something
+// the set based statements are needed for, so those are always written with the single entity path.
 public abstract partial class StorageConnectorBase
 {
-    private const int MaximumCacheWriteOutputThreads = 4;
-
     // A set based write costs a fixed number of round trips (stage, copy, write, read back), which a
     // single entity does not need.
     private const int MinimumEntitiesForSetBasedWrite = 2;
@@ -39,113 +38,80 @@ public abstract partial class StorageConnectorBase
     private const string StageTableName = "#CacheWriteStage";
     private const string HandledTableName = "#CacheWriteHandled";
 
-    // A set based update of a table locks its rows in the clustered key and in its [ValidFromValidTo] index (an update
-    // moves the row in that one) in different orders, so two of them at the same time deadlock each other. The batches
-    // of a table are therefore written one after the other, and the next one grows while the current one is written.
-    private readonly ConcurrentDictionary<(string ConnectionString, string TableName), SemaphoreSlim> _cacheTableWriteGates = new();
-
     private enum CacheWriteKind
     {
         Upsert,
-        HardDelete,
         SoftDelete,
     }
 
-    private sealed record CacheWriteRequest(
-        string ConnectionString,
-        string TableName,
-        bool UseSoftDelete,
-        SyncItem Item);
-
-    private sealed class CacheWriteEntry(CacheWriteRequest request, int index)
+    // A class and not a record: requests are told apart by reference, as two writes of the same entity are equal in value
+    private sealed class CacheWriteRequest(string connectionString, string tableName, SyncItem item)
     {
-        public CacheWriteRequest Request { get; } = request;
+        public string ConnectionString { get; } = connectionString;
 
-        /// <summary>Position of the request in the batch, which is where its result goes.</summary>
-        public int Index { get; } = index;
+        public string TableName { get; } = tableName;
 
-        public Guid EntityId => Request.Item.EntityId;
+        public SyncItem Item { get; } = item;
 
-        /// <summary>The values of the stage columns after the id, as the single entity path would send them.</summary>
-        public object[] StageValues { get; set; }
+        public Guid EntityId => Item.EntityId;
     }
 
     private sealed record SetBasedWriteGroup(
         CacheWriteKind Kind,
-        bool UseSoftDelete,
         bool IsChanged,
         IReadOnlyList<string> Columns,
         IReadOnlyList<SqlDbType> ColumnTypes,
-        List<CacheWriteEntry> Entries);
+        List<CacheWriteRequest> Requests,
+        List<object[]> StageValues);
 
-    private OperationBatcher<CacheWriteRequest, bool> CreateCacheWriteBatcher(int batchSize, int batchTimeoutMilliseconds)
+    private OperationBatcher<CacheWriteRequest, bool> GetCacheWriteBatcher(Guid streamId)
+    {
+        return _cacheWriteBatchers.GetOrAdd(streamId, _ => new Lazy<OperationBatcher<CacheWriteRequest, bool>>(CreateCacheWriteBatcher)).Value;
+    }
+
+    private OperationBatcher<CacheWriteRequest, bool> CreateCacheWriteBatcher()
     {
         return new OperationBatcher<CacheWriteRequest, bool>(
-            batchSize: Math.Max(1, batchSize),
+            batchSize: Math.Max(1, _cacheBatchSize),
             inputProcessingThreadsCount: 1,
-            outputProcessingThreadsCount: Math.Clamp(Environment.ProcessorCount, 1, MaximumCacheWriteOutputThreads),
+            outputProcessingThreadsCount: Math.Max(1, _cacheBatchOutputThreads),
             processOutputBatchFunc: WriteCacheBatch,
-            batchTimeout: batchTimeoutMilliseconds > 0 ? TimeSpan.FromMilliseconds(batchTimeoutMilliseconds) : null);
+            batchTimeout: _cacheBatchTimeoutMilliseconds > 0 ? TimeSpan.FromMilliseconds(_cacheBatchTimeoutMilliseconds) : null);
     }
 
     private async Task<IList<OperationResult<bool>>> WriteCacheBatch(IList<CacheWriteRequest> requests)
     {
-        var results = new OperationResult<bool>[requests.Count];
-
         // The batcher's own tasks never run inside a caller's transaction, and the writes below manage theirs.
         using var suppressAmbientTransaction = new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled);
 
-        var tableGroups = requests
-            .Select((request, index) => new CacheWriteEntry(request, index))
-            .GroupBy(entry => (entry.Request.ConnectionString, entry.Request.TableName));
-        foreach (var tableGroup in tableGroups)
-        {
-            await WriteCacheTableEntries(tableGroup.ToList(), results);
-        }
-
-        return results;
+        // A batcher belongs to one stream, so all its requests are for the same cache table on the same connection
+        return await WriteCacheTableRequests(requests, requests[0].ConnectionString, requests[0].TableName);
     }
 
-    private async Task WriteCacheTableEntries(List<CacheWriteEntry> entries, OperationResult<bool>[] results)
-    {
-        var connectionString = entries[0].Request.ConnectionString;
-        var tableName = entries[0].Request.TableName;
-
-        var gate = _cacheTableWriteGates.GetOrAdd((connectionString, tableName), _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync();
-        try
-        {
-            await WriteCacheTableEntries(entries, connectionString, tableName, results);
-        }
-        finally
-        {
-            gate.Release();
-        }
-    }
-
-    private async Task WriteCacheTableEntries(
-        List<CacheWriteEntry> entries,
+    private async Task<IList<OperationResult<bool>>> WriteCacheTableRequests(
+        IList<CacheWriteRequest> requests,
         string connectionString,
-        string tableName,
-        OperationResult<bool>[] results)
+        string tableName)
     {
+        var results = new Dictionary<CacheWriteRequest, OperationResult<bool>>(requests.Count);
+
         // Only the first occurrence of an entity is written set based. Later occurrences are written afterwards,
         // one by one and in order, so the last write of an entity still wins, as it does without batching.
         var seenEntityIds = new HashSet<Guid>();
-        var firstOccurrences = new List<CacheWriteEntry>();
-        var laterOccurrences = new List<CacheWriteEntry>();
-        foreach (var entry in entries)
+        var firstOccurrences = new List<CacheWriteRequest>();
+        var laterOccurrences = new List<CacheWriteRequest>();
+        foreach (var request in requests)
         {
-            (seenEntityIds.Add(entry.EntityId) ? firstOccurrences : laterOccurrences).Add(entry);
+            (seenEntityIds.Add(request.EntityId) ? firstOccurrences : laterOccurrences).Add(request);
         }
 
-        var writeOneByOne = new List<CacheWriteEntry>();
+        var writeOneByOne = new List<CacheWriteRequest>();
         var setBasedGroups = new List<SetBasedWriteGroup>();
         foreach (var group in GroupForSetBasedWrite(firstOccurrences))
         {
-            if (group.Entries.Count < MinimumEntitiesForSetBasedWrite)
+            if (group.Requests.Count < MinimumEntitiesForSetBasedWrite)
             {
-                writeOneByOne.AddRange(group.Entries);
+                writeOneByOne.AddRange(group.Requests);
             }
             else
             {
@@ -158,10 +124,10 @@ public abstract partial class StorageConnectorBase
             try
             {
                 var notWritten = await WriteSetBased(connectionString, tableName, setBasedGroups);
-                var notWrittenEntries = notWritten.ToHashSet();
-                foreach (var entry in setBasedGroups.SelectMany(group => group.Entries).Where(entry => !notWrittenEntries.Contains(entry)))
+                var notWrittenRequests = notWritten.ToHashSet();
+                foreach (var request in setBasedGroups.SelectMany(group => group.Requests).Where(request => !notWrittenRequests.Contains(request)))
                 {
-                    results[entry.Index] = new OperationResult<bool>(true, null);
+                    results[request] = new OperationResult<bool>(true, null);
                 }
 
                 writeOneByOne.AddRange(notWritten);
@@ -179,67 +145,64 @@ public abstract partial class StorageConnectorBase
                     _logger.LogWarning(
                         ex,
                         "Failed to write a batch of {Count} entities to cache table {TableName}. Writing them one entity at a time.",
-                        setBasedGroups.Sum(group => group.Entries.Count),
+                        setBasedGroups.Sum(group => group.Requests.Count),
                         tableName);
                 }
 
-                writeOneByOne.AddRange(setBasedGroups.SelectMany(group => group.Entries));
+                writeOneByOne.AddRange(setBasedGroups.SelectMany(group => group.Requests));
             }
         }
 
-        foreach (var entry in writeOneByOne.Concat(laterOccurrences))
+        foreach (var request in writeOneByOne.Concat(laterOccurrences))
         {
             try
             {
-                var request = entry.Request;
-                await WriteToCacheTableUnbatched(request.ConnectionString, request.TableName, request.UseSoftDelete, request.Item);
-                results[entry.Index] = new OperationResult<bool>(true, null);
+                await WriteToCacheTableUnbatched(request.ConnectionString, request.TableName, useSoftDelete: true, request.Item);
+                results[request] = new OperationResult<bool>(true, null);
             }
             catch (Exception ex)
             {
-                results[entry.Index] = new OperationResult<bool>(false, ex);
+                results[request] = new OperationResult<bool>(false, ex);
             }
         }
+
+        return requests.Select(request => results[request]).ToList();
     }
 
     /// <summary>
-    /// Groups the entries that one set of statements can write: the same kind of write, with the same columns, of the types
+    /// Groups the requests that one set of statements can write: the same kind of write, with the same columns, of the types
     /// the single entity path would send them as (a column of the stage has one type, and the server converts it into the
     /// cache table's column like it does a parameter of that type).
     /// </summary>
-    private static IEnumerable<SetBasedWriteGroup> GroupForSetBasedWrite(List<CacheWriteEntry> entries)
+    private static IEnumerable<SetBasedWriteGroup> GroupForSetBasedWrite(List<CacheWriteRequest> requests)
     {
-        var groups = new Dictionary<(CacheWriteKind Kind, bool UseSoftDelete, bool IsChanged, string Signature), SetBasedWriteGroup>();
-        foreach (var entry in entries)
+        var groups = new Dictionary<(CacheWriteKind Kind, bool IsChanged, string Signature), SetBasedWriteGroup>();
+        foreach (var request in requests)
         {
-            var item = entry.Request.Item;
-            var useSoftDelete = entry.Request.UseSoftDelete;
-            var kind = item.ChangeType == VersionChangeType.Removed
-                ? useSoftDelete ? CacheWriteKind.SoftDelete : CacheWriteKind.HardDelete
-                : CacheWriteKind.Upsert;
-            var isChanged = kind == CacheWriteKind.Upsert && useSoftDelete && item.ChangeType == VersionChangeType.Changed;
+            var item = request.Item;
+            var kind = item.ChangeType == VersionChangeType.Removed ? CacheWriteKind.SoftDelete : CacheWriteKind.Upsert;
+            var isChanged = kind == CacheWriteKind.Upsert && item.ChangeType == VersionChangeType.Changed;
 
-            // A delete only touches the id (and, for a soft delete, the change type, timestamp and epoch)
-            var columns = kind switch
-            {
-                CacheWriteKind.Upsert => GetPropertyKeysWithoutId(item),
-                CacheWriteKind.SoftDelete => [StorageConfigurationConstants.ChangeTypeKey, StorageConfigurationConstants.TimestampKey, StorageConfigurationConstants.EpochKey],
-                _ => new List<string>(),
-            };
+            // A soft delete only touches the id, change type, timestamp and epoch
+            var columns = kind == CacheWriteKind.Upsert
+                ? GetPropertyKeysWithoutId(item)
+                : [StorageConfigurationConstants.ChangeTypeKey, StorageConfigurationConstants.TimestampKey, StorageConfigurationConstants.EpochKey];
 
-            entry.StageValues = columns.Select(column => GetStageValue(item, kind, column)).ToArray();
+            // The values of the stage columns after the id, as the single entity path would send them
+            var stageValues = columns.Select(column => GetStageValue(item, kind, column)).ToArray();
             var columnTypes = columns
-                .Select((column, index) => CacheTableParameterHelper.GetSqlDbType(entry.StageValues[index], GetStageColumnType(item, kind, column)))
+                .Select((column, index) => CacheTableParameterHelper.GetSqlDbType(stageValues[index], GetStageColumnType(item, kind, column)))
                 .ToList();
 
-            var key = (kind, useSoftDelete, isChanged, string.Join('\u001f', columns.Zip(columnTypes, (column, type) => $"{column}:{type}")));
+            var key = (kind, isChanged, string.Join('\u001f', columns.Zip(columnTypes, (column, type) => $"{column}:{type}")));
             if (!groups.TryGetValue(key, out var group))
             {
-                group = new SetBasedWriteGroup(kind, useSoftDelete, isChanged, columns, columnTypes, new List<CacheWriteEntry>());
+                group = new SetBasedWriteGroup(kind, isChanged, columns, columnTypes, new List<CacheWriteRequest>(), new List<object[]>());
                 groups.Add(key, group);
             }
 
-            group.Entries.Add(entry);
+            group.Requests.Add(request);
+            group.StageValues.Add(stageValues);
         }
 
         return groups.Values;
@@ -261,11 +224,11 @@ public abstract partial class StorageConnectorBase
     }
 
     /// <summary>
-    /// Writes the groups in one transaction and returns the entries it did not write: the ones that already exist
+    /// Writes the groups in one transaction and returns the requests it did not write: the ones that already exist
     /// and are not changed by the statements (e.g. an older version), which the single entity path judges.
     /// Throws, after rolling back, when anything fails.
     /// </summary>
-    private static async Task<List<CacheWriteEntry>> WriteSetBased(
+    private static async Task<List<CacheWriteRequest>> WriteSetBased(
         string connectionString,
         string tableName,
         List<SetBasedWriteGroup> groups)
@@ -274,7 +237,7 @@ public abstract partial class StorageConnectorBase
         await connection.OpenAsync();
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
 
-        var notWritten = new List<CacheWriteEntry>();
+        var notWritten = new List<CacheWriteRequest>();
         foreach (var group in groups)
         {
             notWritten.AddRange(await WriteSetBasedGroup(connection, transaction, tableName, group));
@@ -284,7 +247,7 @@ public abstract partial class StorageConnectorBase
         return notWritten;
     }
 
-    private static async Task<List<CacheWriteEntry>> WriteSetBasedGroup(
+    private static async Task<List<CacheWriteRequest>> WriteSetBasedGroup(
         SqlConnection connection,
         SqlTransaction transaction,
         string tableName,
@@ -301,13 +264,13 @@ public abstract partial class StorageConnectorBase
         // converts them into the cache table's columns like it does for that path. The stage, the statements, what they
         // wrote and the clean up are the same command when the parameters fit in one, which is one round trip for the batch.
         var rowsPerCommand = Math.Clamp(MaximumParametersPerCommand / (group.Columns.Count + 1), 1, MaximumRowsPerInsert);
-        var chunks = group.Entries.Chunk(rowsPerCommand).ToList();
+        var chunkCount = (group.Requests.Count + rowsPerCommand - 1) / rowsPerCommand;
 
         var handledEntityIds = new HashSet<Guid>();
-        for (var i = 0; i < chunks.Count; i++)
+        for (var i = 0; i < chunkCount; i++)
         {
             var isFirst = i == 0;
-            var isLast = i == chunks.Count - 1;
+            var isLast = i == chunkCount - 1;
 
             var sql = new StringBuilder();
             if (isFirst)
@@ -317,7 +280,7 @@ public abstract partial class StorageConnectorBase
             }
 
             await using var command = new SqlCommand { Connection = connection, Transaction = transaction, CommandType = CommandType.Text };
-            AppendStageRows(sql, command.Parameters, chunks[i], group, stageColumns);
+            AppendStageRows(sql, command.Parameters, group, i * rowsPerCommand, Math.Min(rowsPerCommand, group.Requests.Count - i * rowsPerCommand), stageColumns);
 
             if (!isLast)
             {
@@ -336,27 +299,29 @@ public abstract partial class StorageConnectorBase
             }
         }
 
-        return group.Entries.Where(entry => !handledEntityIds.Contains(entry.EntityId)).ToList();
+        return group.Requests.Where(request => !handledEntityIds.Contains(request.EntityId)).ToList();
     }
 
     private static void AppendStageRows(
         StringBuilder sql,
         SqlParameterCollection parameters,
-        CacheWriteEntry[] entries,
         SetBasedWriteGroup group,
+        int firstRow,
+        int rowCount,
         string stageColumns)
     {
         sql.Append($"INSERT INTO {StageTableName} ({stageColumns}) VALUES ");
-        for (var row = 0; row < entries.Length; row++)
+        for (var row = 0; row < rowCount; row++)
         {
+            var source = firstRow + row;
             sql.Append(row == 0 ? "(" : ", (");
             sql.Append($"@i{row}");
-            parameters.Add(new SqlParameter($"@i{row}", SqlDbType.UniqueIdentifier) { Value = entries[row].EntityId });
+            parameters.Add(new SqlParameter($"@i{row}", SqlDbType.UniqueIdentifier) { Value = group.Requests[source].EntityId });
 
             for (var column = 0; column < group.Columns.Count; column++)
             {
                 sql.Append($", @v{row}_{column}");
-                parameters.Add(CacheTableParameterHelper.CreateParameter($"@v{row}_{column}", entries[row].StageValues[column], group.ColumnTypes[column]));
+                parameters.Add(CacheTableParameterHelper.CreateParameter($"@v{row}_{column}", group.StageValues[source][column], group.ColumnTypes[column]));
             }
 
             sql.Append(')');
@@ -372,12 +337,6 @@ public abstract partial class StorageConnectorBase
 
         switch (group.Kind)
         {
-            case CacheWriteKind.HardDelete:
-                return $"""
-                    DELETE t OUTPUT deleted.[{id}] INTO {HandledTableName} ([{id}])
-                    FROM {StageTableName} AS s INNER LOOP JOIN [{tableName}] AS t ON t.[{id}] = s.[{id}];
-                    """;
-
             case CacheWriteKind.SoftDelete:
                 return $"""
                     UPDATE t SET
@@ -387,17 +346,13 @@ public abstract partial class StorageConnectorBase
                     """;
 
             default:
-                // Same conditions as the single entity upsert: with soft delete an entity is only updated by a newer
+                // Same conditions as the single entity upsert with soft delete: an entity is only updated by a newer
                 // persist version, and a removed one is only brought back by something other than a change.
-                var versionCondition = string.Empty;
-                if (group.UseSoftDelete)
+                var versionCondition = $"WHERE t.[{StorageConfigurationConstants.PersistVersionKey}] < s.[{StorageConfigurationConstants.PersistVersionKey}]";
+                if (group.IsChanged)
                 {
-                    versionCondition = $"WHERE t.[{StorageConfigurationConstants.PersistVersionKey}] < s.[{StorageConfigurationConstants.PersistVersionKey}]";
-                    if (group.IsChanged)
-                    {
-                        var changeType = $"t.[{StorageConfigurationConstants.ChangeTypeKey}]";
-                        versionCondition += $" AND ({changeType} != '{nameof(VersionChangeType.Removed)}' OR {changeType} IS NULL)";
-                    }
+                    var changeType = $"t.[{StorageConfigurationConstants.ChangeTypeKey}]";
+                    versionCondition += $" AND ({changeType} != '{nameof(VersionChangeType.Removed)}' OR {changeType} IS NULL)";
                 }
 
                 var allColumns = group.Columns.Prepend(id).ToList();
