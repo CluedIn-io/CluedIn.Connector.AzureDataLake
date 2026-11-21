@@ -36,7 +36,7 @@ internal static class Program
             .AddColumn(
                 new UsageColumn("PeakConnections", "Peak connections", "Most connections to SQL Server this process had open at the same time (mean of the iterations)", usage => usage.PeakConnections),
                 new UsageColumn("NewLogins", "New logins", "Connections logged in to SQL Server during the iteration, as pooled ones are reused (mean of the iterations)", usage => usage.NewLogins),
-                new UsageColumn("Batches", "Batches", "Batches the OperationBatcher cut during the iteration, '-' without batching (mean of the iterations)", usage => usage.Batches?.Batches),
+                new UsageColumn("Batches", "Batches", "Batches the OperationBatcher processed during the iteration, '-' without batching (mean of the iterations)", usage => usage.Batches?.Batches),
                 new UsageColumn("BatchMean", "Mean batch", "Mean number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Mean),
                 new UsageColumn("BatchP50", "Batch p50", "Median number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Median),
                 new UsageColumn("BatchP95", "Batch p95", "95th percentile of the number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Percentile95),

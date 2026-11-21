@@ -62,8 +62,8 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
         _shouldCollectBatchSizeMetrics = shouldCollectBatchSizeMetrics;
         if (_shouldCollectBatchSizeMetrics)
         {
-            batchSizeStats = new int[_inputProcessingThreadsCount][];
-            for (var i = 0; i < _inputProcessingThreadsCount; ++i)
+            batchSizeStats = new int[_outputProcessingThreadsCount][];
+            for (var i = 0; i < _outputProcessingThreadsCount; ++i)
             {
                 batchSizeStats[i] = new int[batchSize];
             }
@@ -156,10 +156,6 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
         {
             try
             {
-                if (_shouldCollectBatchSizeMetrics)
-                {
-                    batchSizeStats[consumerId][batch.Count - 1]++;
-                }
                 await _outputChannel.Writer.WriteAsync(batch);
             }
             catch (Exception e)
@@ -182,39 +178,76 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
 
     private async Task ConsumeOutputAsync(int consumerId, ChannelReader<IList<BatchingRequest>> reader)
     {
+        // The input side cuts a batch as soon as requests arrive, so while the output threads are all busy the batches
+        // queue up small. A thread that comes free merges the batches that are queued, up to the batch size, instead of
+        // processing each on its own. What does not fit is kept for this thread's next batch. Nothing waits for more:
+        // only what is queued already is merged.
+        //
         // TryRead (rather than ReadAsync) avoids a race between multiple concurrent writer
         // tasks: WaitToReadAsync can return true and then another task drains the last item and
         // completes the channel before this task calls ReadAsync, which would otherwise throw
         // ChannelClosedException. TryRead just reports false instead of throwing.
-        while (await reader.WaitToReadAsync())
+        var batch = new List<BatchingRequest>();
+        while (batch.Count > 0 || await reader.WaitToReadAsync())
         {
-            while (reader.TryRead(out var batch))
+            var leftover = MergeQueuedBatches(reader, batch);
+            if (batch.Count > 0)
             {
-                try
+                await ProcessOutputBatchAsync(consumerId, batch);
+            }
+
+            batch = leftover;
+        }
+    }
+
+    /// <summary>Adds the queued batches to <paramref name="batch"/> until it is full, and returns the requests that did not fit.</summary>
+    private List<BatchingRequest> MergeQueuedBatches(ChannelReader<IList<BatchingRequest>> reader, List<BatchingRequest> batch)
+    {
+        var leftover = new List<BatchingRequest>();
+        while (batch.Count < _batchSize && reader.TryRead(out var queued))
+        {
+            var room = _batchSize - batch.Count;
+            batch.AddRange(queued.Take(room));
+            if (queued.Count > room)
+            {
+                leftover.AddRange(queued.Skip(room));
+                break;
+            }
+        }
+
+        return leftover;
+    }
+
+    private async Task ProcessOutputBatchAsync(int consumerId, List<BatchingRequest> batch)
+    {
+        if (_shouldCollectBatchSizeMetrics)
+        {
+            batchSizeStats[consumerId][batch.Count - 1]++;
+        }
+
+        try
+        {
+            var results = await _processOutputBatchFunc(batch.Select(e => e.Request).ToList());
+            var i = 0;
+            foreach (var (_, tcs) in batch)
+            {
+                var currentResult = results[i];
+                if (currentResult.Exception == null)
                 {
-                    var results = await _processOutputBatchFunc(batch.Select(e => e.Request).ToList());
-                    var i = 0;
-                    foreach (var (_, tcs) in batch)
-                    {
-                        var currentResult = results[i];
-                        if (currentResult.Exception == null)
-                        {
-                            tcs.SetResult(currentResult.Result!);
-                        }
-                        else
-                        {
-                            tcs.SetException(currentResult.Exception!);
-                        }
-                        i++;
-                    }
+                    tcs.SetResult(currentResult.Result!);
                 }
-                catch (Exception ex)
+                else
                 {
-                    foreach (var (_, tcs) in batch)
-                    {
-                        tcs.SetException(ex);
-                    }
+                    tcs.SetException(currentResult.Exception!);
                 }
+                i++;
+            }
+        }
+        catch (Exception ex)
+        {
+            foreach (var (_, tcs) in batch)
+            {
+                tcs.SetException(ex);
             }
         }
     }

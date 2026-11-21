@@ -77,13 +77,13 @@ public abstract partial class StorageConnectorBase
     }
 
     /// <summary>
-    /// Whether the batchers count the sizes of the batches they cut. Off, as it is only of interest to a measurement.
+    /// Whether the batchers count the sizes of the batches they process. Off, as it is only of interest to a measurement.
     /// Read when a stream's batcher is created.
     /// </summary>
     protected virtual bool CollectCacheBatchSizeMetrics => false;
 
     /// <summary>
-    /// The sizes of the batches cut so far for all streams: the number at index n - 1 is how many batches had n entities.
+    /// The sizes of the batches processed so far for all streams: the number at index n - 1 is how many batches had n entities.
     /// Empty unless <see cref="CollectCacheBatchSizeMetrics"/> is on.
     /// </summary>
     protected IReadOnlyList<int> GetCacheBatchSizeHistogram()

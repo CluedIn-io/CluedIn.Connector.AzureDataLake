@@ -21,7 +21,7 @@ namespace CluedIn.Connector.FileStorage.Common.Benchmarks;
 internal readonly record struct ConnectionUsage(int PeakConnections, int NewLogins, BatchSizeSummary? Batches = null);
 
 /// <summary>
-/// The sizes of the batches the OperationBatcher cut during a measurement.
+/// The sizes of the batches the OperationBatcher processed during a measurement.
 /// </summary>
 internal readonly record struct BatchSizeSummary(int Batches, double Mean, int Median, int Percentile95, int Max)
 {
