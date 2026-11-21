@@ -12,6 +12,7 @@ using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
 
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 
 namespace CluedIn.Connector.FileStorage.Common.Benchmarks;
 
@@ -152,11 +153,16 @@ public class CacheWriteBenchmarks
 
         // The setup writes through the same connector, so what the measurement cut is what came after
         var batchesBefore = _harness.GetBatchSizeHistogram();
+        var fallbacksBefore = CountBatchFallbacks();
         _requeues = 0;
         await WriteAllAsync(_entities);
         var batches = BatchSizeSummary.From(BatchSizeSummary.Since(batchesBefore, _harness.GetBatchSizeHistogram()));
-        ConnectionUsages.Add(ConnectionUsages.CaseKey(method, Mode, SoftDelete, Concurrency, CollectStats, OutputThreads), await monitor.StopAsync() with { Batches = batches, Requeues = _requeues });
+        ConnectionUsages.Add(ConnectionUsages.CaseKey(method, Mode, SoftDelete, Concurrency, CollectStats, OutputThreads), await monitor.StopAsync() with { Batches = batches, Requeues = _requeues, BatchFallbacks = CountBatchFallbacks() - fallbacksBefore });
     }
+
+    // The batches that failed (a deadlock, for one) and were written one entity at a time instead
+    private int CountBatchFallbacks() => _harness.Logger.Entries.Count(entry =>
+        entry.Level == LogLevel.Warning && entry.Exception is not null && entry.Message.StartsWith("Failed to write a batch", StringComparison.Ordinal));
 
     private async Task WriteAllAsync(IReadOnlyCollection<ConnectorEntityData> entities)
     {

@@ -28,7 +28,7 @@ internal static class Program
             .WithStrategy(RunStrategy.Monitoring)
             .WithLaunchCount(1)
             .WithWarmupCount(1)
-            .WithIterationCount(5)
+            .WithIterationCount(int.TryParse(Environment.GetEnvironmentVariable("BENCH_ITERATIONS"), out var iterations) ? iterations : 5)
             .WithInvocationCount(1)
             .WithUnrollFactor(1);
         var config = DefaultConfig.Instance
@@ -40,6 +40,8 @@ internal static class Program
                 new UsageColumn("BatchMean", "Mean batch", "Mean number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Mean),
                 new UsageColumn("BatchP50", "Batch p50", "Median number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Median),
                 new UsageColumn("BatchP95", "Batch p95", "95th percentile of the number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Percentile95),
+                new UsageColumn("Deadlocks", "Deadlocks", "Deadlocks SQL Server reported during the iteration, of the whole server (mean of the iterations)", usage => usage.Deadlocks),
+                new UsageColumn("BatchFallbacks", "Batch fallbacks", "Batches that failed and were written one entity at a time (mean of the iterations)", usage => usage.BatchFallbacks),
                 new UsageColumn("Requeues", "Requeues", "Times an entity was stored again after a ReQueue result, as the pipeline would (mean of the iterations)", usage => usage.Requeues),
                 new UsageColumn("BatchMax", "Batch max", "Largest number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Max));
 
