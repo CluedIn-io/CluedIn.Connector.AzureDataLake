@@ -74,7 +74,7 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
 
     public string TableName => CacheTableHelper.GetCacheTableName(StreamId);
 
-    public static CacheWriteHarness Create(bool batching, bool softDelete, int batchSize = 50, int batchTimeoutMilliseconds = 0, int outputThreads = 10)
+    public static CacheWriteHarness Create(bool batching, bool softDelete, int batchSize = 50, int batchTimeoutMilliseconds = 0, int outputThreads = 10, bool collectBatchSizeStats = true)
     {
         var connectionString = StreamCacheConnectionString
             ?? throw new InvalidOperationException("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
@@ -113,7 +113,7 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
             .ReturnsAsync(configuration);
 
         var logger = new CapturingLogger();
-        var connector = new TestStorageConnector(logger, applicationContext, constants.Object, storageFactory.Object, timeProvider.Object);
+        var connector = new TestStorageConnector(logger, applicationContext, constants.Object, storageFactory.Object, timeProvider.Object, collectBatchSizeStats);
 
         var streamModel = new StreamModel
         {
@@ -233,14 +233,16 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
             ApplicationContext applicationContext,
             IStorageConfigurationConstants constants,
             IStorageFactory storageFactory,
-            ITimeProvider timeProvider)
+            ITimeProvider timeProvider,
+            bool collectBatchSizeStats)
             : base(logger, applicationContext, constants, storageFactory, timeProvider)
         {
+            CollectCacheBatchSizeMetrics = collectBatchSizeStats;
         }
 
         protected override Type ExportJobType => typeof(object);
 
-        protected override bool CollectCacheBatchSizeMetrics => true;
+        protected override bool CollectCacheBatchSizeMetrics { get; }
 
         public IReadOnlyList<int> BatchSizeHistogram() => GetCacheBatchSizeHistogram();
     }

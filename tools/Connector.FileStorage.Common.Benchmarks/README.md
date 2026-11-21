@@ -23,7 +23,7 @@ process (no project is built per benchmark), and every iteration writes to a tab
 
 | Parameter | |
 |---|---|
-| `Mode` | `Single`: batching is off, every entity is written on a connection and transaction of its own. `Batched`: batching is on and writes what is there. `BatchedWaiting`: batching is on and a batch waits 100 ms (the shortest wait the batcher has) for more entities. |
+| `Mode` | `Single`: batching is off, every entity is written on a connection and transaction of its own. `Batched`: batching is on and writes what is there. `Batched50ms` and `Batched100ms`: batching is on and a batch waits 50 / 100 ms for more entities (the batcher waits in slices of 100 ms, so 50 ms is 100 ms). |
 | `SoftDelete` | Always `true`: only the writes of a stream with soft deletes (delta mode, which adds the persist version check) are batched, hard delete writes always go one by one. |
 | `Concurrency` | How many `StoreData` calls are in flight at the same time (80). This is what decides how many entities there are to write together. |
 | `Entities` | The entities written in an iteration (5000). |
