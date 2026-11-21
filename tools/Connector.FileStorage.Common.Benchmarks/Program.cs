@@ -34,8 +34,13 @@ internal static class Program
         var config = DefaultConfig.Instance
             .AddJob(job.AsDefault())
             .AddColumn(
-                new ConnectionsColumn("PeakConnections", "Peak connections", "Most connections to SQL Server this process had open at the same time (mean of the iterations)", usage => usage.PeakConnections),
-                new ConnectionsColumn("NewLogins", "New logins", "Connections logged in to SQL Server during the iteration, as pooled ones are reused (mean of the iterations)", usage => usage.NewLogins));
+                new UsageColumn("PeakConnections", "Peak connections", "Most connections to SQL Server this process had open at the same time (mean of the iterations)", usage => usage.PeakConnections),
+                new UsageColumn("NewLogins", "New logins", "Connections logged in to SQL Server during the iteration, as pooled ones are reused (mean of the iterations)", usage => usage.NewLogins),
+                new UsageColumn("Batches", "Batches", "Batches the OperationBatcher cut during the iteration, '-' without batching (mean of the iterations)", usage => usage.Batches?.Batches),
+                new UsageColumn("BatchMean", "Mean batch", "Mean number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Mean),
+                new UsageColumn("BatchP50", "Batch p50", "Median number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Median),
+                new UsageColumn("BatchP95", "Batch p95", "95th percentile of the number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Percentile95),
+                new UsageColumn("BatchMax", "Batch max", "Largest number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Max));
 
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
         return 0;

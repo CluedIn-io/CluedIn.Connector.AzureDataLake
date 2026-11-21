@@ -72,7 +72,41 @@ public abstract partial class StorageConnectorBase
             inputProcessingThreadsCount: 1,
             outputProcessingThreadsCount: Math.Max(1, _cacheBatchOutputThreads),
             processOutputBatchFunc: WriteCacheBatch,
-            batchTimeout: _cacheBatchTimeoutMilliseconds > 0 ? TimeSpan.FromMilliseconds(_cacheBatchTimeoutMilliseconds) : null);
+            batchTimeout: _cacheBatchTimeoutMilliseconds > 0 ? TimeSpan.FromMilliseconds(_cacheBatchTimeoutMilliseconds) : null,
+            shouldCollectBatchSizeMetrics: CollectCacheBatchSizeMetrics);
+    }
+
+    /// <summary>
+    /// Whether the batchers count the sizes of the batches they cut. Off, as it is only of interest to a measurement.
+    /// Read when a stream's batcher is created.
+    /// </summary>
+    protected virtual bool CollectCacheBatchSizeMetrics => false;
+
+    /// <summary>
+    /// The sizes of the batches cut so far for all streams: the number at index n - 1 is how many batches had n entities.
+    /// Empty unless <see cref="CollectCacheBatchSizeMetrics"/> is on.
+    /// </summary>
+    protected IReadOnlyList<int> GetCacheBatchSizeHistogram()
+    {
+        var histogram = new List<int>();
+        foreach (var batcher in _cacheWriteBatchers.Values.Where(x => x.IsValueCreated).Select(x => x.Value))
+        {
+            foreach (var inputThread in batcher.GetBatchSizeStats())
+            {
+                var index = 0;
+                foreach (var count in inputThread)
+                {
+                    if (index == histogram.Count)
+                    {
+                        histogram.Add(0);
+                    }
+
+                    histogram[index++] += count;
+                }
+            }
+        }
+
+        return histogram;
     }
 
     private async Task<IList<OperationResult<bool>>> WriteCacheBatch(IList<CacheWriteRequest> requests)
