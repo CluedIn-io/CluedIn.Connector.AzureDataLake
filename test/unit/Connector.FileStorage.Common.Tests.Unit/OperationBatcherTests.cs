@@ -325,6 +325,40 @@ public class OperationBatcherTests
     }
 
     [Fact]
+    public async Task QueueAsync_ShouldNotHoldAFullBatchUpToTheTimeout()
+    {
+        // arrange
+        var timeProvider = new FakeTimeProvider();
+        var receivedChunks = new ConcurrentQueue<IList<int>>();
+
+        await using var sut = new OperationBatcher<int, string>(
+            batchSize: 3,
+            inputProcessingThreadsCount: 1,
+            outputProcessingThreadsCount: 1,
+            batchTimeout: TimeSpan.FromHours(1),
+            timeProvider: timeProvider,
+            processOutputBatchFunc: requests =>
+            {
+                receivedChunks.Enqueue(requests.ToList());
+                return Task.FromResult<IList<OperationResult<string>>>(
+                    requests.Select(r => new OperationResult<string>($"processed-{r}", null)).ToList());
+            });
+
+        // act (the fake time never advances, so a batch that waited for the timeout would never complete)
+        var tasks = new List<Task<string>>();
+        foreach (var request in new[] { 1, 2, 3 })
+        {
+            tasks.Add(sut.QueueAsync(request));
+            await Task.Delay(50);
+        }
+
+        await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
+
+        // assert
+        Assert.Equal(new[] { new[] { 1, 2, 3 } }, receivedChunks.Select(chunk => chunk.ToArray()).ToArray());
+    }
+
+    [Fact]
     public async Task DisposeAsync_ShouldCompleteWithoutHanging_WhenNoPendingRequests()
     {
         // arrange

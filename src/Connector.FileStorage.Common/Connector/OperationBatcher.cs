@@ -14,7 +14,6 @@ internal record struct OperationResult<TResult>(TResult? Result, Exception? Exce
 internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposable
 {
     private static readonly TimeSpan DefaultBatchTimeOut = TimeSpan.FromMilliseconds(100);
-    private static readonly TimeSpan WaitSlice = TimeSpan.FromMilliseconds(100);
 
     private readonly TimeProvider _timeProvider;
     private readonly Channel<BatchingRequest> _inputChannel;
@@ -129,14 +128,14 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
         _disposed = true;
     }
 
-    // Task.Delay(TimeSpan, TimeProvider) is .NET 8 and later. Microsoft.Bcl.TimeProvider has it for the older frameworks
+    // The CancellationTokenSource constructor with a TimeProvider is .NET 8 and later. Microsoft.Bcl.TimeProvider has it for the older frameworks
     // (the CluedIn 4.x lines are net6.0) as an extension of TimeProvider.
-    private Task DelayAsync(TimeSpan delay)
+    private CancellationTokenSource CreateTimeoutSource(TimeSpan timeout)
     {
 #if NET8_0_OR_GREATER
-        return Task.Delay(delay, _timeProvider);
+        return new CancellationTokenSource(timeout, _timeProvider);
 #else
-        return TimeProviderTaskExtensions.Delay(_timeProvider, delay);
+        return TimeProviderTaskExtensions.CreateCancellationTokenSource(_timeProvider, timeout);
 #endif
     }
 
@@ -267,37 +266,22 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
 
             if (_shouldUseBatchTimeout && batch.Count < chunkSize)
             {
-                // Wait for more items to arrive or timeout, polling in WaitSlice increments.
-                // Unlike OperationBatcherChunkedWait, the remaining budget is recalculated from
-                // _timeProvider.GetUtcNow() against a fixed deadline every iteration, rather than
-                // decremented by the nominal slice duration - so timer overshoot on any one delay
-                // doesn't push the total wait past the configured timeout.
-                if (_batchTimeout <= WaitSlice)
+                // Wait for more items to arrive, until the batch is full or the timeout has elapsed. The wait is on the
+                // channel, so an item that arrives is taken at once and a full batch is not held up to the end of the timeout.
+                using var timeout = CreateTimeoutSource(_batchTimeout);
+                try
                 {
-                    await DelayAsync(_batchTimeout);
-                    while (batch.Count < chunkSize && reader.TryRead(out var item))
+                    while (batch.Count < chunkSize && await reader.WaitToReadAsync(timeout.Token))
                     {
-                        batch.Add(item);
-                    }
-                }
-                else
-                {
-                    var deadline = _timeProvider.GetUtcNow().Add(_batchTimeout);
-                    while (batch.Count < chunkSize)
-                    {
-                        var remaining = deadline - _timeProvider.GetUtcNow();
-                        if (remaining <= TimeSpan.Zero)
-                        {
-                            break;
-                        }
-
-                        var delay = remaining < WaitSlice ? remaining : WaitSlice;
-                        await DelayAsync(delay);
                         while (batch.Count < chunkSize && reader.TryRead(out var item))
                         {
                             batch.Add(item);
                         }
                     }
+                }
+                catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+                {
+                    // the timeout elapsed: the batch is cut with what it has
                 }
             }
 
