@@ -37,7 +37,7 @@ its own while an iteration runs (the connection pools are cleared before every i
 |---|---|
 | `Peak connections` | The most connections this process had open to SQL Server at the same time. |
 | `New logins` | The connections logged in during the iteration (a pooled connection that is reused does not log in again). |
-| `Batches` | The batches the `OperationBatcher` cut during the iteration (`-` without batching). |
+| `Batches` | The batches the `OperationBatcher` processed during the iteration (queued batches are merged up to the batch size) (`-` without batching). |
 | `Mean batch`, `Batch p50`, `Batch p95`, `Batch max` | The number of entities in those batches. The batcher counts them when the connector turns on `CollectCacheBatchSizeMetrics`, which only the benchmark's connector does. A batch of one entity is written with the single entity path. |
 
 Run it against a SQL Server that is as far away as the one the stream cache is in production. Writing one entity at a

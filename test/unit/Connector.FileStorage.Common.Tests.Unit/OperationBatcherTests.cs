@@ -220,6 +220,83 @@ public class OperationBatcherTests
     }
 
     [Fact]
+    public async Task QueueAsync_ShouldMergeTheBatchesThatQueuedWhileTheOutputThreadWasBusy()
+    {
+        // arrange
+        var receivedChunks = new ConcurrentQueue<IList<int>>();
+        var release = new TaskCompletionSource();
+
+        await using var sut = new OperationBatcher<int, string>(
+            batchSize: 5,
+            inputProcessingThreadsCount: 1,
+            outputProcessingThreadsCount: 1,
+            processOutputBatchFunc: async requests =>
+            {
+                receivedChunks.Enqueue(requests.ToList());
+                if (receivedChunks.Count == 1)
+                {
+                    await release.Task;
+                }
+
+                return requests.Select(r => new OperationResult<string>($"processed-{r}", null)).ToList();
+            });
+
+        // act: the first request occupies the only output thread, the next ones are cut as batches of one meanwhile
+        var tasks = new List<Task<string>> { sut.QueueAsync(1) };
+        foreach (var request in new[] { 2, 3, 4 })
+        {
+            await Task.Delay(50);
+            tasks.Add(sut.QueueAsync(request));
+        }
+
+        await Task.Delay(50);
+        release.SetResult();
+        await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
+
+        // assert
+        Assert.Equal(new[] { new[] { 1 }, new[] { 2, 3, 4 } }, receivedChunks.Select(chunk => chunk.ToArray()).ToArray());
+    }
+
+    [Fact]
+    public async Task QueueAsync_ShouldNotMergeMoreThanTheBatchSize_AndKeepWhatDoesNotFit()
+    {
+        // arrange
+        var receivedChunks = new ConcurrentQueue<IList<int>>();
+        var release = new TaskCompletionSource();
+
+        await using var sut = new OperationBatcher<int, string>(
+            batchSize: 2,
+            inputProcessingThreadsCount: 1,
+            outputProcessingThreadsCount: 1,
+            processOutputBatchFunc: async requests =>
+            {
+                receivedChunks.Enqueue(requests.ToList());
+                if (receivedChunks.Count == 1)
+                {
+                    await release.Task;
+                }
+
+                return requests.Select(r => new OperationResult<string>($"processed-{r}", null)).ToList();
+            });
+
+        // act
+        var tasks = new List<Task<string>> { sut.QueueAsync(1) };
+        foreach (var request in new[] { 2, 3, 4, 5, 6 })
+        {
+            await Task.Delay(50);
+            tasks.Add(sut.QueueAsync(request));
+        }
+
+        await Task.Delay(50);
+        release.SetResult();
+        var results = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
+
+        // assert
+        Assert.Equal(new[] { "processed-1", "processed-2", "processed-3", "processed-4", "processed-5", "processed-6" }, results);
+        Assert.Equal(new[] { new[] { 1 }, new[] { 2, 3 }, new[] { 4, 5 }, new[] { 6 } }, receivedChunks.Select(chunk => chunk.ToArray()).ToArray());
+    }
+
+    [Fact]
     public async Task DisposeAsync_ShouldCompleteWithoutHanging_WhenNoPendingRequests()
     {
         // arrange

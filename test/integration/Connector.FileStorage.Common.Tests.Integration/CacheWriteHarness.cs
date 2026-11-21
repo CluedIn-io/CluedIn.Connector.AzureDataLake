@@ -132,7 +132,7 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
 
     public Task<SaveResult> StoreAsync(ConnectorEntityData entity) => _connector.StoreData(null, _streamModel, entity);
 
-    /// <summary>The batches cut so far: the number at index n - 1 is how many had n entities. Empty without batching.</summary>
+    /// <summary>The batches processed so far: the number at index n - 1 is how many had n entities. Empty without batching.</summary>
     public IReadOnlyList<int> GetBatchSizeHistogram() => _connector.BatchSizeHistogram();
 
     /// <summary>
