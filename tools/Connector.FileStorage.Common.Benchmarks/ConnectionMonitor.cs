@@ -16,9 +16,9 @@ namespace CluedIn.Connector.FileStorage.Common.Benchmarks;
 /// <summary>
 /// What a measurement cost SQL Server in connections: the most this process had open at the same time,
 /// and how many it logged in (pooled connections that are reused do not log in again), and the sizes of the batches
-/// that were cut meanwhile (none without batching).
+/// that were processed meanwhile (none without batching), and how many times an entity had to be stored again after a ReQueue.
 /// </summary>
-internal readonly record struct ConnectionUsage(int PeakConnections, int NewLogins, BatchSizeSummary? Batches = null);
+internal readonly record struct ConnectionUsage(int PeakConnections, int NewLogins, BatchSizeSummary? Batches = null, int Requeues = 0);
 
 /// <summary>
 /// The sizes of the batches the OperationBatcher processed during a measurement.
@@ -184,14 +184,14 @@ internal static class ConnectionUsages
         }
     }
 
-    public static string CaseKey(string method, WriteMode mode, bool softDelete, int concurrency, bool collectStats) =>
-        $"{method}|{mode}|{softDelete}|{concurrency}|{collectStats}";
+    public static string CaseKey(string method, WriteMode mode, bool softDelete, int concurrency, bool collectStats, int outputThreads) =>
+        $"{method}|{mode}|{softDelete}|{concurrency}|{collectStats}|{outputThreads}";
 
     public static string CaseKey(BenchmarkCase benchmarkCase)
     {
         string Parameter(string name) => benchmarkCase.Parameters.Items.Single(item => item.Name == name).Value.ToString();
 
-        return $"{benchmarkCase.Descriptor.WorkloadMethod.Name}|{Parameter(nameof(CacheWriteBenchmarks.Mode))}|{Parameter(nameof(CacheWriteBenchmarks.SoftDelete))}|{Parameter(nameof(CacheWriteBenchmarks.Concurrency))}|{Parameter(nameof(CacheWriteBenchmarks.CollectStats))}";
+        return $"{benchmarkCase.Descriptor.WorkloadMethod.Name}|{Parameter(nameof(CacheWriteBenchmarks.Mode))}|{Parameter(nameof(CacheWriteBenchmarks.SoftDelete))}|{Parameter(nameof(CacheWriteBenchmarks.Concurrency))}|{Parameter(nameof(CacheWriteBenchmarks.CollectStats))}|{Parameter(nameof(CacheWriteBenchmarks.OutputThreads))}";
     }
 }
 

@@ -43,7 +43,11 @@ public enum WriteMode
 [MemoryDiagnoser]
 public class CacheWriteBenchmarks
 {
+    // What the pipeline does with a ReQueue is to store the entity again, which is what this does too (and counts)
+    private const int MaximumAttempts = 10;
+
     private CacheWriteHarness _harness;
+    private int _requeues;
     private List<ConnectorEntityData> _entities;
 
     /// <summary>How the entities are written: one by one, or the entities that are stored at the same time together.</summary>
@@ -59,6 +63,11 @@ public class CacheWriteBenchmarks
     [ParamsSource(nameof(CollectStatsValues))]
     public bool CollectStats { get; set; }
 
+    /// <summary>The threads that write batches at the same time (the connector's default is 10). Without batching there are none.</summary>
+    /// <remarks>BENCH_THREADS (comma separated) picks the numbers to run, 10 by default.</remarks>
+    [ParamsSource(nameof(OutputThreadsValues))]
+    public int OutputThreads { get; set; }
+
     /// <remarks>BENCH_CONCURRENCY (comma separated) picks the numbers to run, 80 by default.</remarks>
     [ParamsSource(nameof(Concurrencies))]
     public int Concurrency { get; set; }
@@ -69,6 +78,8 @@ public class CacheWriteBenchmarks
     public static IEnumerable<WriteMode> Modes => FromEnvironment("BENCH_MODES", Enum.Parse<WriteMode>, Enum.GetValues<WriteMode>());
 
     public static IEnumerable<bool> CollectStatsValues => FromEnvironment("BENCH_STATS", bool.Parse, [true, false]);
+
+    public static IEnumerable<int> OutputThreadsValues => FromEnvironment("BENCH_THREADS", int.Parse, [10]);
 
     public static IEnumerable<int> Concurrencies => FromEnvironment("BENCH_CONCURRENCY", int.Parse, [80]);
 
@@ -88,7 +99,7 @@ public class CacheWriteBenchmarks
     };
 
     private CacheWriteHarness CreateHarness() =>
-        CacheWriteHarness.Create(Mode != WriteMode.Single, SoftDelete, batchTimeoutMilliseconds: BatchTimeoutMilliseconds, collectBatchSizeStats: CollectStats);
+        CacheWriteHarness.Create(Mode != WriteMode.Single, SoftDelete, batchTimeoutMilliseconds: BatchTimeoutMilliseconds, outputThreads: OutputThreads, collectBatchSizeStats: CollectStats);
 
     [IterationSetup(Target = nameof(Insert))]
     public void SetupInsert()
@@ -141,9 +152,10 @@ public class CacheWriteBenchmarks
 
         // The setup writes through the same connector, so what the measurement cut is what came after
         var batchesBefore = _harness.GetBatchSizeHistogram();
+        _requeues = 0;
         await WriteAllAsync(_entities);
         var batches = BatchSizeSummary.From(BatchSizeSummary.Since(batchesBefore, _harness.GetBatchSizeHistogram()));
-        ConnectionUsages.Add(ConnectionUsages.CaseKey(method, Mode, SoftDelete, Concurrency, CollectStats), await monitor.StopAsync() with { Batches = batches });
+        ConnectionUsages.Add(ConnectionUsages.CaseKey(method, Mode, SoftDelete, Concurrency, CollectStats, OutputThreads), await monitor.StopAsync() with { Batches = batches, Requeues = _requeues });
     }
 
     private async Task WriteAllAsync(IReadOnlyCollection<ConnectorEntityData> entities)
@@ -154,10 +166,21 @@ public class CacheWriteBenchmarks
             await inFlight.WaitAsync();
             try
             {
-                var result = await _harness.StoreAsync(entity);
-                if (result.State != SaveResultState.Success)
+                for (var attempt = 1; ; attempt++)
                 {
-                    throw new InvalidOperationException($"Storing {entity.EntityId} resulted in {result.State}.");
+                    var result = await _harness.StoreAsync(entity);
+                    if (result.State == SaveResultState.Success)
+                    {
+                        break;
+                    }
+
+                    if (result.State != SaveResultState.ReQueue || attempt == MaximumAttempts)
+                    {
+                        var cause = _harness.Logger.Entries.LastOrDefault(entry => entry.Exception is not null).Exception;
+                        throw new InvalidOperationException($"Storing {entity.EntityId} resulted in {result.State} after {attempt} attempts. Last logged exception: {cause}");
+                    }
+
+                    Interlocked.Increment(ref _requeues);
                 }
             }
             finally

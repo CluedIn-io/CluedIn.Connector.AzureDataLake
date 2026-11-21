@@ -40,6 +40,7 @@ internal static class Program
                 new UsageColumn("BatchMean", "Mean batch", "Mean number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Mean),
                 new UsageColumn("BatchP50", "Batch p50", "Median number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Median),
                 new UsageColumn("BatchP95", "Batch p95", "95th percentile of the number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Percentile95),
+                new UsageColumn("Requeues", "Requeues", "Times an entity was stored again after a ReQueue result, as the pipeline would (mean of the iterations)", usage => usage.Requeues),
                 new UsageColumn("BatchMax", "Batch max", "Largest number of entities in a batch (mean of the iterations)", usage => usage.Batches?.Max));
 
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
