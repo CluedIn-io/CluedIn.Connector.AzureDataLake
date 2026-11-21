@@ -18,7 +18,7 @@ namespace CluedIn.Connector.FileStorage.Common.Benchmarks;
 /// and how many it logged in (pooled connections that are reused do not log in again), and the sizes of the batches
 /// that were processed meanwhile (none without batching), and how many times an entity had to be stored again after a ReQueue.
 /// </summary>
-internal readonly record struct ConnectionUsage(int PeakConnections, int NewLogins, BatchSizeSummary? Batches = null, int Requeues = 0);
+internal readonly record struct ConnectionUsage(int PeakConnections, int NewLogins, BatchSizeSummary? Batches = null, int Requeues = 0, int Deadlocks = 0, int BatchFallbacks = 0);
 
 /// <summary>
 /// The sizes of the batches the OperationBatcher processed during a measurement.
@@ -77,10 +77,17 @@ internal sealed class ConnectionMonitor : IAsyncDisposable
         WHERE counter_name = 'Logins/sec' AND object_name LIKE '%General Statistics%'
         """;
 
+    // The counter is cumulative since the server started, whatever its name says, and of the whole server
+    private const string DeadlocksSql = """
+        SELECT cntr_value FROM sys.dm_os_performance_counters
+        WHERE counter_name = 'Number of Deadlocks/sec' AND instance_name = '_Total'
+        """;
+
     private readonly SqlConnection _connection;
     private readonly CancellationTokenSource _stop = new();
     private Task _sampling;
     private long _loginsAtStart;
+    private long _deadlocksAtStart;
     private int _peakConnections;
 
     private ConnectionMonitor(SqlConnection connection)
@@ -97,6 +104,7 @@ internal sealed class ConnectionMonitor : IAsyncDisposable
 
         var monitor = new ConnectionMonitor(connection);
         monitor._loginsAtStart = await monitor.ReadLoginsAsync();
+        monitor._deadlocksAtStart = await monitor.ReadDeadlocksAsync();
         monitor._peakConnections = await monitor.ReadConnectionsAsync();
         monitor._sampling = Task.Run(monitor.SampleAsync);
         return monitor;
@@ -109,7 +117,8 @@ internal sealed class ConnectionMonitor : IAsyncDisposable
 
         var peak = Math.Max(_peakConnections, await ReadConnectionsAsync());
         var logins = await ReadLoginsAsync() - _loginsAtStart;
-        return new ConnectionUsage(peak, (int)logins);
+        var deadlocks = await ReadDeadlocksAsync() - _deadlocksAtStart;
+        return new ConnectionUsage(peak, (int)logins, Deadlocks: (int)deadlocks);
     }
 
     public async ValueTask DisposeAsync()
@@ -145,6 +154,12 @@ internal sealed class ConnectionMonitor : IAsyncDisposable
         await using var command = new SqlCommand(SessionsSql, _connection);
         command.Parameters.AddWithValue("@processId", Environment.ProcessId);
         return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    private async Task<long> ReadDeadlocksAsync()
+    {
+        await using var command = new SqlCommand(DeadlocksSql, _connection);
+        return Convert.ToInt64(await command.ExecuteScalarAsync());
     }
 
     private async Task<long> ReadLoginsAsync()
