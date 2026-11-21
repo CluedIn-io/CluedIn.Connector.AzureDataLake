@@ -274,7 +274,7 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
                 // doesn't push the total wait past the configured timeout.
                 if (_batchTimeout <= WaitSlice)
                 {
-                    await DelayAsync(WaitSlice);
+                    await DelayAsync(_batchTimeout);
                     while (batch.Count < chunkSize && reader.TryRead(out var item))
                     {
                         batch.Add(item);
