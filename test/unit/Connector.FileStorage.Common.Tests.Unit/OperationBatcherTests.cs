@@ -297,6 +297,34 @@ public class OperationBatcherTests
     }
 
     [Fact]
+    public async Task QueueAsync_ShouldFlushPartialChunk_WhenTheBatchTimeoutIsShorterThanTheWaitSlice()
+    {
+        // arrange (the timeout is shorter than the 100 ms slices a longer timeout is waited in)
+        var timeProvider = new FakeTimeProvider();
+
+        await using var sut = new OperationBatcher<int, string>(
+            batchSize: 5,
+            inputProcessingThreadsCount: 1,
+            outputProcessingThreadsCount: 1,
+            batchTimeout: TimeSpan.FromMilliseconds(50),
+            timeProvider: timeProvider,
+            processOutputBatchFunc: requests => Task.FromResult<IList<OperationResult<string>>>(
+                requests.Select(r => new OperationResult<string>($"processed-{r}", null)).ToList()));
+
+        // act
+        var task = sut.QueueAsync(1);
+        await Task.Delay(200);
+        timeProvider.Advance(TimeSpan.FromMilliseconds(49));
+        await Task.Delay(200);
+        var completedBeforeTimeout = task.IsCompleted;
+        timeProvider.Advance(TimeSpan.FromMilliseconds(1));
+
+        // assert
+        Assert.False(completedBeforeTimeout);
+        Assert.Equal("processed-1", await task.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
     public async Task DisposeAsync_ShouldCompleteWithoutHanging_WhenNoPendingRequests()
     {
         // arrange
