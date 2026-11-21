@@ -15,9 +15,50 @@ namespace CluedIn.Connector.FileStorage.Common.Benchmarks;
 
 /// <summary>
 /// What a measurement cost SQL Server in connections: the most this process had open at the same time,
-/// and how many it logged in (pooled connections that are reused do not log in again).
+/// and how many it logged in (pooled connections that are reused do not log in again), and the sizes of the batches
+/// that were cut meanwhile (none without batching).
 /// </summary>
-internal readonly record struct ConnectionUsage(int PeakConnections, int NewLogins);
+internal readonly record struct ConnectionUsage(int PeakConnections, int NewLogins, BatchSizeSummary? Batches = null);
+
+/// <summary>
+/// The sizes of the batches the OperationBatcher cut during a measurement.
+/// </summary>
+internal readonly record struct BatchSizeSummary(int Batches, double Mean, int Median, int Percentile95, int Max)
+{
+    /// <param name="histogram">The number at index n - 1 is how many batches had n entities.</param>
+    public static BatchSizeSummary? From(IReadOnlyList<int> histogram)
+    {
+        var batches = histogram.Sum();
+        if (batches == 0)
+        {
+            return null;
+        }
+
+        int SizeAtOrBelow(double fraction)
+        {
+            var needed = (int)Math.Ceiling(batches * fraction);
+            var cumulative = 0;
+            for (var i = 0; i < histogram.Count; i++)
+            {
+                cumulative += histogram[i];
+                if (cumulative >= needed)
+                {
+                    return i + 1;
+                }
+            }
+
+            return histogram.Count;
+        }
+
+        var entities = histogram.Select((count, index) => (long)count * (index + 1)).Sum();
+        var max = histogram.Select((count, index) => count > 0 ? index + 1 : 0).Max();
+        return new BatchSizeSummary(batches, (double)entities / batches, SizeAtOrBelow(0.5), SizeAtOrBelow(0.95), max);
+    }
+
+    /// <summary>The histogram of what was cut after <paramref name="before"/> was read.</summary>
+    public static IReadOnlyList<int> Since(IReadOnlyList<int> before, IReadOnlyList<int> after) =>
+        after.Select((count, index) => count - (index < before.Count ? before[index] : 0)).ToArray();
+}
 
 /// <summary>
 /// Counts the connections of this process to SQL Server while a measurement runs, from a connection of its own.
@@ -155,13 +196,13 @@ internal static class ConnectionUsages
 }
 
 /// <summary>
-/// A summary column of the connections to SQL Server, averaged over the measured iterations.
+/// A summary column of the connection usage, averaged over the measured iterations.
 /// </summary>
-internal sealed class ConnectionsColumn : IColumn
+internal sealed class UsageColumn : IColumn
 {
-    private readonly Func<ConnectionUsage, int> _select;
+    private readonly Func<ConnectionUsage, double?> _select;
 
-    public ConnectionsColumn(string id, string columnName, string legend, Func<ConnectionUsage, int> select)
+    public UsageColumn(string id, string columnName, string legend, Func<ConnectionUsage, double?> select)
     {
         Id = id;
         ColumnName = columnName;
@@ -193,7 +234,7 @@ internal sealed class ConnectionsColumn : IColumn
 
     public string GetValue(Summary summary, BenchmarkCase benchmarkCase, SummaryStyle style)
     {
-        var usages = ConnectionUsages.Get(ConnectionUsages.CaseKey(benchmarkCase));
-        return usages.Count == 0 ? "N/A" : usages.Average(_select).ToString("0.#");
+        var values = ConnectionUsages.Get(ConnectionUsages.CaseKey(benchmarkCase)).Select(_select).OfType<double>().ToList();
+        return values.Count == 0 ? "-" : values.Average().ToString("0.#");
     }
 }

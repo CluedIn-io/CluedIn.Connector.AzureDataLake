@@ -104,8 +104,12 @@ public class CacheWriteBenchmarks
     private async Task MeasureAsync(string method)
     {
         await using var monitor = await ConnectionMonitor.StartAsync(_harness.ConnectionString);
+
+        // The setup writes through the same connector, so what the measurement cut is what came after
+        var batchesBefore = _harness.GetBatchSizeHistogram();
         await WriteAllAsync(_entities);
-        ConnectionUsages.Add(ConnectionUsages.CaseKey(method, Mode, SoftDelete, Concurrency), await monitor.StopAsync());
+        var batches = BatchSizeSummary.From(BatchSizeSummary.Since(batchesBefore, _harness.GetBatchSizeHistogram()));
+        ConnectionUsages.Add(ConnectionUsages.CaseKey(method, Mode, SoftDelete, Concurrency), await monitor.StopAsync() with { Batches = batches });
     }
 
     private async Task WriteAllAsync(IReadOnlyCollection<ConnectorEntityData> entities)

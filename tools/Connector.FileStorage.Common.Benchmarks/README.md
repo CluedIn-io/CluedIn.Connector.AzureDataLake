@@ -30,13 +30,15 @@ process (no project is built per benchmark), and every iteration writes to a tab
 
 `Insert` writes entities the table does not have yet, `Update` writes a newer persist version of entities it has.
 
-Next to the time and memory, two columns say what it costs SQL Server in connections, sampled from a connection of
-its own while an iteration runs (the connection pools are cleared before every iteration):
+Next to the time and memory, columns say what it costs SQL Server in connections, sampled from a connection of
+its own while an iteration runs (the connection pools are cleared before every iteration), and how the entities were batched:
 
 | Column | |
 |---|---|
 | `Peak connections` | The most connections this process had open to SQL Server at the same time. |
 | `New logins` | The connections logged in during the iteration (a pooled connection that is reused does not log in again). |
+| `Batches` | The batches the `OperationBatcher` cut during the iteration (`-` without batching). |
+| `Mean batch`, `Batch p50`, `Batch p95`, `Batch max` | The number of entities in those batches. The batcher counts them when the connector turns on `CollectCacheBatchSizeMetrics`, which only the benchmark's connector does. A batch of one entity is written with the single entity path. |
 
 Run it against a SQL Server that is as far away as the one the stream cache is in production. Writing one entity at a
 time costs round trips, and what batching saves is round trips, so a SQL Server on the same machine hides most of what it

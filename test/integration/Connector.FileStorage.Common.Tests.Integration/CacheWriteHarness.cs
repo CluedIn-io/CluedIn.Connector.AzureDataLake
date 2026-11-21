@@ -132,6 +132,9 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
 
     public Task<SaveResult> StoreAsync(ConnectorEntityData entity) => _connector.StoreData(null, _streamModel, entity);
 
+    /// <summary>The batches cut so far: the number at index n - 1 is how many had n entities. Empty without batching.</summary>
+    public IReadOnlyList<int> GetBatchSizeHistogram() => _connector.BatchSizeHistogram();
+
     /// <summary>
     /// An entity with a column of each of the types the cache table has to cope with.
     /// </summary>
@@ -236,6 +239,10 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
         }
 
         protected override Type ExportJobType => typeof(object);
+
+        protected override bool CollectCacheBatchSizeMetrics => true;
+
+        public IReadOnlyList<int> BatchSizeHistogram() => GetCacheBatchSizeHistogram();
     }
 
     private sealed class TestStorageConfiguration : IStorageConfiguration
