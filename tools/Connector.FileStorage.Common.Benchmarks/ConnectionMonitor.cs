@@ -184,14 +184,14 @@ internal static class ConnectionUsages
         }
     }
 
-    public static string CaseKey(string method, WriteMode mode, bool softDelete, int concurrency) =>
-        $"{method}|{mode}|{softDelete}|{concurrency}";
+    public static string CaseKey(string method, WriteMode mode, bool softDelete, int concurrency, bool collectStats) =>
+        $"{method}|{mode}|{softDelete}|{concurrency}|{collectStats}";
 
     public static string CaseKey(BenchmarkCase benchmarkCase)
     {
         string Parameter(string name) => benchmarkCase.Parameters.Items.Single(item => item.Name == name).Value.ToString();
 
-        return $"{benchmarkCase.Descriptor.WorkloadMethod.Name}|{Parameter(nameof(CacheWriteBenchmarks.Mode))}|{Parameter(nameof(CacheWriteBenchmarks.SoftDelete))}|{Parameter(nameof(CacheWriteBenchmarks.Concurrency))}";
+        return $"{benchmarkCase.Descriptor.WorkloadMethod.Name}|{Parameter(nameof(CacheWriteBenchmarks.Mode))}|{Parameter(nameof(CacheWriteBenchmarks.SoftDelete))}|{Parameter(nameof(CacheWriteBenchmarks.Concurrency))}|{Parameter(nameof(CacheWriteBenchmarks.CollectStats))}";
     }
 }
 

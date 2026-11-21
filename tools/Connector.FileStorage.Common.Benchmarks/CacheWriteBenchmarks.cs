@@ -23,8 +23,11 @@ public enum WriteMode
     /// <summary>Batching is on and writes what is there, without waiting for more.</summary>
     Batched,
 
+    /// <summary>Batching is on and a batch waits 50 ms for more entities (which the batcher rounds up to its 100 ms slice).</summary>
+    Batched50ms,
+
     /// <summary>Batching is on and a batch waits 100 ms for more entities (the shortest wait there is).</summary>
-    BatchedWaiting,
+    Batched100ms,
 }
 
 /// <summary>
@@ -44,22 +47,53 @@ public class CacheWriteBenchmarks
     private List<ConnectorEntityData> _entities;
 
     /// <summary>How the entities are written: one by one, or the entities that are stored at the same time together.</summary>
-    [Params(WriteMode.Single, WriteMode.Batched, WriteMode.BatchedWaiting)]
+    /// <remarks>BENCH_MODES (comma separated) picks the modes to run, all of them by default.</remarks>
+    [ParamsSource(nameof(Modes))]
     public WriteMode Mode { get; set; }
 
     [Params(true)]
     public bool SoftDelete { get; set; }
 
-    [Params(80)]
+    /// <summary>Whether the batcher counts the sizes of its batches, to see what counting costs.</summary>
+    /// <remarks>BENCH_STATS (comma separated) picks the values to run, both by default.</remarks>
+    [ParamsSource(nameof(CollectStatsValues))]
+    public bool CollectStats { get; set; }
+
+    /// <remarks>BENCH_CONCURRENCY (comma separated) picks the numbers to run, 80 by default.</remarks>
+    [ParamsSource(nameof(Concurrencies))]
     public int Concurrency { get; set; }
 
     [Params(5000)]
     public int Entities { get; set; }
 
+    public static IEnumerable<WriteMode> Modes => FromEnvironment("BENCH_MODES", Enum.Parse<WriteMode>, Enum.GetValues<WriteMode>());
+
+    public static IEnumerable<bool> CollectStatsValues => FromEnvironment("BENCH_STATS", bool.Parse, [true, false]);
+
+    public static IEnumerable<int> Concurrencies => FromEnvironment("BENCH_CONCURRENCY", int.Parse, [80]);
+
+    private static IEnumerable<T> FromEnvironment<T>(string name, Func<string, T> parse, IEnumerable<T> defaults)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(value)
+            ? defaults
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(parse).ToArray();
+    }
+
+    private int BatchTimeoutMilliseconds => Mode switch
+    {
+        WriteMode.Batched50ms => 50,
+        WriteMode.Batched100ms => 100,
+        _ => 0,
+    };
+
+    private CacheWriteHarness CreateHarness() =>
+        CacheWriteHarness.Create(Mode != WriteMode.Single, SoftDelete, batchTimeoutMilliseconds: BatchTimeoutMilliseconds, collectBatchSizeStats: CollectStats);
+
     [IterationSetup(Target = nameof(Insert))]
     public void SetupInsert()
     {
-        _harness = CacheWriteHarness.Create(Mode != WriteMode.Single, SoftDelete, batchTimeoutMilliseconds: Mode == WriteMode.BatchedWaiting ? 100 : 0);
+        _harness = CreateHarness();
 
         // the table exists before the measurement, as it does when entities are stored to a stream that has run before
         WriteAllAsync(new[] { CacheWriteHarness.CreateEntity(Guid.NewGuid()) }).GetAwaiter().GetResult();
@@ -72,7 +106,7 @@ public class CacheWriteBenchmarks
     [IterationSetup(Target = nameof(Update))]
     public void SetupUpdate()
     {
-        _harness = CacheWriteHarness.Create(Mode != WriteMode.Single, SoftDelete, batchTimeoutMilliseconds: Mode == WriteMode.BatchedWaiting ? 100 : 0);
+        _harness = CreateHarness();
 
         var ids = Enumerable.Range(0, Entities).Select(_ => Guid.NewGuid()).ToList();
         WriteAllAsync(ids.Select(id => CacheWriteHarness.CreateEntity(id, VersionChangeType.Added, persistVersion: 1)).ToList()).GetAwaiter().GetResult();
@@ -109,7 +143,7 @@ public class CacheWriteBenchmarks
         var batchesBefore = _harness.GetBatchSizeHistogram();
         await WriteAllAsync(_entities);
         var batches = BatchSizeSummary.From(BatchSizeSummary.Since(batchesBefore, _harness.GetBatchSizeHistogram()));
-        ConnectionUsages.Add(ConnectionUsages.CaseKey(method, Mode, SoftDelete, Concurrency), await monitor.StopAsync() with { Batches = batches });
+        ConnectionUsages.Add(ConnectionUsages.CaseKey(method, Mode, SoftDelete, Concurrency, CollectStats), await monitor.StopAsync() with { Batches = batches });
     }
 
     private async Task WriteAllAsync(IReadOnlyCollection<ConnectorEntityData> entities)
