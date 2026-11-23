@@ -190,6 +190,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 AddToData("IncomingEdges", connectorEntityData.IncomingEdges.SafeEnumerate());
             }
 
+            var writesToCacheTable = configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync;
+
             try
             {
                 // WriteToOutputImmediately writes the data of a stream that is not in sync mode with its change type. It is added
@@ -203,7 +205,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 return await _storeRetryPolicy.RunAsync(
                     async () =>
                     {
-                        if (configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+                        if (writesToCacheTable)
                         {
                             return await WriteToCacheTable(streamModel, connectorEntityData, configuration, data, dataValueTypes);
                         }
