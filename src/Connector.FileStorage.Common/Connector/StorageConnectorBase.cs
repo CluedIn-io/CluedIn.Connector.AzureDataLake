@@ -40,6 +40,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
         private static readonly ConcurrentDictionary<Type, DateTimeOffset> _lastHealthCheckErrorLogs = new ConcurrentDictionary<Type, DateTimeOffset>();
         private readonly TimeSpan _delayBetweenHealthCheckErrorLog;
+        private readonly StoreRetryPolicy _storeRetryPolicy;
 
         // TODO: Handle ushort, ulong, uint
         private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new()
@@ -74,6 +75,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _applicationContext = applicationContext;
             _timeProvider = timeProvider;
             _storageFactory = storageFactory;
+            _storeRetryPolicy = StoreRetryPolicy.FromEnvironment(logger);
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
@@ -190,14 +192,27 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
             try
             {
-                if (configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+                // WriteToOutputImmediately writes the data of a stream that is not in sync mode with its change type. It is added
+                // here, once, as every attempt of the retries below would add it again.
+                if (streamModel.Mode != StreamMode.Sync)
                 {
-                    return await WriteToCacheTable(streamModel, connectorEntityData, configuration, data, dataValueTypes);
+                    data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
                 }
-                else
-                {
-                    return await WriteToOutputImmediately(executionContext, streamModel, connectorEntityData, configuration, data);
-                }
+
+                // A write that fails is retried, with a delay, before the failure is returned as a ReQueue
+                return await _storeRetryPolicy.RunAsync(
+                    async () =>
+                    {
+                        if (configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+                        {
+                            return await WriteToCacheTable(streamModel, connectorEntityData, configuration, data, dataValueTypes);
+                        }
+                        else
+                        {
+                            return await WriteToOutputImmediately(executionContext, streamModel, connectorEntityData, configuration, data);
+                        }
+                    },
+                    _logger);
             }
             catch (Exception ex)
             {
@@ -633,8 +648,6 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             }
             else
             {
-                data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
-
                 var json = JsonConvert.SerializeObject(data);
 
                 await _buffer.Add(new (executionContext.Organization.Id, configurations), json);
