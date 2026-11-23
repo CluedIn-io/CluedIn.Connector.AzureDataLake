@@ -54,6 +54,11 @@ The pipeline in `azure-pipelines.yml` runs the whole benchmark every night at 01
 run that succeeded. A scheduled run only benchmarks: it does not build, test or publish the connector. A run queued by hand does the same
 when its `Run the cache write benchmark instead of the build` parameter is on, and builds as usual otherwise.
 
+A second schedule, at 04:00 UTC and every night, does not benchmark. It deletes the containers that start with `xunit-fs-` from the storage
+account of the integration tests (`ADL2_ACCOUNTNAME` and `ADL2_ACCOUNTKEY`), which the integration tests leave behind
+(`build/cleanup-storage.jobs.yml`, `build/cleanup-storage.ps1`; `-DryRun` only lists them). Both schedules start the same pipeline, and each of its jobs checks
+the name of the schedule that started it.
+
 The SQL Server is created like the integration tests do, with `build/integration-test.ps1 -Action SetUp`: a SQL Server 2022
 container on the build agent, with `INTEGRATIONTEST_STREAMCACHE` set to its connection string. As it is on the same machine as
 the benchmark, the round trips are as cheap as they get, and the times are for comparing one night with the next, not for

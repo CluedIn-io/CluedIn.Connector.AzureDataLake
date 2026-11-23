@@ -4,9 +4,15 @@
 # The SQL Server is created the way the integration tests get theirs: build/integration-test.ps1 starts it in a Docker
 # container and sets INTEGRATIONTEST_STREAMCACHE.
 
+parameters:
+  - name: cleanupScheduleName
+    type: string
+
 jobs:
   - job: Benchmark
     displayName: Benchmark the cache writes
+    # The run of the cleanup schedule only cleans up. Any other run benchmarks.
+    condition: ne(variables['Build.CronSchedule.DisplayName'], '${{ parameters.cleanupScheduleName }}')
     timeoutInMinutes: 180
     pool:
       vmImage: 'ubuntu-22.04'

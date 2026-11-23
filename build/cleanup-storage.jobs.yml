@@ -1,0 +1,30 @@
+# Jobs template that deletes the containers the integration tests leave in their storage account
+# (build/cleanup-storage.ps1). azure-pipelines.yml includes it for its nightly schedule that is named cleanupScheduleName.
+#
+# ADL2_ACCOUNTNAME and ADL2_ACCOUNTKEY are the account the integration tests use. The key is a secret variable, so it has
+# to be mapped into the step explicitly.
+
+parameters:
+  - name: cleanupScheduleName
+    type: string
+
+jobs:
+  - job: CleanupStorage
+    displayName: Delete the containers of the integration tests
+    condition: eq(variables['Build.CronSchedule.DisplayName'], '${{ parameters.cleanupScheduleName }}')
+    timeoutInMinutes: 60
+    pool:
+      vmImage: 'ubuntu-22.04'
+    steps:
+      - checkout: self
+
+      - task: PowerShell@2
+        displayName: Delete the xunit-fs- containers
+        env:
+          ADL2_ACCOUNTNAME: $(ADL2_ACCOUNTNAME)
+          ADL2_ACCOUNTKEY: $(ADL2_ACCOUNTKEY)
+        inputs:
+          targetType: filePath
+          filePath: ./build/cleanup-storage.ps1
+          arguments: -ContainerPrefix xunit-fs-
+          pwsh: true

@@ -14,7 +14,7 @@ parameters:
     default: false
 
   # Runs the stream cache write benchmark (build/benchmark.jobs.yml) instead of the build and test jobs. The nightly
-  # schedule below does the same.
+  # benchmark schedule below does the same.
   - name: runBenchmark
     displayName: Run the cache write benchmark instead of the build
     type: boolean
@@ -39,8 +39,11 @@ trigger:
     - master
     - release/*
 
-# The nightly cache write benchmark. 'always: false' runs it only when develop has changed since the last scheduled run
-# that succeeded, so a night without a change on develop costs nothing.
+# Two nightly schedules, that run different jobs (see the jobs below).
+# - The cache write benchmark: 'always: false' runs it only when develop has changed since the last scheduled run that
+#   succeeded, so a night without a change on develop costs nothing.
+# - The cleanup of the storage account of the integration tests: it runs every night. Its displayName has to be the
+#   cleanupScheduleName that is passed to the jobs below, as that is how the jobs tell the two schedules apart.
 schedules:
   - cron: '0 1 * * *'
     displayName: Nightly cache write benchmark
@@ -48,6 +51,12 @@ schedules:
       include:
         - develop
     always: false
+  - cron: '0 4 * * *'
+    displayName: Nightly storage cleanup
+    branches:
+      include:
+        - develop
+    always: true
 
 # Perform build for a PR to any branch, as if you run PR, you most likely want CI checks.
 pr: ['*']
@@ -81,9 +90,16 @@ lockBehavior: sequential
 # jobs:, not pool:/steps: - crawler.build.jobs.yml is a jobs template, the only one with
 # multi-version support (crawler.build.yml has none).
 jobs:
-  # The scheduled run (and a run that asks for it) only benchmarks. Every other run builds and tests.
+  # A scheduled run (and a run that asks for the benchmark) does not build or test. Each of its jobs checks which schedule
+  # started the run: the benchmark runs for every run but the one of the cleanup schedule, which only cleans up.
+  # Every other run builds and tests.
   - ${{ if or(eq(variables['Build.Reason'], 'Schedule'), eq(parameters.runBenchmark, true)) }}:
     - template: build/benchmark.jobs.yml
+      parameters:
+        cleanupScheduleName: 'Nightly storage cleanup'
+    - template: build/cleanup-storage.jobs.yml
+      parameters:
+        cleanupScheduleName: 'Nightly storage cleanup'
   - ${{ else }}:
     - template: crawler.build.jobs.yml@templates
       parameters:
