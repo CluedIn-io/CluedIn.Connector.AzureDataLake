@@ -196,13 +196,13 @@ public class StorageExportEntitiesJobTransactionTests
     }
 
     [Fact]
-    public async Task Export_DoesNotHoldItsSetupConnectionWhileStreaming()
+    public async Task Export_NeedsOnlyOnePooledConnection()
     {
-        // While streaming, an export should only hold the connection that owns the lock and runs the read. Anything else
-        // held for the whole export is wasted: with enough concurrent exports it exhausts the pool and leaves no connection
-        // for the final history update. With a pool of 2 that update can only succeed if the connection used for the
-        // initial checks was released before streaming started.
-        await using var harness = await ExportHarness.CreateAsync(jobConnectionStringOptions: "Max Pool Size=2;Connect Timeout=3");
+        // An export that needs a second connection while it holds its first can deadlock itself: with enough concurrent
+        // exports (or a small pool) every export holds one connection and waits for another that nobody can release. With
+        // a pool of 1 the export can only succeed if the lock, the setup queries, the read and every history update share
+        // one connection.
+        await using var harness = await ExportHarness.CreateAsync(jobConnectionStringOptions: "Max Pool Size=1;Connect Timeout=3");
 
         var result = await harness.RunExportAsync();
 
@@ -210,6 +210,30 @@ public class StorageExportEntitiesJobTransactionTests
         var history = Assert.Single(await harness.ReadHistoryAsync());
         Assert.Equal("Complete", history.Status);
         Assert.Equal(RowCount, history.TotalRows);
+    }
+
+    [Fact]
+    public async Task Export_ReleasesThePerStreamLockWhenItEnds()
+    {
+        // The lock is owned by the export connection's session, which goes back to the pool when the export ends, so it
+        // has to be released explicitly.
+        await using var harness = await ExportHarness.CreateAsync(jobConnectionStringOptions: "Max Pool Size=1");
+
+        var result = await harness.RunExportAsync();
+
+        Assert.True(result.HasExported, $"Export did not run. Reason: {result.Reason}");
+        Assert.True(await harness.IsExportLockFreeAsync());
+    }
+
+    [Fact]
+    public async Task Export_WhenWritingFails_ReleasesThePerStreamLock()
+    {
+        await using var harness = await ExportHarness.CreateAsync(jobConnectionStringOptions: "Max Pool Size=1");
+        harness.Job.Writer.ExceptionToThrow = new InvalidOperationException("Simulated write failure");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(harness.RunExportAsync);
+
+        Assert.True(await harness.IsExportLockFreeAsync());
     }
 
 #if !NET6_0
@@ -511,6 +535,17 @@ public class StorageExportEntitiesJobTransactionTests
             }
 
             return rows;
+        }
+
+        public async Task<bool> IsExportLockFreeAsync()
+        {
+            await using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync();
+            await using var command = new SqlCommand(
+                "DECLARE @result INT; EXEC @result = sp_getapplock @Resource = @Resource, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = 0; SELECT @result;",
+                connection);
+            command.Parameters.Add(new SqlParameter("@Resource", $"{Job.GetType().Name}_{_streamId}"));
+            return (int)await command.ExecuteScalarAsync() >= 0;
         }
 
         public Task ExecuteAsync(string sql) => ExecuteAsync(_connectionString, sql);

@@ -125,13 +125,16 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             // disposed" after the file had been delivered, and the history row was rolled back, so the run was retried.
             using var suppressScope = new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled);
 
-            // The per-stream export lock and the full-table read share one connection and an explicit transaction. The
-            // read keeps the connection busy for the whole export, so it isn't dropped as idle (an idle connection holding
-            // the lock was closed after ~30 minutes, releasing the lock and letting a second export of the stream start),
-            // and an explicit SqlTransaction isn't subject to the System.Transactions timeout. Disposing it releases the lock.
+            // The whole export uses one connection. It owns the per-stream export lock (a session lock, so it needs no
+            // transaction and isn't subject to the System.Transactions timeout), runs the history updates and streams the
+            // full-table read. It is the only pooled connection the export holds: one that needed a second connection while
+            // holding this one would, with enough concurrent exports (or a small pool), wait for a connection that no other
+            // export can release. The read keeps it busy for the whole export, so it isn't dropped as idle (an idle
+            // connection holding the lock was closed after ~30 minutes, releasing the lock and letting a second export of
+            // the stream start).
             await using var exportConnection = await OpenStreamCacheConnectionAsync(exportJobData.StorageConfiguration);
-            await using var exportTransaction = exportConnection.BeginTransaction();
-            if (!await DistributedLockHelper.TryAcquireExclusiveLock(exportTransaction, $"{GetType().Name}_{streamId}", ExportEntitiesLockInMilliseconds))
+            var lockName = $"{GetType().Name}_{streamId}";
+            if (!await DistributedLockHelper.TryAcquireExclusiveSessionLock(exportConnection, lockName, ExportEntitiesLockInMilliseconds))
             {
                 context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamId);
                 return ExportResult.CreateSkipped("Failed to acquire lock");
@@ -139,12 +142,16 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
             try
             {
-                return await DoRunInternalAsync(context, args, exportJobData, exportConnection, exportTransaction);
+                return await DoRunInternalAsync(context, args, exportJobData, exportConnection);
             }
             catch
             {
-                await TryMarkHistoryFailedAsync(context, exportJobData, GetTriggerSource(args), args.Schedule);
+                await TryMarkHistoryFailedAsync(context, exportConnection, exportJobData, GetTriggerSource(args), args.Schedule);
                 throw;
+            }
+            finally
+            {
+                await TryReleaseExportLockAsync(context, exportConnection, lockName);
             }
         }
         catch (Exception ex)
@@ -158,8 +165,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         ExecutionContext context,
         IStorageJobArgs args,
         ExportJobData exportJobData,
-        SqlConnection exportConnection,
-        SqlTransaction exportTransaction)
+        SqlConnection exportConnection)
     {
         var streamId = exportJobData.StreamId;
         var streamModel = exportJobData.StreamModel;
@@ -176,12 +182,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         using var storageClient = await CreateStorageClient(context, configuration);
         await storageClient.CreateDirectoryIfNotExistsAsync(outputDirectoryPath);
 
-        // Short queries and the first history row use their own connection, without a transaction. It is released as soon
-        // as those checks are done (below), so that an idle pooled connection isn't held for the whole export: with enough
-        // concurrent exports that would exhaust the pool and leave no connection for the final history update.
-        await using var connection = await OpenStreamCacheConnectionAsync(configuration);
-
-        if (await HasExported(context, connection, streamId, asOfTime, GetTriggerSource(args), args.Schedule))
+        if (await HasExported(context, exportConnection, streamId, asOfTime, GetTriggerSource(args), args.Schedule))
         {
             context.Log.LogInformation("Skipping export for StreamId {StreamId} as it is not required. Reason is {Reason}", exportJobData.StreamId, ExportedBeforeReason);
             // Not logging to stream ingestion log to prevent spamming
@@ -208,12 +209,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             TotalRows: null,
             Status: StartingStatus,
             ExporterHostName: Dns.GetHostName());
-        await InsertHistory(context, connection, exportHistory);
+        await InsertHistory(context, exportConnection, exportHistory);
 
         var shouldProduceDelta = configuration.IsDeltaMode && !exportJobData.IsInitialExport;
         var validFrom = shouldProduceDelta ? exportJobData.LastExportedFile?.DataTime : null;
 
-        var getDataCommandWithLimit = GetDataSql(connection, asOfTime, tableName, validFrom, limit: 1);
+        var getDataCommandWithLimit = GetDataSql(exportConnection, asOfTime, tableName, validFrom, limit: 1);
         var hasData = false;
         try
         {
@@ -226,9 +227,6 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             await AddInformationToStreamIngestionLogLocal($"Skipping export as it is not required. Reason is {TableNotFoundReason}");
             return ExportResult.CreateSkipped(TableNotFoundReason);
         }
-
-        // Nothing below needs this connection (the history updates open their own), and disposing it twice is harmless.
-        await connection.DisposeAsync();
 
         if (!configuration.IsOverwriteEnabled && exportJobData.OutputFileExists)
         {
@@ -247,16 +245,17 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         }
 
         // Overrides may take transaction-owned application locks on the connection (e.g. Open Mirroring's partner
-        // events file), so they get a short transaction of their own. They can also call slow remote storage while
-        // holding that lock, so the timeout is explicit: the default (1 minute) would abort the transaction mid-initialization.
+        // events file), so they get a short transaction of their own. The export connection joins it for the duration
+        // and is released from it when the scope ends. They can also call slow remote storage while holding that lock, so
+        // the timeout is explicit: the default (1 minute) would abort the transaction mid-initialization.
         using (var initializeScope = new TransactionScope(TransactionScopeOption.Required, OutputTargetInitializationTimeout, TransactionScopeAsyncFlowOption.Enabled))
         {
-            await using var initializeConnection = await OpenStreamCacheConnectionAsync(configuration);
-            await InitializeOutputTargetAsync(context, initializeConnection, exportJobData, storageClient);
+            exportConnection.EnlistTransaction(Transaction.Current);
+            await InitializeOutputTargetAsync(context, exportConnection, exportJobData, storageClient);
             initializeScope.Complete();
         }
 
-        var getDataCommand = GetDataSql(exportConnection, asOfTime, tableName, validFrom, transaction: exportTransaction);
+        var getDataCommand = GetDataSql(exportConnection, asOfTime, tableName, validFrom);
 
         await using var reader = await getDataCommand.ExecuteReaderAsync();
 
@@ -285,13 +284,13 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         await this.AddInformationToStreamIngestionLog(context, streamModel, $"Exported {outputFileName} with {totalRows} rows.");
         return ExportResult.CreateSuccess(outputDirectoryPath.GetFilePath(outputFileName));
 
-        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null, SqlTransaction transaction = null)
+        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null)
         {
             var limitClause = limit.HasValue ? $"TOP ({limit.Value}) " : string.Empty;
             var getDataSql = validFrom.HasValue
                 ? $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}' WHERE ValidFrom > @ValidFrom"
                 : $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
-            var command = new SqlCommand(getDataSql, connection, transaction)
+            var command = new SqlCommand(getDataSql, connection)
             {
                 CommandType = CommandType.Text
             };
@@ -322,10 +321,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         async Task UpdateHistoryWithStatus(string status, long? totalRows = null)
         {
-            // A short-lived connection of its own: the setup connection is released before the export starts streaming, and
-            // the lock/read connection is busy (and transaction-bound) until the export ends.
-            await using var historyConnection = await OpenStreamCacheConnectionAsync(configuration);
-            await UpdateHistory(context, historyConnection, exportHistory with
+            // Only called while no reader is open on the export connection.
+            await UpdateHistory(context, exportConnection, exportHistory with
             {
                 Status = status,
                 TotalRows = totalRows,
@@ -1137,8 +1134,28 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         }
     }
 
+    private static async Task TryReleaseExportLockAsync(ExecutionContext context, SqlConnection exportConnection, string lockName)
+    {
+        // The connection goes back to the pool, and a pooled session must not keep the lock. A connection that is no longer
+        // open has already lost its session, and the lock with it.
+        if (exportConnection.State != ConnectionState.Open)
+        {
+            return;
+        }
+
+        try
+        {
+            await DistributedLockHelper.ReleaseSessionLock(exportConnection, lockName);
+        }
+        catch (Exception releaseException)
+        {
+            context.Log.LogWarning(releaseException, "Unable to release export lock {LockName}.", lockName);
+        }
+    }
+
     private async Task TryMarkHistoryFailedAsync(
         ExecutionContext context,
+        SqlConnection exportConnection,
         ExportJobData exportJobData,
         string triggerSource,
         string cronSchedule)
@@ -1158,7 +1175,12 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                     """;
         try
         {
-            await using var connection = await OpenStreamCacheConnectionAsync(exportJobData.StorageConfiguration);
+            // The export connection is normally still usable. When it was lost, the failure is recorded on a fresh one.
+            var ownsConnection = exportConnection.State != ConnectionState.Open;
+            var connection = ownsConnection
+                ? await OpenStreamCacheConnectionAsync(exportJobData.StorageConfiguration)
+                : exportConnection;
+            await using var connectionOwner = ownsConnection ? connection : null;
             var command = new SqlCommand(updateSql, connection)
             {
                 CommandType = CommandType.Text
