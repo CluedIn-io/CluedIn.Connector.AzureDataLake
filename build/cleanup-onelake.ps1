@@ -24,7 +24,9 @@ $ErrorActionPreference = 'Stop'
 
 function Get-RequiredVariable([string]$name) {
     $value = [Environment]::GetEnvironmentVariable($name)
-    if ([string]::IsNullOrWhiteSpace($value)) {
+
+    # A variable that is not defined in the pipeline is left as it is written in the step ($(NAME)), which is not a value
+    if ([string]::IsNullOrWhiteSpace($value) -or $value -match '^\$\(.*\)$') {
         throw "$name is required."
     }
 

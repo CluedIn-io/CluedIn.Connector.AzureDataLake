@@ -13,7 +13,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # The integration tests' storage account. The Azure CLI reads these two.
-if ([string]::IsNullOrWhiteSpace($env:ADL2_ACCOUNTNAME) -or [string]::IsNullOrWhiteSpace($env:ADL2_ACCOUNTKEY)) {
+# A variable that is not defined in the pipeline is left as it is written in the step ($(NAME)), which is not a value
+$isMissing = { param($value) [string]::IsNullOrWhiteSpace($value) -or $value -match '^\$\(.*\)$' }
+if ((& $isMissing $env:ADL2_ACCOUNTNAME) -or (& $isMissing $env:ADL2_ACCOUNTKEY)) {
     throw 'ADL2_ACCOUNTNAME and ADL2_ACCOUNTKEY are required.'
 }
 $env:AZURE_STORAGE_ACCOUNT = $env:ADL2_ACCOUNTNAME
