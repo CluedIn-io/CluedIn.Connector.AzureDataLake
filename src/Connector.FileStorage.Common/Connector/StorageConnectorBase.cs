@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using System.Transactions;
 
 using CluedIn.Core;
-using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
@@ -76,11 +75,11 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _timeProvider = timeProvider;
             _storageFactory = storageFactory;
 
-            var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
-            var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
-            var cacheStrategyValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
+            var cacheRecordsThreshold = ConfigurationHelper.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
+            var backgroundFlushMaxIdleDefaultValue = ConfigurationHelper.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
+            var cacheStrategyValue = ConfigurationHelper.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
 
-            var healthCheckErrorLogDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
+            var healthCheckErrorLogDelayMilliseconds = ConfigurationHelper.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
 
             _delayBetweenHealthCheckErrorLog = healthCheckErrorLogDelayMilliseconds > 0 ? TimeSpan.FromMilliseconds(healthCheckErrorLogDelayMilliseconds) : TimeSpan.Zero;
 
@@ -94,8 +93,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 backgroundFlushMaxIdleDefaultValue, Flush, timeProvider, cacheBufferStrategy);
             SetupBufferStatusSubscription();
 
-            var storeRetryCount = ConfigurationManagerEx.AppSettings.GetValue(constants.StoreRetryCountKeyName, constants.StoreRetryCountDefaultValue);
-            var storeRetryDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.StoreRetryDelayKeyName, constants.StoreRetryDelayDefaultValue);
+            var storeRetryCount = ConfigurationHelper.GetValue(constants.StoreRetryCountKeyName, constants.StoreRetryCountDefaultValue);
+            var storeRetryDelayMilliseconds = ConfigurationHelper.GetValue(constants.StoreRetryDelayKeyName, constants.StoreRetryDelayDefaultValue);
             _storeRetryPolicy = new StoreRetryPolicy(storeRetryCount, TimeSpan.FromMilliseconds(storeRetryDelayMilliseconds));
         }
 
