@@ -75,7 +75,6 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _applicationContext = applicationContext;
             _timeProvider = timeProvider;
             _storageFactory = storageFactory;
-            _storeRetryPolicy = StoreRetryPolicy.FromConstants(constants);
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
@@ -94,6 +93,10 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _buffer = new PartitionedBuffer<Partition, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush, timeProvider, cacheBufferStrategy);
             SetupBufferStatusSubscription();
+
+            var storeRetryCount = ConfigurationManagerEx.AppSettings.GetValue(constants.StoreRetryCountKeyName, constants.StoreRetryCountDefaultValue);
+            var storeRetryDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.StoreRetryDelayKeyName, constants.StoreRetryDelayDefaultValue);
+            _storeRetryPolicy = new StoreRetryPolicy(storeRetryCount, TimeSpan.FromMilliseconds(storeRetryDelayMilliseconds));
         }
 
         ~StorageConnectorBase()

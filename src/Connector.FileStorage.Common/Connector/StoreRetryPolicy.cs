@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-using CluedIn.Core.Configuration;
-
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 
@@ -68,17 +66,6 @@ internal sealed class StoreRetryPolicy
     /// The delay before each retry.
     /// </summary>
     internal TimeSpan RetryDelay { get; }
-
-    /// <summary>
-    /// Reads the retry count and the delay (in milliseconds) from the settings of the connector. A negative value is the same as 0.
-    /// </summary>
-    internal static StoreRetryPolicy FromConstants(IStorageConfigurationConstants constants)
-    {
-        var retryCount = ConfigurationManagerEx.AppSettings.GetValue(constants.StoreRetryCountKeyName, constants.StoreRetryCountDefaultValue);
-        var retryDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.StoreRetryDelayKeyName, constants.StoreRetryDelayDefaultValue);
-
-        return new StoreRetryPolicy(retryCount, TimeSpan.FromMilliseconds(Math.Max(0, retryDelayMilliseconds)));
-    }
 
     /// <summary>
     /// Whether the exception, or the one it wraps, is a SQL Server error that can go away on its own.
