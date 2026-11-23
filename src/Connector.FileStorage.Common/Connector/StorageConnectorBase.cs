@@ -202,7 +202,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Exception thrown. Returning SaveResult.ReQueue");
-                return SaveResult.ReQueue;
+                return new SaveResult(SaveResultState.ReQueue) { Exceptions = { ex } };
             }
         }
 
