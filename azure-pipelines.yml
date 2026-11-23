@@ -42,7 +42,8 @@ trigger:
 # Two nightly schedules, that run different jobs (see the jobs below).
 # - The cache write benchmark: 'always: false' runs it only when develop has changed since the last scheduled run that
 #   succeeded, so a night without a change on develop costs nothing.
-# - The cleanup of the storage account of the integration tests: it runs every night. Its displayName has to be the
+# - The cleanup of what the integration tests leave behind (the storage account, the OneLake lakehouse and the Open Mirroring
+#   mirrored database): it runs every night. Its displayName has to be the
 #   cleanupScheduleName that is passed to the jobs below, as that is how the jobs tell the two schedules apart.
 schedules:
   - cron: '0 1 * * *'
@@ -52,7 +53,7 @@ schedules:
         - develop
     always: false
   - cron: '0 4 * * *'
-    displayName: Nightly storage cleanup
+    displayName: Nightly cleanup
     branches:
       include:
         - develop
@@ -96,10 +97,10 @@ jobs:
   - ${{ if or(eq(variables['Build.Reason'], 'Schedule'), eq(parameters.runBenchmark, true)) }}:
     - template: build/benchmark.jobs.yml
       parameters:
-        cleanupScheduleName: 'Nightly storage cleanup'
-    - template: build/cleanup-storage.jobs.yml
+        cleanupScheduleName: 'Nightly cleanup'
+    - template: build/cleanup.jobs.yml
       parameters:
-        cleanupScheduleName: 'Nightly storage cleanup'
+        cleanupScheduleName: 'Nightly cleanup'
   - ${{ else }}:
     - template: crawler.build.jobs.yml@templates
       parameters:

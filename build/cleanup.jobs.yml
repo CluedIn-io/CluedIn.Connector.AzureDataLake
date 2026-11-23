@@ -1,0 +1,79 @@
+# Jobs template that cleans up what the integration tests leave behind. azure-pipelines.yml includes it for its nightly schedule
+# that is named cleanupScheduleName.
+#
+# - The containers (xunit-fs-*) of the storage account of the integration tests (build/cleanup-storage.ps1).
+# - The tables and the files of the OneLake lakehouse, and the files under Tables of the Open Mirroring mirrored database
+#   (build/cleanup-onelake.ps1).
+#
+# The variables are those of the integration tests. The secrets (the keys and the client secrets) have to be mapped into the
+# steps explicitly. Every step runs, whether or not an earlier one failed, and the job fails if one did.
+
+parameters:
+  - name: cleanupScheduleName
+    type: string
+
+jobs:
+  - job: Cleanup
+    displayName: Clean up the resources of the integration tests
+    condition: eq(variables['Build.CronSchedule.DisplayName'], '${{ parameters.cleanupScheduleName }}')
+    timeoutInMinutes: 60
+    pool:
+      vmImage: 'ubuntu-22.04'
+    steps:
+      - checkout: self
+
+      - task: PowerShell@2
+        displayName: Delete the xunit-fs- containers of the storage account
+        env:
+          ADL2_ACCOUNTNAME: $(ADL2_ACCOUNTNAME)
+          ADL2_ACCOUNTKEY: $(ADL2_ACCOUNTKEY)
+        inputs:
+          targetType: filePath
+          filePath: ./build/cleanup-storage.ps1
+          arguments: -ContainerPrefix xunit-fs-
+          pwsh: true
+
+      - task: PowerShell@2
+        displayName: Delete the tables of the OneLake lakehouse
+        condition: succeededOrFailed()
+        env:
+          ONELAKE_WORKSPACENAME: $(ONELAKE_WORKSPACENAME)
+          ONELAKE_ITEMNAME: $(ONELAKE_ITEMNAME)
+          ONELAKE_TENANTID: $(ONELAKE_TENANTID)
+          ONELAKE_CLIENTID: $(ONELAKE_CLIENTID)
+          ONELAKE_CLIENTSECRET: $(ONELAKE_CLIENTSECRET)
+        inputs:
+          targetType: filePath
+          filePath: ./build/cleanup-onelake.ps1
+          arguments: -Target LakehouseTables
+          pwsh: true
+
+      - task: PowerShell@2
+        displayName: Delete the files of the OneLake lakehouse
+        condition: succeededOrFailed()
+        env:
+          ONELAKE_WORKSPACENAME: $(ONELAKE_WORKSPACENAME)
+          ONELAKE_ITEMNAME: $(ONELAKE_ITEMNAME)
+          ONELAKE_TENANTID: $(ONELAKE_TENANTID)
+          ONELAKE_CLIENTID: $(ONELAKE_CLIENTID)
+          ONELAKE_CLIENTSECRET: $(ONELAKE_CLIENTSECRET)
+        inputs:
+          targetType: filePath
+          filePath: ./build/cleanup-onelake.ps1
+          arguments: -Target LakehouseFiles
+          pwsh: true
+
+      - task: PowerShell@2
+        displayName: Delete the files under Tables of the Open Mirroring mirrored database
+        condition: succeededOrFailed()
+        env:
+          ONELAKE_WORKSPACENAME: $(ONELAKE_WORKSPACENAME)
+          FABRICOPENMIRRORING_MIRROREDDATABASENAME: $(FABRICOPENMIRRORING_MIRROREDDATABASENAME)
+          FABRICOPENMIRRORING_TENANTID: $(FABRICOPENMIRRORING_TENANTID)
+          FABRICOPENMIRRORING_CLIENTID: $(FABRICOPENMIRRORING_CLIENTID)
+          FABRICOPENMIRRORING_CLIENTSECRET: $(FABRICOPENMIRRORING_CLIENTSECRET)
+        inputs:
+          targetType: filePath
+          filePath: ./build/cleanup-onelake.ps1
+          arguments: -Target MirroredDatabaseTables
+          pwsh: true

@@ -54,10 +54,17 @@ The pipeline in `azure-pipelines.yml` runs the whole benchmark every night at 01
 run that succeeded. A scheduled run only benchmarks: it does not build, test or publish the connector. A run queued by hand does the same
 when its `Run the cache write benchmark instead of the build` parameter is on, and builds as usual otherwise.
 
-A second schedule, at 04:00 UTC and every night, does not benchmark. It deletes the containers that start with `xunit-fs-` from the storage
-account of the integration tests (`ADL2_ACCOUNTNAME` and `ADL2_ACCOUNTKEY`), which the integration tests leave behind
-(`build/cleanup-storage.jobs.yml`, `build/cleanup-storage.ps1`; `-DryRun` only lists them). Both schedules start the same pipeline, and each of its jobs checks
-the name of the schedule that started it.
+A second schedule, at 04:00 UTC and every night, does not benchmark. It cleans up what the integration tests leave behind
+(`build/cleanup.jobs.yml`; every script has a `-DryRun` switch that only lists what it would delete):
+- The containers that start with `xunit-fs-` in the storage account (`ADL2_ACCOUNTNAME`, `ADL2_ACCOUNTKEY`), `build/cleanup-storage.ps1`.
+- All the tables (`-Target LakehouseTables`) and all the files (`-Target LakehouseFiles`) of the OneLake lakehouse `ONELAKE_ITEMNAME` of the
+  workspace `ONELAKE_WORKSPACENAME`, with the service principal `ONELAKE_TENANTID`, `ONELAKE_CLIENTID` and `ONELAKE_CLIENTSECRET`,
+  `build/cleanup-onelake.ps1`.
+- All the files under `Tables` of the Open Mirroring mirrored database `FABRICOPENMIRRORING_MIRROREDDATABASENAME` of the workspace
+  `ONELAKE_WORKSPACENAME`, with the service principal `FABRICOPENMIRRORING_TENANTID`, `FABRICOPENMIRRORING_CLIENTID` and
+  `FABRICOPENMIRRORING_CLIENTSECRET`, `build/cleanup-onelake.ps1 -Target MirroredDatabaseTables`.
+
+Both schedules start the same pipeline, and each of its jobs checks the name of the schedule that started it.
 
 The SQL Server is created like the integration tests do, with `build/integration-test.ps1 -Action SetUp`: a SQL Server 2022
 container on the build agent, with `INTEGRATIONTEST_STREAMCACHE` set to its connection string. As it is on the same machine as
