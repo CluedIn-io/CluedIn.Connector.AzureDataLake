@@ -3,7 +3,7 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$ContainerPrefix = 'xunit-fs-',
 
-    # Lists what would be deleted, and deletes nothing.
+    # Lists what would be deleted, and deletes nothing. The same when CLEANUP_DRY_RUN is true.
     [switch]$DryRun,
 
     # For a storage emulator (Azurite): the blob endpoint to use instead of the one of the account.
@@ -11,6 +11,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($env:CLEANUP_DRY_RUN -eq 'true') {
+    $DryRun = [switch]$true
+}
 
 # The integration tests' storage account. The Azure CLI reads these two.
 # A variable that is not defined in the pipeline is left as it is written in the step ($(NAME)), which is not a value

@@ -67,7 +67,7 @@ A second schedule, at 04:00 UTC and every night, does not benchmark. It cleans u
   `SNOWFLAKE_SCHEMA`, `SNOWFLAKE_WAREHOUSE`, and optionally `SNOWFLAKE_PRIVATE_KEY_PASSPHRASE` and `SNOWFLAKE_ROLE`), `tools/Connector.Snowflake.Cleanup`
   (`--dry-run` only lists them). Nothing else in that schema is touched.
 
-Both schedules start the same pipeline, and each of its jobs checks the name of the schedule that started it.
+Both schedules start the same pipeline, and each of its jobs checks the name of the schedule that started it. A run queued by hand does the cleanup when its `Run the cleanup of the integration test resources instead of the build` parameter is on, and only lists what it would delete when `Cleanup only lists what it would delete` is on as well (the job sets `CLEANUP_DRY_RUN`, which the scripts and the tool read).
 
 The SQL Server is created like the integration tests do, with `build/integration-test.ps1 -Action SetUp`: a SQL Server 2022
 container on the build agent, with `INTEGRATIONTEST_STREAMCACHE` set to its connection string. As it is on the same machine as

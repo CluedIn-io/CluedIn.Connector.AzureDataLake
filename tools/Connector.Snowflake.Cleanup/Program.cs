@@ -11,13 +11,14 @@ namespace CluedIn.Connector.Snowflake.Cleanup;
 /// Deletes the pipes and tables that the Snowflake integration tests leave in their schema (everything named XUNIT_...).
 /// Connects with the variables the integration tests use: SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PRIVATE_KEY (and the optional
 /// SNOWFLAKE_PRIVATE_KEY_PASSPHRASE), SNOWFLAKE_DATABASE, SNOWFLAKE_SCHEMA, SNOWFLAKE_WAREHOUSE and the optional SNOWFLAKE_ROLE.
-/// --dry-run only lists what would be dropped.
+/// --dry-run (or CLEANUP_DRY_RUN=true) only lists what would be dropped.
 /// </summary>
 internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        var dryRun = args.Contains("--dry-run", StringComparer.OrdinalIgnoreCase);
+        var dryRun = args.Contains("--dry-run", StringComparer.OrdinalIgnoreCase)
+            || string.Equals(Environment.GetEnvironmentVariable("CLEANUP_DRY_RUN"), "true", StringComparison.OrdinalIgnoreCase);
 
         SnowflakeConnectionSettings settings;
         try

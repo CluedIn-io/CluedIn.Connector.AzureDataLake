@@ -12,7 +12,7 @@ param(
     [ValidateSet('LakehouseTables', 'LakehouseFiles', 'MirroredDatabaseTables')]
     [string]$Target,
 
-    # Lists what would be deleted, and deletes nothing.
+    # Lists what would be deleted, and deletes nothing. The same when CLEANUP_DRY_RUN is true.
     [switch]$DryRun,
 
     # For a test against something that is not OneLake: the endpoints of OneLake (DFS) and of the sign in of Entra ID.
@@ -21,6 +21,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($env:CLEANUP_DRY_RUN -eq 'true') {
+    $DryRun = [switch]$true
+}
 
 function Get-RequiredVariable([string]$name) {
     $value = [Environment]::GetEnvironmentVariable($name)

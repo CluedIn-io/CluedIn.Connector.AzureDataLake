@@ -13,14 +13,25 @@
 parameters:
   - name: cleanupScheduleName
     type: string
+  # Only lists what would be deleted
+  - name: dryRun
+    type: boolean
+    default: false
 
 jobs:
   - job: Cleanup
     displayName: Clean up the resources of the integration tests
-    condition: eq(variables['Build.CronSchedule.DisplayName'], '${{ parameters.cleanupScheduleName }}')
+    # The run of the cleanup schedule cleans up, and so does a run that is not scheduled and asked for it (the template is only
+    # included for those). The run of another schedule does not.
+    condition: or(eq(variables['Build.CronSchedule.DisplayName'], '${{ parameters.cleanupScheduleName }}'), ne(variables['Build.Reason'], 'Schedule'))
     timeoutInMinutes: 60
     pool:
       vmImage: 'ubuntu-22.04'
+    variables:
+      # True or False. A variable is an environment variable of every step: the scripts and the tool only list what they would
+      # delete when it is True.
+      - name: CLEANUP_DRY_RUN
+        value: ${{ parameters.dryRun }}
     steps:
       - checkout: self
 

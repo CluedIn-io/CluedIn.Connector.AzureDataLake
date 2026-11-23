@@ -20,6 +20,18 @@ parameters:
     type: boolean
     default: false
 
+  # Runs the cleanup of what the integration tests leave behind (build/cleanup.jobs.yml) instead of the build and test jobs. The
+  # nightly cleanup schedule below does the same. With cleanupDryRun it only lists what it would delete.
+  - name: runCleanup
+    displayName: Run the cleanup of the integration test resources instead of the build
+    type: boolean
+    default: false
+
+  - name: cleanupDryRun
+    displayName: Cleanup only lists what it would delete (when running the cleanup)
+    type: boolean
+    default: false
+
   - name: pipelineTemplateRef
     displayName: Pipeline Template Ref
     type: string
@@ -91,16 +103,19 @@ lockBehavior: sequential
 # jobs:, not pool:/steps: - crawler.build.jobs.yml is a jobs template, the only one with
 # multi-version support (crawler.build.yml has none).
 jobs:
-  # A scheduled run (and a run that asks for the benchmark) does not build or test. Each of its jobs checks which schedule
-  # started the run: the benchmark runs for every run but the one of the cleanup schedule, which only cleans up.
+  # A scheduled run (and a run that asks for the benchmark or the cleanup) does not build or test. Each of its jobs checks which
+  # schedule started the run: the benchmark runs for every run but the one of the cleanup schedule, which only cleans up.
   # Every other run builds and tests.
-  - ${{ if or(eq(variables['Build.Reason'], 'Schedule'), eq(parameters.runBenchmark, true)) }}:
-    - template: build/benchmark.jobs.yml
-      parameters:
-        cleanupScheduleName: 'Nightly cleanup'
-    - template: build/cleanup.jobs.yml
-      parameters:
-        cleanupScheduleName: 'Nightly cleanup'
+  - ${{ if or(eq(variables['Build.Reason'], 'Schedule'), eq(parameters.runBenchmark, true), eq(parameters.runCleanup, true)) }}:
+    - ${{ if or(eq(variables['Build.Reason'], 'Schedule'), eq(parameters.runBenchmark, true)) }}:
+      - template: build/benchmark.jobs.yml
+        parameters:
+          cleanupScheduleName: 'Nightly cleanup'
+    - ${{ if or(eq(variables['Build.Reason'], 'Schedule'), eq(parameters.runCleanup, true)) }}:
+      - template: build/cleanup.jobs.yml
+        parameters:
+          cleanupScheduleName: 'Nightly cleanup'
+          dryRun: ${{ parameters.cleanupDryRun }}
   - ${{ else }}:
     - template: crawler.build.jobs.yml@templates
       parameters:
