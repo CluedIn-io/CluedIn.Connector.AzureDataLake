@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 
 using Microsoft.Data.SqlClient;
@@ -13,7 +15,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector;
 /// returned to the pipeline (as a ReQueue). Both are settings of the connector (see
 /// <see cref="IStorageConfigurationConstants.StoreRetryCountKeyName"/> and <see cref="IStorageConfigurationConstants.StoreRetryDelayKeyName"/>).
 /// Only a failure that can go away on its own is retried: a SQL Server error that is transient (a timeout, a deadlock, a
-/// connection that was lost or could not be made, a server that is busy or failing over, see <see cref="IsTransientSqlErrorNumber"/>).
+/// connection that was lost or could not be made, a server that is busy or failing over, see <see cref="IsTransientSqlErrorNumber"/>
+/// and <see cref="IsNetworkFailure"/>).
 /// What retrying cannot fix (a login or permission that is refused, a database or object that is not there, an invalid
 /// statement, a violated constraint, a value that does not convert) and what is not a SQL Server error is returned at once.
 /// </summary>
@@ -76,9 +79,26 @@ internal sealed class StoreRetryPolicy
         {
             null => false,
             SqlException sqlException => IsTransientSqlErrorNumber(sqlException.Number)
-                || sqlException.Errors.Cast<SqlError>().Any(error => IsTransientSqlErrorNumber(error.Number)),
+                || sqlException.Errors.Cast<SqlError>().Any(error => IsTransientSqlErrorNumber(error.Number))
+                || IsNetworkFailure(sqlException.InnerException),
             AggregateException aggregateException => aggregateException.InnerExceptions.Any(IsRetryable),
             _ => IsRetryable(exception.InnerException),
+        };
+    }
+
+    /// <summary>
+    /// Whether the exception, or the one it wraps, is a failure of the network or of the stream to the SQL Server. What SqlClient
+    /// reports for a SQL Server that cannot be reached depends on the platform (on Linux a refused connection is an error 0, and
+    /// an unknown host an error 11001), but the cause of it is always a socket or an I/O failure.
+    /// </summary>
+    internal static bool IsNetworkFailure(Exception exception)
+    {
+        return exception switch
+        {
+            null => false,
+            SocketException or IOException => true,
+            AggregateException aggregateException => aggregateException.InnerExceptions.Any(IsNetworkFailure),
+            _ => IsNetworkFailure(exception.InnerException),
         };
     }
 
