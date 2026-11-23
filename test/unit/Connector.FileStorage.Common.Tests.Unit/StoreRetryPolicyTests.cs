@@ -201,6 +201,25 @@ public class StoreRetryPolicyTests
         Assert.False(StoreRetryPolicy.IsTransientSqlErrorNumber(number));
     }
 
+    [Theory]
+    [InlineData(0, 20)] // what SqlClient reports for a SQL Server that cannot be reached, on Linux
+    [InlineData(0, 21)]
+    public void IsConnectionFailure_ForAnErrorNumber0OfAFatalClass_IsTrue(int number, byte errorClass)
+    {
+        Assert.True(StoreRetryPolicy.IsConnectionFailure(number, errorClass));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(0, 16)]
+    [InlineData(4060, 11)] // the database is not there
+    [InlineData(18456, 14)] // login failed
+    [InlineData(596, 21)] // a fatal error of the SQL Server itself has a number
+    public void IsConnectionFailure_ForAnythingElse_IsFalse(int number, byte errorClass)
+    {
+        Assert.False(StoreRetryPolicy.IsConnectionFailure(number, errorClass));
+    }
+
     [Fact]
     public void IsNetworkFailure_ForASocketOrIoFailure_IsTrue()
     {

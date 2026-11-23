@@ -16,7 +16,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector;
 /// <see cref="IStorageConfigurationConstants.StoreRetryCountKeyName"/> and <see cref="IStorageConfigurationConstants.StoreRetryDelayKeyName"/>).
 /// Only a failure that can go away on its own is retried: a SQL Server error that is transient (a timeout, a deadlock, a
 /// connection that was lost or could not be made, a server that is busy or failing over, see <see cref="IsTransientSqlErrorNumber"/>
-/// and <see cref="IsNetworkFailure"/>).
+/// <see cref="IsConnectionFailure"/> and <see cref="IsNetworkFailure"/>).
 /// What retrying cannot fix (a login or permission that is refused, a database or object that is not there, an invalid
 /// statement, a violated constraint, a value that does not convert) and what is not a SQL Server error is returned at once.
 /// </summary>
@@ -80,6 +80,7 @@ internal sealed class StoreRetryPolicy
             null => false,
             SqlException sqlException => IsTransientSqlErrorNumber(sqlException.Number)
                 || sqlException.Errors.Cast<SqlError>().Any(error => IsTransientSqlErrorNumber(error.Number))
+                || IsConnectionFailure(sqlException.Number, sqlException.Class)
                 || IsNetworkFailure(sqlException.InnerException),
             AggregateException aggregateException => aggregateException.InnerExceptions.Any(IsRetryable),
             _ => IsRetryable(exception.InnerException),
@@ -87,9 +88,16 @@ internal sealed class StoreRetryPolicy
     }
 
     /// <summary>
-    /// Whether the exception, or the one it wraps, is a failure of the network or of the stream to the SQL Server. What SqlClient
-    /// reports for a SQL Server that cannot be reached depends on the platform (on Linux a refused connection is an error 0, and
-    /// an unknown host an error 11001), but the cause of it is always a socket or an I/O failure.
+    /// Whether an error is SqlClient's own report that a connection to the SQL Server could not be made or was lost: an error number
+    /// 0 of a fatal class (20). What SqlClient reports for a SQL Server that cannot be reached depends on its version and on the
+    /// platform (on Linux a refused connection is an error 0 of class 20, with or without a SocketException as its cause, and an
+    /// unknown host an error 11001 or 0), but the error number of a SQL Server itself is never 0.
+    /// </summary>
+    internal static bool IsConnectionFailure(int number, byte errorClass) => number == 0 && errorClass >= 20;
+
+    /// <summary>
+    /// Whether the exception, or the one it wraps, is a failure of the network or of the stream to the SQL Server, as the cause of
+    /// a SQL error.
     /// </summary>
     internal static bool IsNetworkFailure(Exception exception)
     {
