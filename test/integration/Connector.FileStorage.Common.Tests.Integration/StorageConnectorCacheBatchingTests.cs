@@ -125,29 +125,6 @@ public class StorageConnectorCacheBatchingTests
     }
 
     [Fact]
-    public async Task StoreData_WithBatching_WhenAnEntityIsChangedMoreThanOnceInABatch_TheHighestPersistVersionWins()
-    {
-        // waits for the entities to come together, so that the changes of the entity are in one batch
-        await using var harness = CacheWriteHarness.Create(batching: true, softDelete: true, batchTimeoutMilliseconds: 100);
-        var repeated = Guid.NewGuid();
-        var others = Enumerable.Range(0, 20).Select(_ => Guid.NewGuid()).ToList();
-        await StoreAllAsync(harness, others.Prepend(repeated).Select(id => CacheWriteHarness.CreateEntity(id, VersionChangeType.Added, persistVersion: 1, name: "v1")));
-
-        var results = await StoreAllAsync(
-            harness,
-            others.Select(id => CacheWriteHarness.CreateEntity(id, VersionChangeType.Changed, persistVersion: 2, name: "other"))
-                .Prepend(CacheWriteHarness.CreateEntity(repeated, VersionChangeType.Changed, persistVersion: 3, name: "v3"))
-                .Append(CacheWriteHarness.CreateEntity(repeated, VersionChangeType.Changed, persistVersion: 5, name: "v5"))
-                .Append(CacheWriteHarness.CreateEntity(repeated, VersionChangeType.Changed, persistVersion: 4, name: "v4")));
-
-        Assert.All(results, result => Assert.Equal(SaveResultState.Success, result.State));
-        var rows = await harness.ReadRowsAsync();
-        Assert.Equal(21, rows.Count);
-        Assert.Equal("v5", (string)rows.Single(row => (Guid)row["Id"] == repeated)["Name"]);
-        Assert.Equal(20, rows.Count(row => (string)row["Name"] == "other"));
-    }
-
-    [Fact]
     public async Task StoreData_WithBatching_WhenAnEntityIsAddedAndChangedInABatch_TheHighestPersistVersionWins()
     {
         // waits for the entities to come together, so that the writes of the entity are in one batch

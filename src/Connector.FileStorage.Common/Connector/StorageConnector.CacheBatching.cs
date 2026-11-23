@@ -125,35 +125,15 @@ public abstract partial class StorageConnectorBase
     {
         var results = new Dictionary<CacheWriteRequest, OperationResult<bool>>(requests.Count);
 
-        // When an entity occurs more than once and all of them are changes, only the one with the highest persist version
-        // has an effect (it is only written over a lower persist version), so the others are skipped. An add can recreate
-        // a removed row, which a change never does, and a remove has to be applied in order, so an entity with one of those
-        // is written as it comes. The first of equal persist versions is the one, as it is the one that is written first
-        // without batching.
-        var superseded = new HashSet<CacheWriteRequest>();
-        foreach (var sameEntity in requests
-            .GroupBy(request => request.EntityId)
-            .Where(group => group.Count() > 1 && group.All(request => request.Item.ChangeType == VersionChangeType.Changed)))
-        {
-            var newest = sameEntity.MaxBy(request => request.Item.PersistVersion ?? int.MinValue);
-            superseded.UnionWith(sameEntity.Where(request => request != newest));
-        }
-
         // Only the first occurrence of an entity is written set based. Later occurrences are written afterwards,
-        // one by one and in order, so the last write of an entity still wins, as it does without batching.
+        // one by one and in order, so the last write of an entity still wins, as it does without batching. An entity
+        // rarely occurs twice in a batch, so the occurrences are not reduced to the newest one.
         var seenEntityIds = new HashSet<Guid>();
         var firstOccurrences = new List<CacheWriteRequest>();
         var laterOccurrences = new List<CacheWriteRequest>();
         foreach (var request in requests)
         {
-            if (superseded.Contains(request))
-            {
-                results[request] = new OperationResult<bool>(true, null);
-            }
-            else
-            {
-                (seenEntityIds.Add(request.EntityId) ? firstOccurrences : laterOccurrences).Add(request);
-            }
+            (seenEntityIds.Add(request.EntityId) ? firstOccurrences : laterOccurrences).Add(request);
         }
 
         var writeOneByOne = new List<CacheWriteRequest>();
