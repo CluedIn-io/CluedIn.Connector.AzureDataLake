@@ -68,17 +68,6 @@ internal sealed class StoreRetryPolicy
     internal TimeSpan RetryDelay { get; }
 
     /// <summary>
-    /// Reads the retry count and the delay (in milliseconds) from the settings of the connector. A negative value is the same as 0.
-    /// </summary>
-    internal static StoreRetryPolicy FromConstants(IStorageConfigurationConstants constants)
-    {
-        var retryCount = ConfigurationHelper.GetValue(constants.StoreRetryCountKeyName, constants.StoreRetryCountDefaultValue);
-        var retryDelayMilliseconds = ConfigurationHelper.GetValue(constants.StoreRetryDelayKeyName, constants.StoreRetryDelayDefaultValue);
-
-        return new StoreRetryPolicy(retryCount, TimeSpan.FromMilliseconds(Math.Max(0, retryDelayMilliseconds)));
-    }
-
-    /// <summary>
     /// Whether the exception, or the one it wraps, is a SQL Server error that can go away on its own.
     /// </summary>
     internal static bool IsRetryable(Exception exception)
