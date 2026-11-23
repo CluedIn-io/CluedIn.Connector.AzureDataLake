@@ -24,30 +24,19 @@ namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 /// <remarks>
 /// The connection strings turn off the connection retries of SqlClient (which retries a login to a missing database on its own,
 /// 10 seconds apart), so that it is the retries of the connector that are tested.
-/// The retries are set with environment variables that the connector reads when it is created, and those are for the whole
-/// process, so these tests run on their own: no other test runs while they do.
 /// </remarks>
-[Collection(StoreRetryEnvironmentCollection.Name)]
-public sealed class StorageConnectorStoreRetryTests : IDisposable
+public sealed class StorageConnectorStoreRetryTests
 {
-    private const string RetryCountVariableName = "FILESTORAGE_STORE_RETRY_COUNT";
-    private const string RetryDelaySecondsVariableName = "FILESTORAGE_STORE_RETRY_DELAY_SECONDS";
-
-    private readonly string _retryCountBefore = Environment.GetEnvironmentVariable(RetryCountVariableName);
-    private readonly string _retryDelayBefore = Environment.GetEnvironmentVariable(RetryDelaySecondsVariableName);
-
-    public void Dispose()
-    {
-        Environment.SetEnvironmentVariable(RetryCountVariableName, _retryCountBefore);
-        Environment.SetEnvironmentVariable(RetryDelaySecondsVariableName, _retryDelayBefore);
-    }
 
     [Fact]
     public async Task StoreData_WhenTheSqlServerCannotBeReached_RetriesTheCountWithTheDelayAndThenReturnsReQueue()
     {
-        Environment.SetEnvironmentVariable(RetryCountVariableName, "2");
-        Environment.SetEnvironmentVariable(RetryDelaySecondsVariableName, "0.2");
-        await using var harness = CacheWriteHarness.Create(batching: false, softDelete: true, connectionString: GetConnectionString($"127.0.0.1,{GetFreePort()}"));
+        await using var harness = CacheWriteHarness.Create(
+            batching: false,
+            softDelete: true,
+            connectionString: GetConnectionString($"127.0.0.1,{GetFreePort()}"),
+            storeRetryCount: 2,
+            storeRetryDelayMilliseconds: 200);
 
         var stopwatch = Stopwatch.StartNew();
         var result = await harness.StoreAsync(CacheWriteHarness.CreateEntity(Guid.NewGuid()));
@@ -64,10 +53,13 @@ public sealed class StorageConnectorStoreRetryTests : IDisposable
     [Fact]
     public async Task StoreData_WhenTheSqlServerCanBeReachedAtTheRetry_Succeeds()
     {
-        Environment.SetEnvironmentVariable(RetryCountVariableName, "5");
-        Environment.SetEnvironmentVariable(RetryDelaySecondsVariableName, "1");
         var proxyPort = GetFreePort();
-        await using var harness = CacheWriteHarness.Create(batching: false, softDelete: true, connectionString: GetConnectionString($"127.0.0.1,{proxyPort}"));
+        await using var harness = CacheWriteHarness.Create(
+            batching: false,
+            softDelete: true,
+            connectionString: GetConnectionString($"127.0.0.1,{proxyPort}"),
+            storeRetryCount: 5,
+            storeRetryDelayMilliseconds: 1000);
 
         // The first attempt fails, as nothing listens on the port yet. The SQL Server is there while the write waits to retry.
         var storing = harness.StoreAsync(CacheWriteHarness.CreateEntity(Guid.NewGuid()));
@@ -89,15 +81,18 @@ public sealed class StorageConnectorStoreRetryTests : IDisposable
     [Fact]
     public async Task StoreData_WhenTheDatabaseIsNotThere_DoesNotRetry()
     {
-        Environment.SetEnvironmentVariable(RetryCountVariableName, "5");
-        Environment.SetEnvironmentVariable(RetryDelaySecondsVariableName, "30");
         var connectionString = new SqlConnectionStringBuilder(CacheWriteHarness.StreamCacheConnectionString)
         {
             InitialCatalog = $"StoreRetryMissing_{Guid.NewGuid():N}",
             Pooling = false,
             ConnectRetryCount = 0,
         }.ConnectionString;
-        await using var harness = CacheWriteHarness.Create(batching: false, softDelete: true, connectionString: connectionString);
+        await using var harness = CacheWriteHarness.Create(
+            batching: false,
+            softDelete: true,
+            connectionString: connectionString,
+            storeRetryCount: 5,
+            storeRetryDelayMilliseconds: 30_000);
 
         var stopwatch = Stopwatch.StartNew();
         var result = await harness.StoreAsync(CacheWriteHarness.CreateEntity(Guid.NewGuid()));
@@ -111,9 +106,12 @@ public sealed class StorageConnectorStoreRetryTests : IDisposable
     [Fact]
     public async Task StoreData_WithoutRetries_ReturnsReQueueAtOnce()
     {
-        Environment.SetEnvironmentVariable(RetryCountVariableName, "0");
-        Environment.SetEnvironmentVariable(RetryDelaySecondsVariableName, "30");
-        await using var harness = CacheWriteHarness.Create(batching: false, softDelete: true, connectionString: GetConnectionString($"127.0.0.1,{GetFreePort()}"));
+        await using var harness = CacheWriteHarness.Create(
+            batching: false,
+            softDelete: true,
+            connectionString: GetConnectionString($"127.0.0.1,{GetFreePort()}"),
+            storeRetryCount: 0,
+            storeRetryDelayMilliseconds: 30_000);
 
         var stopwatch = Stopwatch.StartNew();
         var result = await harness.StoreAsync(CacheWriteHarness.CreateEntity(Guid.NewGuid()));
@@ -232,10 +230,4 @@ public sealed class StorageConnectorStoreRetryTests : IDisposable
             }
         }
     }
-}
-
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class StoreRetryEnvironmentCollection
-{
-    public const string Name = "Store retry environment variables";
 }

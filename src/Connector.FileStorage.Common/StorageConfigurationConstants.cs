@@ -154,6 +154,27 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     /// </summary>
     public int CacheBatchOutputThreadsDefaultValue => 10;
 
+    /// <summary>
+    /// Environment key name for how many times the write of an entity is retried when it fails with a transient SQL Server error
+    /// (a timeout, a deadlock, a lost connection and the like), before it is returned to the pipeline as a ReQueue. 0 turns retrying off.
+    /// </summary>
+    public string StoreRetryCountKeyName => $"Streams.{CacheKeyword}.StoreRetry.Count";
+
+    /// <summary>
+    /// Default value for how many times the write of an entity is retried.
+    /// </summary>
+    public int StoreRetryCountDefaultValue => 3;
+
+    /// <summary>
+    /// Environment key name for the delay, in milliseconds, before each retry of the write of an entity.
+    /// </summary>
+    public string StoreRetryDelayKeyName => $"Streams.{CacheKeyword}.StoreRetry.Delay";
+
+    /// <summary>
+    /// Default value for the delay before each retry of the write of an entity, in milliseconds.
+    /// </summary>
+    public int StoreRetryDelayDefaultValue => 5_000;
+
     public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
 
     public string CacheBufferStrategyDefaultValue => nameof(BufferStrategy.Safe);

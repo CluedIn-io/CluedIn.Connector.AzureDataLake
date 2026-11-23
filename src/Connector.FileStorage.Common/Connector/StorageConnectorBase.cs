@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Transactions;
 
 using CluedIn.Core;
+using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
@@ -82,7 +83,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _applicationContext = applicationContext;
             _timeProvider = timeProvider;
             _storageFactory = storageFactory;
-            _storeRetryPolicy = StoreRetryPolicy.FromEnvironment(logger);
+            _storeRetryPolicy = StoreRetryPolicy.FromConstants(constants);
 
             var cacheRecordsThreshold = ConfigurationHelper.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationHelper.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);

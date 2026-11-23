@@ -14,69 +14,21 @@ namespace CluedIn.Connector.FileStorage.Common.Tests.Unit;
 public class StoreRetryPolicyTests
 {
     [Fact]
-    public void FromEnvironment_WithoutVariables_Retries3TimesWithADelayOf5Seconds()
+    public void Constructor_WithANegativeRetryCountOrDelay_UsesZero()
     {
-        var policy = StoreRetryPolicy.FromEnvironment(NullLogger.Instance, _ => null);
+        var policy = new StoreRetryPolicy(-1, TimeSpan.FromSeconds(-5));
 
-        Assert.Equal(3, policy.RetryCount);
-        Assert.Equal(TimeSpan.FromSeconds(5), policy.RetryDelay);
+        Assert.Equal(0, policy.RetryCount);
+        Assert.Equal(TimeSpan.Zero, policy.RetryDelay);
     }
 
     [Fact]
-    public void FromEnvironment_WithVariables_UsesThem()
+    public void Constructor_UsesTheRetryCountAndDelay()
     {
-        var variables = new Dictionary<string, string>
-        {
-            [StoreRetryPolicy.RetryCountVariableName] = "7",
-            [StoreRetryPolicy.RetryDelaySecondsVariableName] = "0.25",
-        };
-
-        var policy = StoreRetryPolicy.FromEnvironment(NullLogger.Instance, name => variables.GetValueOrDefault(name));
+        var policy = new StoreRetryPolicy(7, TimeSpan.FromMilliseconds(250));
 
         Assert.Equal(7, policy.RetryCount);
         Assert.Equal(TimeSpan.FromMilliseconds(250), policy.RetryDelay);
-    }
-
-    [Fact]
-    public void FromEnvironment_WithZeroRetries_TurnsRetryingOff()
-    {
-        var policy = StoreRetryPolicy.FromEnvironment(
-            NullLogger.Instance,
-            name => name == StoreRetryPolicy.RetryCountVariableName ? "0" : null);
-
-        Assert.Equal(0, policy.RetryCount);
-    }
-
-    [Theory]
-    [InlineData("abc")]
-    [InlineData("-1")]
-    [InlineData("1.5")]
-    public void FromEnvironment_WithAnInvalidRetryCount_LogsAWarningAndUsesTheDefault(string value)
-    {
-        var logger = new CapturingLogger();
-
-        var policy = StoreRetryPolicy.FromEnvironment(
-            logger,
-            name => name == StoreRetryPolicy.RetryCountVariableName ? value : null);
-
-        Assert.Equal(StoreRetryPolicy.DefaultRetryCount, policy.RetryCount);
-        Assert.Contains(logger.Warnings, warning => warning.Contains(StoreRetryPolicy.RetryCountVariableName));
-    }
-
-    [Theory]
-    [InlineData("abc")]
-    [InlineData("-1")]
-    [InlineData("NaN")]
-    public void FromEnvironment_WithAnInvalidDelay_LogsAWarningAndUsesTheDefault(string value)
-    {
-        var logger = new CapturingLogger();
-
-        var policy = StoreRetryPolicy.FromEnvironment(
-            logger,
-            name => name == StoreRetryPolicy.RetryDelaySecondsVariableName ? value : null);
-
-        Assert.Equal(StoreRetryPolicy.DefaultRetryDelay, policy.RetryDelay);
-        Assert.Contains(logger.Warnings, warning => warning.Contains(StoreRetryPolicy.RetryDelaySecondsVariableName));
     }
 
     [Fact]
