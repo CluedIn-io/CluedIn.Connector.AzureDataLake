@@ -23,6 +23,7 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
     private readonly int _outputProcessingThreadsCount;
     private readonly Func<IList<TRequest>, Task<IList<OperationResult<TResult>>>> _processOutputBatchFunc;
     private readonly TimeSpan _batchTimeout;
+    private readonly Func<TRequest, int>? _requestWeight;
     private readonly bool _shouldCollectBatchSizeMetrics;
     private readonly int[][] batchSizeStats;
     private readonly List<Task> _batcherTasks;
@@ -38,9 +39,11 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
         Func<IList<TRequest>, Task<IList<OperationResult<TResult>>>> processOutputBatchFunc,
         TimeSpan? batchTimeout = null,
         TimeProvider? timeProvider = null,
-        bool shouldCollectBatchSizeMetrics = false)
+        bool shouldCollectBatchSizeMetrics = false,
+        Func<TRequest, int>? requestWeight = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _requestWeight = requestWeight;
         _batchSize = batchSize;
         _inputProcessingThreadsCount = inputProcessingThreadsCount;
         _outputProcessingThreadsCount = outputProcessingThreadsCount;
@@ -203,18 +206,34 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
     private List<BatchingRequest> MergeQueuedBatches(ChannelReader<IList<BatchingRequest>> reader, List<BatchingRequest> batch)
     {
         var leftover = new List<BatchingRequest>();
-        while (batch.Count < _batchSize && reader.TryRead(out var queued))
+        var weight = batch.Sum(WeightOf);
+        while (weight < _batchSize && reader.TryRead(out var queued))
         {
-            var room = _batchSize - batch.Count;
-            batch.AddRange(queued.Take(room));
-            if (queued.Count > room)
+            for (var i = 0; i < queued.Count; i++)
             {
-                leftover.AddRange(queued.Skip(room));
+                if (weight >= _batchSize)
+                {
+                    leftover.AddRange(queued.Skip(i));
+                    break;
+                }
+
+                batch.Add(queued[i]);
+                weight += WeightOf(queued[i]);
+            }
+
+            if (leftover.Count > 0)
+            {
                 break;
             }
         }
 
         return leftover;
+    }
+
+    // A batch is full once the weights of its requests reach the batch size; a request is never split, so a batch can pass the batch size by the last request.
+    private int WeightOf(BatchingRequest request)
+    {
+        return _requestWeight is null ? 1 : Math.Max(1, _requestWeight(request.Request));
     }
 
     private async Task ProcessOutputBatchAsync(int consumerId, List<BatchingRequest> batch)
@@ -251,31 +270,34 @@ internal class OperationBatcher<TRequest, TResult> : IAsyncDisposable, IDisposab
         }
     }
 
-    private async IAsyncEnumerable<List<T>> ReadBatchAsync<T>(
-            ChannelReader<T> reader,
+    private async IAsyncEnumerable<List<BatchingRequest>> ReadBatchAsync(
+            ChannelReader<BatchingRequest> reader,
             int chunkSize,
             CancellationToken cancellationToken = default)
     {
         while (await reader.WaitToReadAsync())
         {
-            var batch = new List<T>(chunkSize);
-            while (batch.Count < chunkSize && reader.TryRead(out var item))
+            var batch = new List<BatchingRequest>(chunkSize);
+            var weight = 0;
+            while (weight < chunkSize && reader.TryRead(out var item))
             {
                 batch.Add(item);
+                weight += WeightOf(item);
             }
 
-            if (_shouldUseBatchTimeout && batch.Count < chunkSize)
+            if (_shouldUseBatchTimeout && weight < chunkSize)
             {
                 // Wait for more items to arrive, until the batch is full or the timeout has elapsed. The wait is on the
                 // channel, so an item that arrives is taken at once and a full batch is not held up to the end of the timeout.
                 using var timeout = CreateTimeoutSource(_batchTimeout);
                 try
                 {
-                    while (batch.Count < chunkSize && await reader.WaitToReadAsync(timeout.Token))
+                    while (weight < chunkSize && await reader.WaitToReadAsync(timeout.Token))
                     {
-                        while (batch.Count < chunkSize && reader.TryRead(out var item))
+                        while (weight < chunkSize && reader.TryRead(out var item))
                         {
                             batch.Add(item);
+                            weight += WeightOf(item);
                         }
                     }
                 }

@@ -297,9 +297,102 @@ public class OperationBatcherTests
     }
 
     [Fact]
-    public async Task QueueAsync_ShouldFlushPartialChunk_WhenTheBatchTimeoutIsShorterThanTheWaitSlice()
+    public async Task QueueAsync_ShouldCutTheBatchWhenTheWeightOfItsRequestsReachesTheBatchSize()
     {
-        // arrange (the timeout is shorter than the 100 ms slices a longer timeout is waited in)
+        // arrange
+        var receivedChunks = new ConcurrentQueue<IList<int>>();
+
+        await using var sut = new OperationBatcher<int, string>(
+            batchSize: 10,
+            inputProcessingThreadsCount: 1,
+            outputProcessingThreadsCount: 1,
+            batchTimeout: TimeSpan.FromMilliseconds(200),
+            requestWeight: request => request,
+            processOutputBatchFunc: requests =>
+            {
+                receivedChunks.Enqueue(requests.ToList());
+                return Task.FromResult<IList<OperationResult<string>>>(
+                    requests.Select(r => new OperationResult<string>($"processed-{r}", null)).ToList());
+            });
+
+        // act
+        var tasks = new[] { sut.QueueAsync(6), sut.QueueAsync(6), sut.QueueAsync(6) };
+        await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
+
+        // assert (the second request passes the batch size, it is not split: the third one waits for the next batch)
+        Assert.Equal(new[] { new[] { 6, 6 }, new[] { 6 } }, receivedChunks.Select(chunk => chunk.ToArray()).ToArray());
+    }
+
+    [Fact]
+    public async Task QueueAsync_ShouldProcessARequestOnItsOwn_WhenItsWeightIsAboveTheBatchSize()
+    {
+        // arrange
+        var receivedChunks = new ConcurrentQueue<IList<int>>();
+
+        await using var sut = new OperationBatcher<int, string>(
+            batchSize: 10,
+            inputProcessingThreadsCount: 1,
+            outputProcessingThreadsCount: 1,
+            batchTimeout: TimeSpan.FromMilliseconds(200),
+            requestWeight: request => request,
+            processOutputBatchFunc: requests =>
+            {
+                receivedChunks.Enqueue(requests.ToList());
+                return Task.FromResult<IList<OperationResult<string>>>(
+                    requests.Select(r => new OperationResult<string>($"processed-{r}", null)).ToList());
+            });
+
+        // act
+        var tasks = new[] { sut.QueueAsync(100), sut.QueueAsync(1), sut.QueueAsync(1) };
+        await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
+
+        // assert
+        Assert.Equal(new[] { new[] { 100 }, new[] { 1, 1 } }, receivedChunks.Select(chunk => chunk.ToArray()).ToArray());
+    }
+
+    [Fact]
+    public async Task QueueAsync_ShouldMergeTheQueuedBatchesUpToTheWeightOfTheBatchSize()
+    {
+        // arrange
+        var receivedChunks = new ConcurrentQueue<IList<int>>();
+        var release = new TaskCompletionSource();
+
+        await using var sut = new OperationBatcher<int, string>(
+            batchSize: 10,
+            inputProcessingThreadsCount: 1,
+            outputProcessingThreadsCount: 1,
+            requestWeight: request => request,
+            processOutputBatchFunc: async requests =>
+            {
+                receivedChunks.Enqueue(requests.ToList());
+                if (receivedChunks.Count == 1)
+                {
+                    await release.Task;
+                }
+
+                return requests.Select(r => new OperationResult<string>($"processed-{r}", null)).ToList();
+            });
+
+        // act: the first request occupies the only output thread, the next ones are cut as batches of one meanwhile
+        var tasks = new List<Task<string>> { sut.QueueAsync(10) };
+        foreach (var request in new[] { 6, 6, 6 })
+        {
+            await Task.Delay(50);
+            tasks.Add(sut.QueueAsync(request));
+        }
+
+        await Task.Delay(50);
+        release.SetResult();
+        await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
+
+        // assert (by count, all three would have been merged)
+        Assert.Equal(new[] { new[] { 10 }, new[] { 6, 6 }, new[] { 6 } }, receivedChunks.Select(chunk => chunk.ToArray()).ToArray());
+    }
+
+    [Fact]
+    public async Task QueueAsync_ShouldFlushPartialChunk_WhenTheBatchTimeoutIsShorterThanOneHundredMilliseconds()
+    {
+        // arrange
         var timeProvider = new FakeTimeProvider();
 
         await using var sut = new OperationBatcher<int, string>(
