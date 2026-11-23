@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using System.Transactions;
 
 using CluedIn.Core;
-using CluedIn.Core.Configuration;
 using CluedIn.Core.Connectors;
 using CluedIn.Core.Data.Parts;
 using CluedIn.Core.Processing;
@@ -85,11 +84,11 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _storageFactory = storageFactory;
             _storeRetryPolicy = StoreRetryPolicy.FromEnvironment(logger);
 
-            var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
-            var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
-            var cacheStrategyValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
+            var cacheRecordsThreshold = ConfigurationHelper.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
+            var backgroundFlushMaxIdleDefaultValue = ConfigurationHelper.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
+            var cacheStrategyValue = ConfigurationHelper.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
 
-            var healthCheckErrorLogDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
+            var healthCheckErrorLogDelayMilliseconds = ConfigurationHelper.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
 
             _delayBetweenHealthCheckErrorLog = healthCheckErrorLogDelayMilliseconds > 0 ? TimeSpan.FromMilliseconds(healthCheckErrorLogDelayMilliseconds) : TimeSpan.Zero;
 
@@ -104,12 +103,12 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             SetupBufferStatusSubscription();
 
             _cacheBatchingEnabled = !string.IsNullOrEmpty(constants.CacheBatchingEnabledKeyName)
-                && ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchingEnabledKeyName, constants.CacheBatchingEnabledDefaultValue);
+                && ConfigurationHelper.GetValue(constants.CacheBatchingEnabledKeyName, constants.CacheBatchingEnabledDefaultValue);
             if (_cacheBatchingEnabled)
             {
-                _cacheBatchSize = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchSizeKeyName, constants.CacheBatchSizeDefaultValue);
-                _cacheBatchTimeoutMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchTimeoutKeyName, constants.CacheBatchTimeoutDefaultValue);
-                _cacheBatchOutputThreads = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchOutputThreadsKeyName, constants.CacheBatchOutputThreadsDefaultValue);
+                _cacheBatchSize = ConfigurationHelper.GetValue(constants.CacheBatchSizeKeyName, constants.CacheBatchSizeDefaultValue);
+                _cacheBatchTimeoutMilliseconds = ConfigurationHelper.GetValue(constants.CacheBatchTimeoutKeyName, constants.CacheBatchTimeoutDefaultValue);
+                _cacheBatchOutputThreads = ConfigurationHelper.GetValue(constants.CacheBatchOutputThreadsKeyName, constants.CacheBatchOutputThreadsDefaultValue);
             }
         }
 

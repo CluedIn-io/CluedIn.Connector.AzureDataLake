@@ -5,8 +5,8 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 
+using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Core;
-using CluedIn.Core.Configuration;
 using CluedIn.Core.Providers.ExtendedConfiguration;
 
 namespace CluedIn.Connector.AzureDataLake;
@@ -29,7 +29,7 @@ internal partial class AzureDataLakeExtendedConfigurationProvider : IExtendedCon
 
     public AzureDataLakeExtendedConfigurationProvider(IAzureDataLakeConfigurationConstants constants)
     {
-        _shouldEnableWorkloadIdentity = ConfigurationManagerEx.AppSettings.GetValue(
+        _shouldEnableWorkloadIdentity = ConfigurationHelper.GetValue(
             constants.WorkloadIdentityAuthenticationMethodEnabledKeyName,
             constants.WorkloadIdentityAuthenticationMethodEnabledDefaultValue);
     }
