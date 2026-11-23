@@ -46,3 +46,17 @@ is for. The batching settings are the connector defaults: batch size 50 (`Stream
 
 A delay can be added to a SQL Server in Docker with `tc qdisc add dev eth0 root netem delay 2ms` (the container
 needs `--cap-add NET_ADMIN`).
+
+## Nightly run
+
+The pipeline in `azure-pipelines.yml` runs the whole benchmark every night at 01:00 UTC on `develop` (the jobs are in
+`build/benchmark.jobs.yml`). The schedule has `always: false`, so a night is skipped when `develop` has not changed since the last scheduled
+run that succeeded. A scheduled run only benchmarks: it does not build, test or publish the connector. A run queued by hand does the same
+when its `Run the cache write benchmark instead of the build` parameter is on, and builds as usual otherwise.
+
+The SQL Server is created like the integration tests do, with `build/integration-test.ps1 -Action SetUp`: a SQL Server 2022
+container on the build agent, with `INTEGRATIONTEST_STREAMCACHE` set to its connection string. As it is on the same machine as
+the benchmark, the round trips are as cheap as they get, and the times are for comparing one night with the next, not for
+what batching saves against a SQL Server that is far away.
+
+The report of the run is on its summary tab, and the `benchmark-results` artifact has the markdown, csv and html reports.

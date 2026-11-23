@@ -13,6 +13,13 @@ parameters:
     type: boolean
     default: false
 
+  # Runs the stream cache write benchmark (build/benchmark.jobs.yml) instead of the build and test jobs. The nightly
+  # schedule below does the same.
+  - name: runBenchmark
+    displayName: Run the cache write benchmark instead of the build
+    type: boolean
+    default: false
+
   - name: pipelineTemplateRef
     displayName: Pipeline Template Ref
     type: string
@@ -31,6 +38,16 @@ trigger:
     - develop
     - master
     - release/*
+
+# The nightly cache write benchmark. 'always: false' runs it only when develop has changed since the last scheduled run
+# that succeeded, so a night without a change on develop costs nothing.
+schedules:
+  - cron: '0 1 * * *'
+    displayName: Nightly cache write benchmark
+    branches:
+      include:
+        - develop
+    always: false
 
 # Perform build for a PR to any branch, as if you run PR, you most likely want CI checks.
 pr: ['*']
@@ -64,28 +81,32 @@ lockBehavior: sequential
 # jobs:, not pool:/steps: - crawler.build.jobs.yml is a jobs template, the only one with
 # multi-version support (crawler.build.yml has none).
 jobs:
-  - template: crawler.build.jobs.yml@templates
-    parameters:
-      pool:
-        vmImage: 'ubuntu-22.04'
-      githubReleaseInMaster: true
-      publicReleaseForMaster: true
-      publishCodeCoverage: true
-      useGitVersionDotNetTool: true
-      publishToDevFeed: true
-      probeCluedInVersion: ${{ parameters.probeCluedInVersion }}
-      executeIntegrationTests: ${{ parameters.runIntegrationTests }}
-      createIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
-      createIntegrationEnvironmentScriptArguments: '-Action SetUp'
-      deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
-      deleteIntegrationEnvironmentScriptArguments: '-Action TearDown'
-      # Matches this repo's own CLUEDIN_V46_OR_GREATER/V47_OR_GREATER/V48_OR_GREATER/V50_OR_GREATER
-      # DefineConstants gates in Directory.Build.props. release/4.6.7, release/4.7.4 and
-      # release/4.8.1(/.2) are all still actively released lines (tags as recent as 2026-08-11) -
-      # 4.6.0 is included unlike most other repos' multi-version migrations. 5.0.0-beta.* floats to
-      # whatever prerelease is newest in the develop feed.
-      multiVersionCluedInTargets:
-        - cluedInVersion: '4.6.0'
-        - cluedInVersion: '4.7.0'
-        - cluedInVersion: '4.8.0'
-        - cluedInVersion: '5.0.0'
+  # The scheduled run (and a run that asks for it) only benchmarks. Every other run builds and tests.
+  - ${{ if or(eq(variables['Build.Reason'], 'Schedule'), eq(parameters.runBenchmark, true)) }}:
+    - template: build/benchmark.jobs.yml
+  - ${{ else }}:
+    - template: crawler.build.jobs.yml@templates
+      parameters:
+        pool:
+          vmImage: 'ubuntu-22.04'
+        githubReleaseInMaster: true
+        publicReleaseForMaster: true
+        publishCodeCoverage: true
+        useGitVersionDotNetTool: true
+        publishToDevFeed: true
+        probeCluedInVersion: ${{ parameters.probeCluedInVersion }}
+        executeIntegrationTests: ${{ parameters.runIntegrationTests }}
+        createIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
+        createIntegrationEnvironmentScriptArguments: '-Action SetUp'
+        deleteIntegrationEnvironmentScriptFilePath: './build/integration-test.ps1'
+        deleteIntegrationEnvironmentScriptArguments: '-Action TearDown'
+        # Matches this repo's own CLUEDIN_V46_OR_GREATER/V47_OR_GREATER/V48_OR_GREATER/V50_OR_GREATER
+        # DefineConstants gates in Directory.Build.props. release/4.6.7, release/4.7.4 and
+        # release/4.8.1(/.2) are all still actively released lines (tags as recent as 2026-08-11) -
+        # 4.6.0 is included unlike most other repos' multi-version migrations. 5.0.0-beta.* floats to
+        # whatever prerelease is newest in the develop feed.
+        multiVersionCluedInTargets:
+          - cluedInVersion: '4.6.0'
+          - cluedInVersion: '4.7.0'
+          - cluedInVersion: '4.8.0'
+          - cluedInVersion: '5.0.0'

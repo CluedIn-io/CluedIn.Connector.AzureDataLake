@@ -1,0 +1,77 @@
+# Jobs template of the stream cache write benchmark (tools/Connector.FileStorage.Common.Benchmarks). It is included by
+# azure-pipelines.yml for the nightly run (and for a run that asks for it), instead of the build and test jobs.
+#
+# The SQL Server is created the way the integration tests get theirs: build/integration-test.ps1 starts it in a Docker
+# container and sets INTEGRATIONTEST_STREAMCACHE.
+
+jobs:
+  - job: Benchmark
+    displayName: Benchmark the cache writes
+    timeoutInMinutes: 180
+    pool:
+      vmImage: 'ubuntu-22.04'
+    variables:
+      benchmarkProject: tools/Connector.FileStorage.Common.Benchmarks/Connector.FileStorage.Common.Benchmarks.csproj
+      benchmarkResults: $(Build.ArtifactStagingDirectory)/benchmark
+    steps:
+      - checkout: self
+
+      - task: UseDotNet@2
+        displayName: Use the .NET SDK of global.json
+        inputs:
+          packageType: sdk
+          useGlobalJson: true
+
+      - task: NuGetAuthenticate@1
+        displayName: Authenticate the package feeds
+
+      - script: dotnet restore $(benchmarkProject)
+        displayName: Restore
+
+      - script: dotnet build $(benchmarkProject) --configuration Release --no-restore
+        displayName: Build
+
+      # Sets INTEGRATIONTEST_STREAMCACHE for the steps after it.
+      - task: PowerShell@2
+        displayName: Create the SQL Server
+        inputs:
+          targetType: filePath
+          filePath: ./build/integration-test.ps1
+          arguments: -Action SetUp
+          pwsh: true
+
+      - script: >
+          dotnet run
+          --project $(benchmarkProject)
+          --configuration Release
+          --no-build
+          --
+          --filter "*"
+          --artifacts "$(benchmarkResults)"
+        displayName: Run the benchmark
+
+      # Puts the report of every benchmark class on the summary tab of the run.
+      - task: PowerShell@2
+        displayName: Add the report to the summary
+        inputs:
+          targetType: inline
+          pwsh: true
+          script: |
+            foreach ($report in Get-ChildItem -Path '$(benchmarkResults)' -Filter '*-report-github.md' -Recurse) {
+              Write-Host "##vso[task.uploadsummary]$($report.FullName)"
+            }
+
+      - task: PublishPipelineArtifact@1
+        displayName: Publish the results
+        inputs:
+          targetPath: $(benchmarkResults)
+          artifact: benchmark-results
+
+      - task: PowerShell@2
+        displayName: Delete the SQL Server
+        condition: always()
+        inputs:
+          targetType: filePath
+          filePath: ./build/integration-test.ps1
+          arguments: -Action TearDown
+          pwsh: true
