@@ -169,6 +169,28 @@ public class StorageConnectorCacheBatchingTests
     }
 
     [Fact]
+    public async Task StoreData_WithBatching_WhenARemovedEntityIsAddedAndChangedInABatch_ItIsRecreated()
+    {
+        // waits for the entities to come together, so that the writes of the entity are in one batch
+        await using var harness = CacheWriteHarness.Create(batching: true, softDelete: true, batchTimeoutMilliseconds: 100);
+        var recreated = Guid.NewGuid();
+        await StoreAllAsync(harness, Enumerable.Range(0, 5).Select(_ => CacheWriteHarness.CreateEntity(Guid.NewGuid())).Append(CacheWriteHarness.CreateEntity(recreated, persistVersion: 1, name: "original")));
+        await StoreAllAsync(harness, [CacheWriteHarness.CreateEntity(recreated, VersionChangeType.Removed, persistVersion: 2)]);
+
+        // an add recreates a removed row, which the change after it must then update
+        var results = await StoreAllAsync(
+            harness,
+            Enumerable.Range(0, 20).Select(_ => CacheWriteHarness.CreateEntity(Guid.NewGuid()))
+                .Prepend(CacheWriteHarness.CreateEntity(recreated, VersionChangeType.Added, persistVersion: 3, name: "added"))
+                .Append(CacheWriteHarness.CreateEntity(recreated, VersionChangeType.Changed, persistVersion: 4, name: "changed")));
+
+        Assert.All(results, result => Assert.Equal(SaveResultState.Success, result.State));
+        var rows = await harness.ReadRowsAsync();
+        Assert.Equal(26, rows.Count);
+        Assert.Equal("changed", (string)rows.Single(row => (Guid)row["Id"] == recreated)["Name"]);
+    }
+
+    [Fact]
     public async Task StoreData_WithBatching_WithoutSoftDelete_DoesNotBatch()
     {
         await using var harness = CacheWriteHarness.Create(batching: true, softDelete: false);

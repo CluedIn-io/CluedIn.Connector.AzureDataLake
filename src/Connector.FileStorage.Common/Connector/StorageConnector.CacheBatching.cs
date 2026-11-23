@@ -125,13 +125,15 @@ public abstract partial class StorageConnectorBase
     {
         var results = new Dictionary<CacheWriteRequest, OperationResult<bool>>(requests.Count);
 
-        // When an entity occurs more than once and none of them removes it, only the one with the highest persist version
-        // has an effect (it is only written over a lower persist version), so the others, adds included, are skipped.
-        // The first of equal persist versions is the one, as it is the one that is written first without batching.
+        // When an entity occurs more than once and all of them are changes, only the one with the highest persist version
+        // has an effect (it is only written over a lower persist version), so the others are skipped. An add can recreate
+        // a removed row, which a change never does, and a remove has to be applied in order, so an entity with one of those
+        // is written as it comes. The first of equal persist versions is the one, as it is the one that is written first
+        // without batching.
         var superseded = new HashSet<CacheWriteRequest>();
         foreach (var sameEntity in requests
             .GroupBy(request => request.EntityId)
-            .Where(group => group.Count() > 1 && !group.Any(request => request.Item.ChangeType == VersionChangeType.Removed)))
+            .Where(group => group.Count() > 1 && group.All(request => request.Item.ChangeType == VersionChangeType.Changed)))
         {
             var newest = sameEntity.MaxBy(request => request.Item.PersistVersion ?? int.MinValue);
             superseded.UnionWith(sameEntity.Where(request => request != newest));
