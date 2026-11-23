@@ -114,7 +114,9 @@ public abstract partial class StorageConnectorBase
         // The batcher's own tasks never run inside a caller's transaction, and the writes below manage theirs.
         using var suppressAmbientTransaction = new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled);
 
-        // A batcher belongs to one stream, so all its requests are for the same cache table on the same connection
+        // A batcher belongs to one stream, and a stream's cache connection string and table are the same for every one of its
+        // requests (the connection string comes from the stream's configuration and is never different between requests),
+        // so the first request speaks for the whole batch and the requests are not grouped by connection.
         return await WriteCacheTableRequests(requests, requests[0].ConnectionString, requests[0].TableName);
     }
 
