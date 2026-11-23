@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 
 using CluedIn.Connector.FileStorage.Common.Connector;
@@ -197,6 +199,23 @@ public class StoreRetryPolicyTests
     public void IsTransientSqlErrorNumber_ForAnErrorThatRetryingCannotFix_IsFalse(int number)
     {
         Assert.False(StoreRetryPolicy.IsTransientSqlErrorNumber(number));
+    }
+
+    [Fact]
+    public void IsNetworkFailure_ForASocketOrIoFailure_IsTrue()
+    {
+        Assert.True(StoreRetryPolicy.IsNetworkFailure(new SocketException((int)SocketError.ConnectionRefused)));
+        Assert.True(StoreRetryPolicy.IsNetworkFailure(new IOException("The connection was reset")));
+        Assert.True(StoreRetryPolicy.IsNetworkFailure(new InvalidOperationException("x", new SocketException((int)SocketError.HostNotFound))));
+        Assert.True(StoreRetryPolicy.IsNetworkFailure(new AggregateException(new InvalidOperationException(), new IOException())));
+    }
+
+    [Fact]
+    public void IsNetworkFailure_ForAnythingElse_IsFalse()
+    {
+        Assert.False(StoreRetryPolicy.IsNetworkFailure(null));
+        Assert.False(StoreRetryPolicy.IsNetworkFailure(new InvalidOperationException("x", new TimeoutException())));
+        Assert.False(StoreRetryPolicy.IsNetworkFailure(new UnauthorizedAccessException()));
     }
 
     [Fact]
