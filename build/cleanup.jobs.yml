@@ -7,8 +7,8 @@
 # - The pipes and tables the Snowflake integration tests leave in their schema, named XUNIT_...
 #   (tools/Connector.Snowflake.Cleanup).
 #
-# The variables are those of the integration tests. The secrets (the keys and the client secrets) have to be mapped into the
-# steps explicitly. Every step runs, whether or not an earlier one failed, and the job fails if one did.
+# The variables are those of the integration tests, so the client secrets of OneLake and Open Mirroring are base64 encoded. The
+# secrets (the keys and the client secrets) have to be mapped into the steps explicitly. Every step runs, whether or not an earlier one failed, and the job fails if one did.
 
 parameters:
   - name: cleanupScheduleName

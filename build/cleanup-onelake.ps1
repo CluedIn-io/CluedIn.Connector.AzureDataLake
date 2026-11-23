@@ -1,13 +1,13 @@
 param(
     # LakehouseTables: deletes all the tables of the lakehouse ONELAKE_ITEMNAME of the workspace ONELAKE_WORKSPACENAME, with the
-    # service principal of the OneLake integration tests (ONELAKE_TENANTID, ONELAKE_CLIENTID, ONELAKE_CLIENTSECRET).
+    # service principal of the OneLake integration tests (ONELAKE_TENANTID, ONELAKE_CLIENTID, ONELAKE_CLIENTSECRET, which is base64 encoded).
     #
     # LakehouseFiles: deletes everything under Files of the same lakehouse (the OneLake integration tests write there), with the same
     # service principal.
     #
     # MirroredDatabaseTables: deletes all the files under Tables of the mirrored database FABRICOPENMIRRORING_MIRROREDDATABASENAME
     # of the workspace ONELAKE_WORKSPACENAME, with the service principal of the Open Mirroring integration tests
-    # (FABRICOPENMIRRORING_TENANTID, FABRICOPENMIRRORING_CLIENTID, FABRICOPENMIRRORING_CLIENTSECRET).
+    # (FABRICOPENMIRRORING_TENANTID, FABRICOPENMIRRORING_CLIENTID, FABRICOPENMIRRORING_CLIENTSECRET, which is base64 encoded).
     [Parameter(Mandatory)]
     [ValidateSet('LakehouseTables', 'LakehouseFiles', 'MirroredDatabaseTables')]
     [string]$Target,
@@ -37,6 +37,18 @@ function Get-RequiredVariable([string]$name) {
     return $value.Trim()
 }
 
+# The client secrets are base64 encoded in the variables of the pipeline, as the integration tests expect them (they decode them
+# before they use them).
+function Get-RequiredSecret([string]$name) {
+    $encoded = Get-RequiredVariable $name
+    try {
+        return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))
+    }
+    catch {
+        throw "$name is not base64 encoded."
+    }
+}
+
 # A workspace or item name ends up in a path that is deleted recursively, so it must be a name and not a path.
 function Assert-IsAName([string]$variableName, [string]$value) {
     if ($value -match '[/\\]' -or $value -eq '.' -or $value -eq '..') {
@@ -52,7 +64,7 @@ switch ($Target) {
         $directory = "$item.Lakehouse/Tables"
         $tenantId = Get-RequiredVariable 'ONELAKE_TENANTID'
         $clientId = Get-RequiredVariable 'ONELAKE_CLIENTID'
-        $clientSecret = Get-RequiredVariable 'ONELAKE_CLIENTSECRET'
+        $clientSecret = Get-RequiredSecret 'ONELAKE_CLIENTSECRET'
     }
     'LakehouseFiles' {
         $workspace = Get-RequiredVariable 'ONELAKE_WORKSPACENAME'
@@ -61,7 +73,7 @@ switch ($Target) {
         $directory = "$item.Lakehouse/Files"
         $tenantId = Get-RequiredVariable 'ONELAKE_TENANTID'
         $clientId = Get-RequiredVariable 'ONELAKE_CLIENTID'
-        $clientSecret = Get-RequiredVariable 'ONELAKE_CLIENTSECRET'
+        $clientSecret = Get-RequiredSecret 'ONELAKE_CLIENTSECRET'
     }
     'MirroredDatabaseTables' {
         $workspace = Get-RequiredVariable 'ONELAKE_WORKSPACENAME'
@@ -70,7 +82,7 @@ switch ($Target) {
         $directory = "$item.MountedRelationalDatabase/Tables"
         $tenantId = Get-RequiredVariable 'FABRICOPENMIRRORING_TENANTID'
         $clientId = Get-RequiredVariable 'FABRICOPENMIRRORING_CLIENTID'
-        $clientSecret = Get-RequiredVariable 'FABRICOPENMIRRORING_CLIENTSECRET'
+        $clientSecret = Get-RequiredSecret 'FABRICOPENMIRRORING_CLIENTSECRET'
     }
 }
 Assert-IsAName 'ONELAKE_WORKSPACENAME' $workspace
