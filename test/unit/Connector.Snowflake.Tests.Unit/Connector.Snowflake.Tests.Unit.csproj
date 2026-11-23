@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Connector.Snowflake\Connector.Snowflake.csproj" />
+    <ProjectReference Include="../../../tools/Connector.Snowflake.Cleanup/Connector.Snowflake.Cleanup.csproj" />
   </ItemGroup>
 
 </Project>

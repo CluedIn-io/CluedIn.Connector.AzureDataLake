@@ -63,6 +63,9 @@ A second schedule, at 04:00 UTC and every night, does not benchmark. It cleans u
 - All the files under `Tables` of the Open Mirroring mirrored database `FABRICOPENMIRRORING_MIRROREDDATABASENAME` of the workspace
   `ONELAKE_WORKSPACENAME`, with the service principal `FABRICOPENMIRRORING_TENANTID`, `FABRICOPENMIRRORING_CLIENTID` and
   `FABRICOPENMIRRORING_CLIENTSECRET`, `build/cleanup-onelake.ps1 -Target MirroredDatabaseTables`.
+- The pipes and the tables named `XUNIT_...` in the Snowflake schema (`SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PRIVATE_KEY`, `SNOWFLAKE_DATABASE`,
+  `SNOWFLAKE_SCHEMA`, `SNOWFLAKE_WAREHOUSE`, and optionally `SNOWFLAKE_PRIVATE_KEY_PASSPHRASE` and `SNOWFLAKE_ROLE`), `tools/Connector.Snowflake.Cleanup`
+  (`--dry-run` only lists them). Nothing else in that schema is touched.
 
 Both schedules start the same pipeline, and each of its jobs checks the name of the schedule that started it.
 

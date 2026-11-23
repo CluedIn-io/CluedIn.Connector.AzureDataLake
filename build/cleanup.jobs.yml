@@ -4,6 +4,8 @@
 # - The containers (xunit-fs-*) of the storage account of the integration tests (build/cleanup-storage.ps1).
 # - The tables and the files of the OneLake lakehouse, and the files under Tables of the Open Mirroring mirrored database
 #   (build/cleanup-onelake.ps1).
+# - The pipes and tables the Snowflake integration tests leave in their schema, named XUNIT_...
+#   (tools/Connector.Snowflake.Cleanup).
 #
 # The variables are those of the integration tests. The secrets (the keys and the client secrets) have to be mapped into the
 # steps explicitly. Every step runs, whether or not an earlier one failed, and the job fails if one did.
@@ -77,3 +79,28 @@ jobs:
           filePath: ./build/cleanup-onelake.ps1
           arguments: -Target MirroredDatabaseTables
           pwsh: true
+
+      - task: UseDotNet@2
+        displayName: Use the .NET SDK of global.json
+        condition: succeededOrFailed()
+        inputs:
+          packageType: sdk
+          useGlobalJson: true
+
+      - task: NuGetAuthenticate@1
+        displayName: Authenticate the package feeds
+        condition: succeededOrFailed()
+
+      # The role and the passphrase are optional: when they are not defined, the tool takes the $(NAME) it is given as not set.
+      - script: dotnet run --project tools/Connector.Snowflake.Cleanup/Connector.Snowflake.Cleanup.csproj --configuration Release
+        displayName: Drop the XUNIT_ pipes and tables of the Snowflake schema
+        condition: succeededOrFailed()
+        env:
+          SNOWFLAKE_ACCOUNT: $(SNOWFLAKE_ACCOUNT)
+          SNOWFLAKE_USER: $(SNOWFLAKE_USER)
+          SNOWFLAKE_PRIVATE_KEY: $(SNOWFLAKE_PRIVATE_KEY)
+          SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: $(SNOWFLAKE_PRIVATE_KEY_PASSPHRASE)
+          SNOWFLAKE_DATABASE: $(SNOWFLAKE_DATABASE)
+          SNOWFLAKE_SCHEMA: $(SNOWFLAKE_SCHEMA)
+          SNOWFLAKE_WAREHOUSE: $(SNOWFLAKE_WAREHOUSE)
+          SNOWFLAKE_ROLE: $(SNOWFLAKE_ROLE)
