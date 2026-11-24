@@ -75,7 +75,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _applicationContext = applicationContext;
             _timeProvider = timeProvider;
             _storageFactory = storageFactory;
-            _storeRetryPolicy = StoreRetryPolicy.FromEnvironment(logger);
+            _storeRetryPolicy = StoreRetryPolicy.FromConstants(constants);
 
             var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
             var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);

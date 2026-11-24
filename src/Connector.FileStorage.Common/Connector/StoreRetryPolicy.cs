@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+
+using CluedIn.Core.Configuration;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -11,7 +12,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector;
 
 /// <summary>
 /// Retries the write of an entity that failed, a number of times and with a delay before each retry, before the failure is
-/// returned to the pipeline (as a ReQueue). Both are set with environment variables.
+/// returned to the pipeline (as a ReQueue). Both are settings of the connector (see
+/// <see cref="IStorageConfigurationConstants.StoreRetryCountKeyName"/> and <see cref="IStorageConfigurationConstants.StoreRetryDelayKeyName"/>).
 /// Only a failure that can go away on its own is retried: a SQL Server error that is transient (a timeout, a deadlock, a
 /// connection that was lost or could not be made, a server that is busy or failing over, see <see cref="IsTransientSqlErrorNumber"/>).
 /// What retrying cannot fix (a login or permission that is refused, a database or object that is not there, an invalid
@@ -19,20 +21,6 @@ namespace CluedIn.Connector.FileStorage.Common.Connector;
 /// </summary>
 internal sealed class StoreRetryPolicy
 {
-    /// <summary>
-    /// How many times a failed write is retried after the first attempt (so 3 retries are 4 attempts). 0 turns retrying off.
-    /// </summary>
-    internal const string RetryCountVariableName = "FILESTORAGE_STORE_RETRY_COUNT";
-
-    /// <summary>
-    /// The delay before each retry, in seconds (fractions are allowed).
-    /// </summary>
-    internal const string RetryDelaySecondsVariableName = "FILESTORAGE_STORE_RETRY_DELAY_SECONDS";
-
-    internal const int DefaultRetryCount = 3;
-
-    internal static readonly TimeSpan DefaultRetryDelay = TimeSpan.FromSeconds(5);
-
     // The numbers of the SQL Server errors that can go away on their own. Others are not retried: they are what retrying cannot fix.
     private static readonly HashSet<int> _transientSqlErrorNumbers =
     [
@@ -71,57 +59,25 @@ internal sealed class StoreRetryPolicy
         _isRetryable = isRetryable ?? IsRetryable;
     }
 
+    /// <summary>
+    /// How many times a failed write is retried after the first attempt (so 3 retries are 4 attempts). 0 turns retrying off.
+    /// </summary>
     internal int RetryCount { get; }
 
+    /// <summary>
+    /// The delay before each retry.
+    /// </summary>
     internal TimeSpan RetryDelay { get; }
 
     /// <summary>
-    /// Reads the retry count and the delay from the environment variables. A value that is missing uses its default. A value that
-    /// is not valid (not a number, or negative) is logged and uses its default as well.
+    /// Reads the retry count and the delay (in milliseconds) from the settings of the connector. A negative value is the same as 0.
     /// </summary>
-    internal static StoreRetryPolicy FromEnvironment(ILogger logger, Func<string, string> getVariable = null)
+    internal static StoreRetryPolicy FromConstants(IStorageConfigurationConstants constants)
     {
-        getVariable ??= Environment.GetEnvironmentVariable;
+        var retryCount = ConfigurationManagerEx.AppSettings.GetValue(constants.StoreRetryCountKeyName, constants.StoreRetryCountDefaultValue);
+        var retryDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.StoreRetryDelayKeyName, constants.StoreRetryDelayDefaultValue);
 
-        var retryCount = DefaultRetryCount;
-        var retryCountValue = getVariable(RetryCountVariableName);
-        if (!string.IsNullOrWhiteSpace(retryCountValue))
-        {
-            if (int.TryParse(retryCountValue, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedRetryCount))
-            {
-                retryCount = parsedRetryCount;
-            }
-            else
-            {
-                logger.LogWarning(
-                    "Invalid value '{Value}' for {VariableName}, it has to be a whole number of 0 or more. Using the default {DefaultValue}.",
-                    retryCountValue,
-                    RetryCountVariableName,
-                    DefaultRetryCount);
-            }
-        }
-
-        var retryDelay = DefaultRetryDelay;
-        var retryDelayValue = getVariable(RetryDelaySecondsVariableName);
-        if (!string.IsNullOrWhiteSpace(retryDelayValue))
-        {
-            if (double.TryParse(retryDelayValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedSeconds)
-                && parsedSeconds >= 0
-                && parsedSeconds <= TimeSpan.MaxValue.TotalSeconds)
-            {
-                retryDelay = TimeSpan.FromSeconds(parsedSeconds);
-            }
-            else
-            {
-                logger.LogWarning(
-                    "Invalid value '{Value}' for {VariableName}, it has to be a number of seconds of 0 or more. Using the default {DefaultValue}.",
-                    retryDelayValue,
-                    RetryDelaySecondsVariableName,
-                    DefaultRetryDelay.TotalSeconds);
-            }
-        }
-
-        return new StoreRetryPolicy(retryCount, retryDelay);
+        return new StoreRetryPolicy(retryCount, TimeSpan.FromMilliseconds(Math.Max(0, retryDelayMilliseconds)));
     }
 
     /// <summary>
