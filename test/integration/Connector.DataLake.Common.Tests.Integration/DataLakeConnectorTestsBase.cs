@@ -158,8 +158,17 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFact
         await directoryClient.DeleteIfExistsAsync();
     }
 
-    private protected override async Task<ExportedFilePath> WaitForFileToBeCreated(
+    private protected override Task<ExportedFilePath> WaitForFileToBeCreated(
         SetupContainerResult setupContainerResult,
+        Func<IList<ExportedFilePath>, IList<ExportedFilePath>> filterPaths = null,
+        Func<SetupContainerResult, string> getDirectoryName = null)
+    {
+        return WaitForFileToBeCreated(setupContainerResult, TimeSpan.FromSeconds(30), filterPaths, getDirectoryName);
+    }
+
+    private protected async Task<ExportedFilePath> WaitForFileToBeCreated(
+        SetupContainerResult setupContainerResult,
+        TimeSpan timeout,
         Func<IList<ExportedFilePath>, IList<ExportedFilePath>> filterPaths = null,
         Func<SetupContainerResult, string> getDirectoryName = null)
     {
@@ -167,7 +176,7 @@ public abstract partial class DataLakeConnectorTestsBase<TConnector, TClientFact
         var d = DateTime.Now;
         while (true)
         {
-            if (DateTime.Now > d.AddSeconds(30))
+            if (DateTime.Now > d.Add(timeout))
             {
                 throw new TimeoutException();
             }
