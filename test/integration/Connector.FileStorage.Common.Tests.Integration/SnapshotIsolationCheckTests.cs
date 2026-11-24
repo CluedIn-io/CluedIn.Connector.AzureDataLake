@@ -13,15 +13,15 @@ using Xunit;
 namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 
 /// <summary>
-/// Needs INTEGRATIONTEST_STREAMCACHE (a base64 encoded SQL Server connection string).
-/// The tests for a database with and without ALLOW_SNAPSHOT_ISOLATION are skipped when the database is the other way.
+/// Needs INTEGRATIONTEST_STREAMCACHE, a database with ALLOW_SNAPSHOT_ISOLATION on, and
+/// INTEGRATIONTEST_STREAMCACHE_NOSNAPSHOT, one with it off (both base64 encoded connection strings).
 /// </summary>
 public class SnapshotIsolationCheckTests
 {
     [Fact]
     public async Task LogIfNotEnabledAsync_WhenSnapshotIsolationIsEnabled_LogsNothing()
     {
-        await SkipUnlessSnapshotIsolationIs(enabled: true);
+        await AssertSnapshotIsolationIsOnAsync();
         var logger = new CapturingLogger();
 
         await SnapshotIsolationCheck.LogIfNotEnabledAsync(logger, "TestConnector", ConnectionString);
@@ -32,11 +32,11 @@ public class SnapshotIsolationCheckTests
     [Fact]
     public async Task LogIfNotEnabledAsync_WhenSnapshotIsolationIsNotEnabled_LogsAnError()
     {
-        await SkipUnlessSnapshotIsolationIs(enabled: false);
         var logger = new CapturingLogger();
-        var databaseName = new SqlConnectionStringBuilder(ConnectionString).InitialCatalog;
+        var connectionString = StreamCacheTestConnection.ConnectionStringWithoutSnapshotIsolation;
+        var databaseName = new SqlConnectionStringBuilder(connectionString).InitialCatalog;
 
-        await SnapshotIsolationCheck.LogIfNotEnabledAsync(logger, "TestConnector", ConnectionString);
+        await SnapshotIsolationCheck.LogIfNotEnabledAsync(logger, "TestConnector", connectionString);
 
         var entry = Assert.Single(logger.Entries);
         Assert.Equal(LogLevel.Error, entry.Level);
@@ -60,12 +60,12 @@ public class SnapshotIsolationCheckTests
 
     private static string ConnectionString => StreamCacheTestConnection.ConnectionString;
 
-    private static async Task SkipUnlessSnapshotIsolationIs(bool enabled)
+    // fails and does not skip, so that a pipeline database without the option cannot make this test pass by being skipped
+    private static async Task AssertSnapshotIsolationIsOnAsync()
     {
         await using var connection = new SqlConnection(ConnectionString);
         await connection.OpenAsync();
-        var isEnabled = await SnapshotSqlDataReader.IsSnapshotIsolationEnabledAsync(connection);
-        Assert.SkipUnless(isEnabled == enabled, $"The test needs ALLOW_SNAPSHOT_ISOLATION {(enabled ? "ON" : "OFF")} on the database.");
+        Assert.True(await SnapshotSqlDataReader.IsSnapshotIsolationEnabledAsync(connection), "The test needs ALLOW_SNAPSHOT_ISOLATION ON on the INTEGRATIONTEST_STREAMCACHE database.");
     }
 
     private sealed class CapturingLogger : ILogger

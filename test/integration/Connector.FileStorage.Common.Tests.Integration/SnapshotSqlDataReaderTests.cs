@@ -15,9 +15,8 @@ namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 
 /// <summary>
 /// Reads a real system-versioned table as of a point in time while other connections update it.
-/// Needs INTEGRATIONTEST_STREAMCACHE (a base64 encoded SQL Server connection string).
-/// Most tests need ALLOW_SNAPSHOT_ISOLATION on that database and are skipped without it,
-/// the one test for a database without it is skipped when it is on.
+/// Needs INTEGRATIONTEST_STREAMCACHE, a database with ALLOW_SNAPSHOT_ISOLATION on, and
+/// INTEGRATIONTEST_STREAMCACHE_NOSNAPSHOT, one with it off (both base64 encoded connection strings).
 /// </summary>
 public class SnapshotSqlDataReaderTests
 {
@@ -33,7 +32,7 @@ public class SnapshotSqlDataReaderTests
     [Fact]
     public async Task TryOpenAsync_WhenRowsAreUpdatedDuringTheRead_ReturnsEveryRowAsOfTheTimeExactlyOnce()
     {
-        await SkipUnlessSnapshotIsolationIs(enabled: true);
+        await AssertSnapshotIsolationIsOnAsync();
         const int rowCount = 30_000;
         await using var table = await TestTable.CreateAsync(rowCount);
         var initialIds = await table.GetIdsAsync();
@@ -73,7 +72,7 @@ public class SnapshotSqlDataReaderTests
     [Fact]
     public async Task TryOpenAsync_WhenTheReadIsOpenInsideASerializableScope_DoesNotBlockWriters()
     {
-        await SkipUnlessSnapshotIsolationIs(enabled: true);
+        await AssertSnapshotIsolationIsOnAsync();
         await using var table = await TestTable.CreateAsync(1_000);
         await Task.Delay(TimeSpan.FromSeconds(1.5));
         var asOfTime = await table.GetServerTimeAsync();
@@ -102,38 +101,39 @@ public class SnapshotSqlDataReaderTests
     [Fact]
     public async Task TryOpenAsync_WhenSnapshotIsolationIsNotEnabled_ReturnsNull()
     {
-        await SkipUnlessSnapshotIsolationIs(enabled: false);
-        await using var table = await TestTable.CreateAsync(10);
+        await using var table = await TestTable.CreateAsync(10, StreamCacheTestConnection.ConnectionStringWithoutSnapshotIsolation);
         var asOfTime = await table.GetServerTimeAsync();
 
-        await using var snapshotReader = await SnapshotSqlDataReader.TryOpenAsync(ConnectionString, connection => table.CreateAsOfCommand(connection, asOfTime));
+        await using var snapshotReader = await SnapshotSqlDataReader.TryOpenAsync(table.ConnectionString, connection => table.CreateAsOfCommand(connection, asOfTime));
 
         Assert.Null(snapshotReader);
     }
 
     private static string ConnectionString => StreamCacheTestConnection.ConnectionString;
 
-    private static async Task SkipUnlessSnapshotIsolationIs(bool enabled)
+    // fails and does not skip, so that a pipeline database without the option cannot make these tests pass by being skipped
+    private static async Task AssertSnapshotIsolationIsOnAsync()
     {
         await using var connection = new SqlConnection(ConnectionString);
         await connection.OpenAsync();
-        await using var command = new SqlCommand("SELECT snapshot_isolation_state FROM sys.databases WHERE database_id = DB_ID()", connection);
-        var isEnabled = Convert.ToInt32(await command.ExecuteScalarAsync()) == 1;
-        Assert.SkipUnless(isEnabled == enabled, $"The test needs ALLOW_SNAPSHOT_ISOLATION {(enabled ? "ON" : "OFF")} on the database.");
+        Assert.True(await SnapshotSqlDataReader.IsSnapshotIsolationEnabledAsync(connection), "The test needs ALLOW_SNAPSHOT_ISOLATION ON on the INTEGRATIONTEST_STREAMCACHE database.");
     }
 
     private sealed class TestTable : IAsyncDisposable
     {
-        private TestTable(string name)
+        private TestTable(string name, string connectionString)
         {
             Name = name;
+            ConnectionString = connectionString;
         }
 
         public string Name { get; }
 
-        public static async Task<TestTable> CreateAsync(int rowCount)
+        public string ConnectionString { get; }
+
+        public static async Task<TestTable> CreateAsync(int rowCount, string connectionString = null)
         {
-            var table = new TestTable($"SnapshotReaderTest_{Guid.NewGuid():N}");
+            var table = new TestTable($"SnapshotReaderTest_{Guid.NewGuid():N}", connectionString ?? SnapshotSqlDataReaderTests.ConnectionString);
             await table.ExecuteAsync($"""
                 CREATE TABLE [{table.Name}] (
                     [Id] UNIQUEIDENTIFIER NOT NULL,

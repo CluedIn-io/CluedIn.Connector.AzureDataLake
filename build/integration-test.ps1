@@ -44,6 +44,8 @@ function Get-ContainerName() {
 
 function Run-Setup() {
 	$databaseName = "DataStore.Db.StreamCache"
+	# Without snapshot isolation, for the tests of the export when the option is missing
+	$databaseNameWithoutSnapshot = "DataStore.Db.StreamCache.NoSnapshot"
 	$databaseHost = "localhost"
 	$databaseUser = "sa"
 	$databasePassword = "yourStrong(!)Password"
@@ -55,8 +57,11 @@ function Run-Setup() {
 	$port = ((docker inspect $containerName | convertfrom-json).NetworkSettings.Ports."1433/tcp" | Where-Object { $_.HostIp -eq '0.0.0.0'}).HostPort
 	$connectionString = "Data Source=$($databaseHost),$($port);Initial Catalog=$($databaseName);User Id=$($databaseUser);Password=$($databasePassword);connection timeout=0;Max Pool Size=200;Pooling=True;Encrypt=false"
 	$connectionStringEncoded = [Convert]::ToBase64String([char[]]$connectionString)
+	$connectionStringWithoutSnapshot = $connectionString.Replace("Initial Catalog=$($databaseName);", "Initial Catalog=$($databaseNameWithoutSnapshot);")
+	$connectionStringWithoutSnapshotEncoded = [Convert]::ToBase64String([char[]]$connectionStringWithoutSnapshot)
 	
 	Set-Variable "INTEGRATIONTEST_STREAMCACHE" $connectionStringEncoded
+	Set-Variable "INTEGRATIONTEST_STREAMCACHE_NOSNAPSHOT" $connectionStringWithoutSnapshotEncoded
 	
 	Write-Host "##[command]docker logs -f $($containerName)"
 	WaitFor { docker container logs --follow "datalaketest" } "SQL Server is now ready for client connections"
@@ -71,6 +76,10 @@ function Run-Setup() {
 	$snapshotIsolationCommand = "ALTER DATABASE [$databaseName] SET ALLOW_SNAPSHOT_ISOLATION ON"
 	Write-Host "##[command]docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $snapshotIsolationCommand"
 	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $snapshotIsolationCommand
+	
+	$createDatabaseWithoutSnapshotCommand = "CREATE DATABASE [$databaseNameWithoutSnapshot]"
+	Write-Host "##[command]docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseWithoutSnapshotCommand"
+	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseWithoutSnapshotCommand
 }
 
 function Run-TearDown() {

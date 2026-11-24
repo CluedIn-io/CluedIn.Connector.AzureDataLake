@@ -4,22 +4,25 @@ using System.Text;
 namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 
 /// <summary>
-/// The SQL Server database the integration tests of the stream cache run against,
-/// INTEGRATIONTEST_STREAMCACHE is its connection string, base64 encoded.
+/// The SQL Server databases the integration tests of the stream cache run against.
+/// Each connection string is in an environment variable, base64 encoded.
 /// </summary>
 internal static class StreamCacheTestConnection
 {
-    public static string ConnectionString
-    {
-        get
-        {
-            var encoded = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
-            if (string.IsNullOrWhiteSpace(encoded))
-            {
-                throw new InvalidOperationException("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
-            }
+    /// <summary>The database with ALLOW_SNAPSHOT_ISOLATION on, like the one the connector is deployed with.</summary>
+    public static string ConnectionString => Get("INTEGRATIONTEST_STREAMCACHE");
 
-            return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+    /// <summary>The database with ALLOW_SNAPSHOT_ISOLATION off.</summary>
+    public static string ConnectionStringWithoutSnapshotIsolation => Get("INTEGRATIONTEST_STREAMCACHE_NOSNAPSHOT");
+
+    private static string Get(string variableName)
+    {
+        var encoded = Environment.GetEnvironmentVariable(variableName);
+        if (string.IsNullOrWhiteSpace(encoded))
+        {
+            throw new InvalidOperationException($"{variableName} environment variable is not set.");
         }
+
+        return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
     }
 }
