@@ -66,6 +66,11 @@ function Run-Setup() {
 	$createDatabaseCommand = "CREATE DATABASE [$databaseName]"
 	Write-Host "##[command]docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand"
 	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $createDatabaseCommand
+	
+	# The export reads the cache table in a snapshot transaction, which needs this option (Runtime-Environment sets it in the StreamCache DACPAC)
+	$snapshotIsolationCommand = "ALTER DATABASE [$databaseName] SET ALLOW_SNAPSHOT_ISOLATION ON"
+	Write-Host "##[command]docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $snapshotIsolationCommand"
+	docker exec $containerName /opt/mssql-tools18/bin/sqlcmd -S $databaseHost -U $databaseUser -P $databasePassword -C -Q $snapshotIsolationCommand
 }
 
 function Run-TearDown() {
