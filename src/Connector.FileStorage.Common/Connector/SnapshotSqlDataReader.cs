@@ -66,7 +66,7 @@ internal sealed class SnapshotSqlDataReader : IAsyncDisposable
         await DisposeAsync(_connection, _transaction, _command);
     }
 
-    private static async Task<bool> IsSnapshotIsolationEnabledAsync(SqlConnection connection)
+    public static async Task<bool> IsSnapshotIsolationEnabledAsync(SqlConnection connection)
     {
         // 1 is ON, the states in between are while the option is being turned on or off
         await using var command = new SqlCommand("SELECT snapshot_isolation_state FROM sys.databases WHERE database_id = DB_ID()", connection);
