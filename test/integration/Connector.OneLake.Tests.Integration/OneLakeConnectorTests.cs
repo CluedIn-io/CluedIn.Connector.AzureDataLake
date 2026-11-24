@@ -329,8 +329,10 @@ public class OneLakeConnectorTests : DataLakeConnectorTestsBase<OneLakeConnector
                 var dataLakeClient = GetDataLakeClient(storageConfiguration);
                 var directoryName = $"{storageConfiguration.ItemName}.Lakehouse/Tables/{tableName}";
 
+                // Fabric loads the table in the background, and on a busy capacity that can take longer than writing a file
                 var tableFile = await WaitForFileToBeCreated(
                     setupResult,
+                    TimeSpan.FromMinutes(3),
                     paths => paths.Where(path => path.Name.EndsWith("parquet", StringComparison.OrdinalIgnoreCase)).ToList(),
                     _ => directoryName);
 
