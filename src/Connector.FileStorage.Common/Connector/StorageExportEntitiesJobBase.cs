@@ -116,9 +116,25 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         try
         {
+            // Without snapshot isolation the cache table is read on the connection of the export, so the export is serializable,
+            // for the table and its history table to be read as of the same moment.
+            var isSnapshotIsolationEnabled = await SnapshotSqlDataReader.IsSnapshotIsolationEnabledAsync(exportJobData.StorageConfiguration.StreamCacheConnectionString);
+            if (!isSnapshotIsolationEnabled)
+            {
+                context.Log.LogWarning(
+                    "Snapshot isolation is not enabled on the stream cache database. Reading the cache table for StreamId {StreamId} without it can block the entity writes.",
+                    streamId);
+            }
+
             using var transactionScope = new TransactionScope(
                 TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadCommitted, Timeout = _exportTimeout },
+                new TransactionOptions
+                {
+                    IsolationLevel = isSnapshotIsolationEnabled
+                        ? System.Transactions.IsolationLevel.ReadCommitted
+                        : System.Transactions.IsolationLevel.Serializable,
+                    Timeout = _exportTimeout,
+                },
                 TransactionScopeAsyncFlowOption.Enabled);
             await using var connection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
             await connection.OpenAsync();
@@ -128,7 +144,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                 context.Log.LogInformation("Unable to acquire lock to export data for Stream '{StreamId}'. Skipping export.", streamId);
                 return ExportResult.CreateSkipped("Failed to acquire lock");
             }
-            return await DoRunInternalAsync(context, args, exportJobData, transactionScope, connection);
+            return await DoRunInternalAsync(context, args, exportJobData, transactionScope, connection, isSnapshotIsolationEnabled);
         }
         catch (Exception ex)
         {
@@ -142,7 +158,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         IStorageJobArgs args,
         ExportJobData exportJobData,
         TransactionScope transactionScope,
-        SqlConnection connection)
+        SqlConnection connection,
+        bool isSnapshotIsolationEnabled)
     {
         var streamId = exportJobData.StreamId;
         var streamModel = exportJobData.StreamModel;
@@ -224,14 +241,15 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         await InitializeOutputTargetAsync(context, connection, exportJobData, storageClient);
 
         // The full table is read from a snapshot on its own connection so that it does not block the entity writes.
-        await using var snapshotReader = await SnapshotSqlDataReader.TryOpenAsync(
-            configuration.StreamCacheConnectionString,
-            dataConnection => GetDataSql(dataConnection, asOfTime, tableName, validFrom));
-        if (snapshotReader == null)
+        await using var snapshotReader = isSnapshotIsolationEnabled
+            ? await SnapshotSqlDataReader.TryOpenAsync(
+                configuration.StreamCacheConnectionString,
+                dataConnection => GetDataSql(dataConnection, asOfTime, tableName, validFrom))
+            : null;
+        if (isSnapshotIsolationEnabled && snapshotReader == null)
         {
-            context.Log.LogWarning(
-                "Snapshot isolation is not enabled on the stream cache database. Reading the cache table for StreamId {StreamId} without it can block the entity writes.",
-                exportJobData.StreamId);
+            // turned off since the export started, the export is read committed and so cannot read without it
+            throw new InvalidOperationException("Snapshot isolation was turned off on the stream cache database during the export.");
         }
 
         await using var fallbackReader = snapshotReader == null
