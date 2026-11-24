@@ -118,7 +118,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         {
             using var transactionScope = new TransactionScope(
                 TransactionScopeOption.Required,
-                _exportTimeout,
+                new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.ReadCommitted, Timeout = _exportTimeout },
                 TransactionScopeAsyncFlowOption.Enabled);
             await using var connection = new SqlConnection(exportJobData.StorageConfiguration.StreamCacheConnectionString);
             await connection.OpenAsync();
@@ -223,9 +223,21 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
 
         await InitializeOutputTargetAsync(context, connection, exportJobData, storageClient);
 
-        var getDataCommand = GetDataSql(connection, asOfTime, tableName, validFrom);
+        // The full table is read from a snapshot on its own connection so that it does not block the entity writes.
+        await using var snapshotReader = await SnapshotSqlDataReader.TryOpenAsync(
+            configuration.StreamCacheConnectionString,
+            dataConnection => GetDataSql(dataConnection, asOfTime, tableName, validFrom));
+        if (snapshotReader == null)
+        {
+            context.Log.LogWarning(
+                "Snapshot isolation is not enabled on the stream cache database. Reading the cache table for StreamId {StreamId} without it can block the entity writes.",
+                exportJobData.StreamId);
+        }
 
-        await using var reader = await getDataCommand.ExecuteReaderAsync();
+        await using var fallbackReader = snapshotReader == null
+            ? await GetDataSql(connection, asOfTime, tableName, validFrom).ExecuteReaderAsync()
+            : null;
+        var reader = snapshotReader?.Reader ?? fallbackReader;
 
         var fieldNames = Enumerable.Range(0, reader.VisibleFieldCount)
             .Select(reader.GetName)
