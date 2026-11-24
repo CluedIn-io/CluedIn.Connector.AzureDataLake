@@ -60,7 +60,7 @@ public class SnapshotSqlDataReaderTests
             }
         }
 
-        await stopWritersCts.CancelAsync();
+        stopWritersCts.Cancel();
         var updateStatements = (await Task.WhenAll(writers)).Sum();
         _output.WriteLine($"Rows returned: {returnedIds.Count}. Update statements during the read: {updateStatements}.");
 
