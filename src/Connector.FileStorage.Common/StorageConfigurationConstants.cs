@@ -121,7 +121,7 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     /// <summary>
     /// Default value for how many times the write of an entity is retried.
     /// </summary>
-    public int StoreRetryCountDefaultValue => 3;
+    public int StoreRetryCountDefaultValue => 5;
 
     /// <summary>
     /// Environment key name for the delay, in milliseconds, before each retry of the write of an entity.
@@ -131,7 +131,7 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     /// <summary>
     /// Default value for the delay before each retry of the write of an entity, in milliseconds.
     /// </summary>
-    public int StoreRetryDelayDefaultValue => 5_000;
+    public int StoreRetryDelayDefaultValue => 30_000;
 
     public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
 
