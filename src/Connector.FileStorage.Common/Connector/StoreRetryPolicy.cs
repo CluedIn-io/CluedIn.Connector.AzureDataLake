@@ -38,6 +38,7 @@ internal sealed class StoreRetryPolicy
         10054, // The connection was reset by the peer
         10060, // The connection attempt timed out
         10061, // The connection was refused (the server may be restarting)
+        11001, // The host is not known (the name of the server could not be resolved, for example a DNS failure)
         10928, // The resource limit of the Azure SQL database was reached
         10929, // The Azure SQL database is too busy
         40143, // The Azure SQL connection could not be initialized
@@ -91,7 +92,8 @@ internal sealed class StoreRetryPolicy
     /// Whether an error is SqlClient's own report that a connection to the SQL Server could not be made or was lost: an error number
     /// 0 of a fatal class (20). What SqlClient reports for a SQL Server that cannot be reached depends on its version and on the
     /// platform (on Linux a refused connection is an error 0 of class 20, with or without a SocketException as its cause, and an
-    /// unknown host an error 11001 or 0), but the error number of a SQL Server itself is never 0.
+    /// unknown host an error 11001, which is one of the transient error numbers, or 0), but the error number of a SQL Server itself
+    /// is never 0.
     /// </summary>
     internal static bool IsConnectionFailure(int number, byte errorClass) => number == 0 && errorClass >= 20;
 

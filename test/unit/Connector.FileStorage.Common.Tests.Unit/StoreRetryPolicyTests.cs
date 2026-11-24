@@ -173,6 +173,7 @@ public class StoreRetryPolicyTests
     [InlineData(233)]
     [InlineData(10054)]
     [InlineData(10060)]
+    [InlineData(11001)] // unknown host
     [InlineData(40197)]
     [InlineData(40501)]
     [InlineData(40613)]
