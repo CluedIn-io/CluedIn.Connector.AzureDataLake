@@ -971,7 +971,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
 
         private static async Task RenameCacheTableIfExists(SqlConnection connection, string tableName)
         {
-            var suffixDate = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var suffixDate = DateTime.UtcNow.ToString(StreamCacheTables.ArchiveDateFormat);
 
             await renameTable($"{tableName}_History");
             await renameTable(tableName);

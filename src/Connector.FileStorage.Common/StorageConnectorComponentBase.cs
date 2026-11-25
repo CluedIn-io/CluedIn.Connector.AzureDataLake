@@ -49,6 +49,9 @@ public abstract class StorageConnectorComponentBase : ServiceApplicationComponen
 
             _ = Task.Run(scheduler.RunAsync);
 
+            var streamCacheCleaner = new StreamCacheCleaner(Log, ApplicationContext);
+            _ = Task.Run(streamCacheCleaner.RunAsync);
+
             SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
         }
         else
