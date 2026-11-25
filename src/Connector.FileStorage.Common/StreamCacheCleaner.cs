@@ -97,14 +97,14 @@ internal class StreamCacheCleaner
 
     internal async Task CleanUpStreamAsync(StreamCacheTableRemover remover, StreamCacheTables streamTables, bool streamExists)
     {
-        await remover.RemoveObsoleteTablesAsync(streamTables);
+        var removedTableNames = await remover.RemoveObsoleteTablesAsync(streamTables);
 
         if (!streamExists)
         {
             _logger.LogWarning(
                 "Stream '{StreamId}' no longer exists but it still has stream cache tables. Please delete these tables, and their history tables, manually: {TableNames}.",
                 streamTables.StreamId,
-                string.Join(", ", streamTables.TableNames.Except(streamTables.ObsoleteTableNames)));
+                string.Join(", ", streamTables.TableNames.Except(removedTableNames)));
         }
     }
 

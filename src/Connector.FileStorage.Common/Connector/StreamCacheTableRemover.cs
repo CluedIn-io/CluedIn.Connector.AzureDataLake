@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Transactions;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -11,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace CluedIn.Connector.FileStorage.Common.Connector;
 
 /// <summary>
-/// Removes tables of streams from the stream cache database.
+/// Removes tables of streams from the stream cache database. The data of a table that cannot be removed is truncated.
 /// </summary>
 internal class StreamCacheTableRemover
 {
@@ -39,69 +38,75 @@ internal class StreamCacheTableRemover
     /// <summary>
     /// Removes all the tables of a stream, including its export history.
     /// </summary>
-    public async Task RemoveAllTablesAsync(Guid streamId)
+    public Task RemoveAllTablesAsync(Guid streamId)
     {
-        using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
-        await using var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync();
-
-        if (!await TryAcquireLockAsync(connection, streamId))
+        return RunWithLockAsync(streamId, async connection =>
         {
-            return;
-        }
-
-        var tableNames = await GetTableNamesAsync(connection);
-        var streamTables = StreamCacheTables.FromTableNames(tableNames).SingleOrDefault(tables => tables.StreamId == streamId);
-        if (streamTables != null)
-        {
-            foreach (var tableName in streamTables.TableNames)
+            var tableNames = await GetTableNamesAsync(connection);
+            var streamTables = StreamCacheTables.FromTableNames(tableNames).SingleOrDefault(tables => tables.StreamId == streamId);
+            if (streamTables != null)
             {
-                await TryDropCacheTableAsync(connection, streamId, tableName);
+                foreach (var tableName in streamTables.TableNames)
+                {
+                    _ = await TryDropOrTruncateCacheTableAsync(connection, streamId, tableName);
+                }
             }
-        }
 
-        await DropExportHistoryTableAsync(connection, streamId);
-        transactionScope.Complete();
+            await DropExportHistoryTableAsync(connection, streamId);
+        });
     }
 
     /// <summary>
     /// Removes the archived tables of a stream, except for the most recent one.
     /// </summary>
-    public async Task RemoveObsoleteTablesAsync(StreamCacheTables streamTables)
+    /// <returns>The names of the tables that were removed.</returns>
+    public async Task<IReadOnlyList<string>> RemoveObsoleteTablesAsync(StreamCacheTables streamTables)
     {
-        foreach (var tableName in streamTables.ObsoleteTableNames)
+        var removedTableNames = new List<string>();
+        var obsoleteTableNames = streamTables.ObsoleteTableNames;
+        if (obsoleteTableNames.Count == 0)
         {
-            try
-            {
-                // each table has its own transaction, for one that fails not to roll back the others
-                using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
-                await using var connection = new SqlConnection(_connectionString);
-                await connection.OpenAsync();
-
-                if (!await TryAcquireLockAsync(connection, streamTables.StreamId))
-                {
-                    return;
-                }
-
-                await TryDropCacheTableAsync(connection, streamTables.StreamId, tableName);
-                transactionScope.Complete();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to remove table {TableName} for Stream '{StreamId}'.", tableName, streamTables.StreamId);
-            }
+            return removedTableNames;
         }
+
+        await RunWithLockAsync(streamTables.StreamId, async connection =>
+        {
+            foreach (var tableName in obsoleteTableNames)
+            {
+                if (await TryDropOrTruncateCacheTableAsync(connection, streamTables.StreamId, tableName))
+                {
+                    removedTableNames.Add(tableName);
+                }
+            }
+        });
+        return removedTableNames;
     }
 
-    private async Task<bool> TryAcquireLockAsync(SqlConnection connection, Guid streamId)
+    private async Task RunWithLockAsync(Guid streamId, Func<SqlConnection, Task> action)
     {
-        if (await DistributedLockHelper.TryAcquireExclusiveLock(connection, $"RemoveTable_{streamId}", RemoveTableLockTimeoutInMilliseconds))
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        // a lock of the session, because each table is removed in a transaction of its own
+        var lockName = $"RemoveTable_{streamId}";
+        if (!await DistributedLockHelper.TryAcquireExclusiveSessionLock(connection, lockName, RemoveTableLockTimeoutInMilliseconds))
         {
-            return true;
+            _logger.LogInformation("Unable to acquire lock to remove table for Stream '{StreamId}'. Skipping removal.", streamId);
+            return;
         }
 
-        _logger.LogInformation("Unable to acquire lock to remove table for Stream '{StreamId}'. Skipping removal.", streamId);
-        return false;
+        try
+        {
+            await action(connection);
+        }
+        finally
+        {
+            // a connection that was closed by an error has lost its lock
+            if (connection.State == ConnectionState.Open)
+            {
+                await DistributedLockHelper.ReleaseSessionLock(connection, lockName);
+            }
+        }
     }
 
     private static async Task<IReadOnlyList<string>> GetTableNamesAsync(SqlConnection connection)
@@ -126,38 +131,67 @@ internal class StreamCacheTableRemover
         return list;
     }
 
-    private async Task TryDropCacheTableAsync(SqlConnection connection, Guid streamId, string tableName)
+    private async Task<bool> TryDropOrTruncateCacheTableAsync(SqlConnection connection, Guid streamId, string tableName)
     {
         _logger.LogInformation("Dropping table {TableName} for Stream '{StreamId}'.", tableName, streamId);
         try
         {
             await DropCacheTableAsync(connection, streamId, tableName);
             _logger.LogInformation("Dropped table {TableName} for Stream '{StreamId}'.", tableName, streamId);
+            return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to drop table {TableName} for Stream '{StreamId}'.", tableName, streamId);
+            _logger.LogError(ex, "Failed to drop table {TableName} for Stream '{StreamId}'. Truncating it instead.", tableName, streamId);
         }
+
+        try
+        {
+            await TruncateCacheTableAsync(connection, streamId, tableName);
+            _logger.LogWarning("Table {TableName} for Stream '{StreamId}' was truncated because it could not be dropped. Please remove it, and its history table, manually.", tableName, streamId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to truncate table {TableName} for Stream '{StreamId}'. Please remove it, and its history table, manually.", tableName, streamId);
+        }
+
+        return false;
     }
 
-    private static async Task DropCacheTableAsync(SqlConnection connection, Guid streamId, string tableName)
+    private static Task DropCacheTableAsync(SqlConnection connection, Guid streamId, string tableName)
+    {
+        return ExecuteOnCacheTableAsync(connection, streamId, tableName, "DROP TABLE");
+    }
+
+    private static Task TruncateCacheTableAsync(SqlConnection connection, Guid streamId, string tableName)
+    {
+        return ExecuteOnCacheTableAsync(connection, streamId, tableName, "TRUNCATE TABLE");
+    }
+
+    /// <summary>
+    /// Runs the statement on the table and its history table, both or none. Neither can be dropped or truncated while the table is
+    /// system-versioned, so that is turned off.
+    /// </summary>
+    private static async Task ExecuteOnCacheTableAsync(SqlConnection connection, Guid streamId, string tableName, string statement)
     {
         var prefix = CacheTableHelper.GetCacheTableName(streamId);
         var suffix = tableName[prefix.Length..].Replace("]", "]]").Replace("'", "''");
-        var dropTableSql =
+        var sql =
             $"""
              IF OBJECTPROPERTY(OBJECT_ID(N'[dbo].[{prefix}{suffix}]'), 'TableTemporalType') = 2
              ALTER TABLE [dbo].[{prefix}{suffix}] SET ( SYSTEM_VERSIONING = OFF  );
              IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[{prefix}{suffix}]') AND type in (N'U'))
-             DROP TABLE [dbo].[{prefix}{suffix}];
+             {statement} [dbo].[{prefix}{suffix}];
              IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[{prefix}_History{suffix}]') AND type in (N'U'))
-             DROP TABLE [dbo].[{prefix}_History{suffix}];
+             {statement} [dbo].[{prefix}_History{suffix}];
              """;
-        await using var dropCommand = new SqlCommand(dropTableSql, connection)
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        await using var command = new SqlCommand(sql, connection, transaction)
         {
             CommandType = CommandType.Text
         };
-        _ = await dropCommand.ExecuteNonQueryAsync();
+        _ = await command.ExecuteNonQueryAsync();
+        await transaction.CommitAsync();
     }
 
     private async Task DropExportHistoryTableAsync(SqlConnection connection, Guid streamId)
