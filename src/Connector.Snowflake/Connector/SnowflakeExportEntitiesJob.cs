@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Transactions;
 
 using CluedIn.Connector.FileStorage.Common;
 using CluedIn.Connector.FileStorage.Common.Connector;
@@ -53,7 +52,6 @@ internal class SnowflakeExportEntitiesJob : StorageExportEntitiesJobBase
         IStorageConfiguration configuration,
         IStorageClient storageClient,
         SqlDataReader reader,
-        TransactionScope transactionScope,
         List<string> fieldNames,
         DateTimeOffset instanceTime)
     {
