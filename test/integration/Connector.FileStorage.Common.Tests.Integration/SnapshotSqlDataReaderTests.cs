@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Transactions;
 
 using CluedIn.Connector.FileStorage.Common.Connector;
 
@@ -20,6 +19,11 @@ namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
 /// </summary>
 public class SnapshotSqlDataReaderTests
 {
+    // the values of sys.dm_exec_sessions.transaction_isolation_level
+    private const short ReadCommittedLevel = 2;
+    private const short SerializableLevel = 4;
+    private const short SnapshotLevel = 5;
+
     private const string AsOfSql = "SELECT * FROM [{0}] FOR SYSTEM_TIME AS OF @AsOfTime";
 
     private readonly ITestOutputHelper _output;
@@ -30,7 +34,7 @@ public class SnapshotSqlDataReaderTests
     }
 
     [Fact]
-    public async Task TryOpenAsync_WhenRowsAreUpdatedDuringTheRead_ReturnsEveryRowAsOfTheTimeExactlyOnce()
+    public async Task OpenAsync_WhenRowsAreUpdatedDuringTheRead_ReturnsEveryRowAsOfTheTimeExactlyOnce()
     {
         await AssertSnapshotIsolationIsOnAsync();
         const int rowCount = 30_000;
@@ -45,9 +49,10 @@ public class SnapshotSqlDataReaderTests
             .ToList();
 
         var returnedIds = new List<Guid>();
-        await using (var snapshotReader = await SnapshotSqlDataReader.TryOpenAsync(ConnectionString, connection => table.CreateAsOfCommand(connection, asOfTime)))
+        await using (var readConnection = await table.OpenConnectionAsync())
+        await using (var snapshotReader = await SnapshotSqlDataReader.OpenAsync(readConnection, connection => table.CreateAsOfCommand(connection, asOfTime)))
         {
-            Assert.NotNull(snapshotReader);
+            Assert.True(snapshotReader.IsSnapshotIsolation);
             while (await snapshotReader.Reader.ReadAsync())
             {
                 returnedIds.Add(snapshotReader.Reader.GetGuid(snapshotReader.Reader.GetOrdinal("Id")));
@@ -70,43 +75,43 @@ public class SnapshotSqlDataReaderTests
     }
 
     [Fact]
-    public async Task TryOpenAsync_WhenTheReadIsOpenInsideASerializableScope_DoesNotBlockWriters()
+    public async Task OpenAsync_WhenTheReadIsOpen_DoesNotBlockWriters()
     {
         await AssertSnapshotIsolationIsOnAsync();
         await using var table = await TestTable.CreateAsync(1_000);
         await Task.Delay(TimeSpan.FromSeconds(1.5));
         var asOfTime = await table.GetServerTimeAsync();
 
-        using var scope = new TransactionScope(
-            TransactionScopeOption.Required,
-            new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.Serializable },
-            TransactionScopeAsyncFlowOption.Enabled);
-        await using var snapshotReader = await SnapshotSqlDataReader.TryOpenAsync(ConnectionString, connection => table.CreateAsOfCommand(connection, asOfTime));
-        Assert.NotNull(snapshotReader);
+        await using var readConnection = await table.OpenConnectionAsync();
+        await using var snapshotReader = await SnapshotSqlDataReader.OpenAsync(readConnection, connection => table.CreateAsOfCommand(connection, asOfTime));
         Assert.True(await snapshotReader.Reader.ReadAsync());
 
         // the read is still open, a write from another connection must not wait for it
         var started = DateTime.UtcNow;
-        using (var suppress = new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled))
-        {
-            await table.ExecuteAsync($"SET LOCK_TIMEOUT 3000; UPDATE [{table.Name}] SET [Value] = 1");
-            suppress.Complete();
-        }
-
+        await table.ExecuteAsync($"SET LOCK_TIMEOUT 3000; UPDATE [{table.Name}] SET [Value] = 1");
         var elapsed = DateTime.UtcNow - started;
         _output.WriteLine($"Updating every row while the read was open took {elapsed.TotalMilliseconds:F0} ms.");
         Assert.True(elapsed < TimeSpan.FromSeconds(3), "The update had to wait for the read.");
     }
 
-    [Fact]
-    public async Task TryOpenAsync_WhenSnapshotIsolationIsNotEnabled_ReturnsNull()
+    [Theory]
+    [InlineData(true, SnapshotLevel)]
+    [InlineData(false, SerializableLevel)]
+    public async Task OpenAsync_ReadsInASnapshotOrSerializable_AndLeavesTheConnectionReadCommitted(bool isSnapshotIsolationEnabled, short expectedLevel)
     {
-        await using var table = await TestTable.CreateAsync(10, StreamCacheTestConnection.ConnectionStringWithoutSnapshotIsolation);
-        var asOfTime = await table.GetServerTimeAsync();
+        const string levelSql = "SELECT transaction_isolation_level FROM sys.dm_exec_sessions WHERE session_id = @@SPID";
+        await using var connection = new SqlConnection(isSnapshotIsolationEnabled ? ConnectionString : StreamCacheTestConnection.ConnectionStringWithoutSnapshotIsolation);
+        await connection.OpenAsync();
 
-        await using var snapshotReader = await SnapshotSqlDataReader.TryOpenAsync(table.ConnectionString, connection => table.CreateAsOfCommand(connection, asOfTime));
+        await using (var snapshotReader = await SnapshotSqlDataReader.OpenAsync(connection, dataConnection => new SqlCommand(levelSql, dataConnection)))
+        {
+            Assert.Equal(isSnapshotIsolationEnabled, snapshotReader.IsSnapshotIsolation);
+            Assert.True(await snapshotReader.Reader.ReadAsync());
+            Assert.Equal(expectedLevel, snapshotReader.Reader.GetInt16(0));
+        }
 
-        Assert.Null(snapshotReader);
+        await using var command = new SqlCommand(levelSql, connection);
+        Assert.Equal(ReadCommittedLevel, (short)await command.ExecuteScalarAsync());
     }
 
     private static string ConnectionString => StreamCacheTestConnection.ConnectionString;
