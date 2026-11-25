@@ -40,6 +40,14 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
         private static readonly ConcurrentDictionary<Type, DateTimeOffset> _lastHealthCheckErrorLogs = new ConcurrentDictionary<Type, DateTimeOffset>();
         private readonly TimeSpan _delayBetweenHealthCheckErrorLog;
+        private readonly bool _cacheBatchingEnabled;
+        private readonly int _cacheBatchSize;
+        private readonly int _cacheBatchTimeoutMilliseconds;
+        private readonly int _cacheBatchOutputThreads;
+
+        // One batcher per stream, so that the writes of a stream are batched with each other and not held up by other streams.
+        // Lazy, because a batcher starts its threads when it is created and GetOrAdd may run the factory more than once.
+        private readonly ConcurrentDictionary<Guid, Lazy<OperationBatcher<CacheWriteRequest, bool>>> _cacheWriteBatchers = new();
 
         // TODO: Handle ushort, ulong, uint
         private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new()
@@ -92,6 +100,15 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _buffer = new PartitionedBuffer<Partition, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush, timeProvider, cacheBufferStrategy);
             SetupBufferStatusSubscription();
+
+            _cacheBatchingEnabled = !string.IsNullOrEmpty(constants.CacheBatchingEnabledKeyName)
+                && ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchingEnabledKeyName, constants.CacheBatchingEnabledDefaultValue);
+            if (_cacheBatchingEnabled)
+            {
+                _cacheBatchSize = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchSizeKeyName, constants.CacheBatchSizeDefaultValue);
+                _cacheBatchTimeoutMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchTimeoutKeyName, constants.CacheBatchTimeoutDefaultValue);
+                _cacheBatchOutputThreads = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchOutputThreadsKeyName, constants.CacheBatchOutputThreadsDefaultValue);
+            }
         }
 
         ~StorageConnectorBase()
@@ -107,6 +124,10 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 {
                     _buffer.Dispose();
                     _bufferStatusSubscription?.Dispose();
+                    foreach (var batcher in _cacheWriteBatchers.Values.Where(x => x.IsValueCreated))
+                    {
+                        batcher.Value.Dispose();
+                    }
                 }
 
                 _disposedValue = true;
@@ -288,46 +309,66 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             var useSoftDelete = GetUseSoftDelete(streamModel, configurations);
             try
             {
+                // Only the writes with soft delete are batched
+                if (_cacheBatchingEnabled && useSoftDelete)
+                {
+                    await GetCacheWriteBatcher(syncItem.StreamId).QueueAsync(new CacheWriteRequest(
+                        configurations.StreamCacheConnectionString,
+                        tableName,
+                        syncItem));
+                }
+                else
+                {
+                    await WriteToCacheTableUnbatched(configurations.StreamCacheConnectionString, tableName, useSoftDelete, syncItem);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
+                throw;
+            }
+
+            return SaveResult.Success;
+        }
+
+        /// <summary>
+        /// Writes one entity to the cache table in a transaction of its own, creating the table first if it does not exist.
+        /// This is the write path used when batching is off, and the one the batched path falls back to for what it cannot
+        /// write set based, so that the outcome of an entity does not depend on which path handled it.
+        /// </summary>
+        private async Task WriteToCacheTableUnbatched(
+            string connectionString,
+            string tableName,
+            bool useSoftDelete,
+            SyncItem syncItem)
+        {
+            try
+            {
                 using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
-                await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
+                await using var connection = new SqlConnection(connectionString);
                 await connection.OpenAsync();
                 await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: useSoftDelete);
                 transactionScope.Complete();
             }
             catch (SqlException writeDataException) when (writeDataException.IsTableNotFoundException())
             {
-                try
-                {
-                    _logger.LogDebug("Table {TableName} does not exist. Trying to create and retry.", tableName);
-                    using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
-                    await using var connection = new SqlConnection(configurations.StreamCacheConnectionString);
-                    await connection.OpenAsync();
+                _logger.LogDebug("Table {TableName} does not exist. Trying to create and retry.", tableName);
+                using var transactionScope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled);
+                await using var connection = new SqlConnection(connectionString);
+                await connection.OpenAsync();
 
-                    var acquiredLock = await TryAcquireTableCreationLock(connection, tableName);
-                    if (!acquiredLock)
-                    {
-                        _logger.LogDebug("Unable to acquire lock for table creation. Table might be in the process of being created.");
-                    }
-                    else
-                    {
-                        await EnsureCacheTableExists(connection, tableName, syncItem);
-                    }
-                    await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: useSoftDelete);
-                    transactionScope.Complete();
-                }
-                catch (Exception ex2)
+                var acquiredLock = await TryAcquireTableCreationLock(connection, tableName);
+                if (!acquiredLock)
                 {
-                    _logger.LogError(ex2, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
-                    throw;
+                    _logger.LogDebug("Unable to acquire lock for table creation. Table might be in the process of being created.");
                 }
+                else
+                {
+                    await EnsureCacheTableExists(connection, tableName, syncItem);
+                }
+                await WriteToCacheTable(connection, syncItem, tableName, useSoftDelete: useSoftDelete);
+                transactionScope.Complete();
             }
-            catch (Exception ex1)
-            {
-                _logger.LogError(ex1, "Failed to process Entity with Id {EntityId}.", syncItem.EntityId);
-                throw;
-            }
-
-            return SaveResult.Success;
         }
 
         private Task<bool> TryAcquireTableCreationLock(SqlConnection connection, string tableName)

@@ -277,3 +277,6 @@ coverage.json
 
 # Developer only Runsettings (contain secrets for local test runs)
 devonly.runsettings
+
+# BenchmarkDotNet results of tools/Connector.FileStorage.Common.Benchmarks
+BenchmarkDotNet.Artifacts/

@@ -42,6 +42,16 @@ internal static class CacheTableParameterHelper
     };
 
     /// <summary>
+    /// The type a parameter for <paramref name="value"/> is declared with.
+    /// A null or <see cref="DBNull"/> value takes it from <paramref name="columnType"/>.
+    /// </summary>
+    internal static SqlDbType GetSqlDbType(object value, Type columnType)
+    {
+        var valueType = value is null || value is DBNull ? columnType : value.GetType();
+        return _dotNetToSqlDbTypeMap.TryGetValue(valueType, out var mappedType) ? mappedType : SqlDbType.NVarChar;
+    }
+
+    /// <summary>
     /// Creates a parameter whose declaration depends only on the value's type, never on the value itself.
     /// </summary>
     /// <param name="parameterName">Name of the parameter, including the '@' prefix.</param>
@@ -53,9 +63,14 @@ internal static class CacheTableParameterHelper
     /// </remarks>
     internal static SqlParameter CreateParameter(string parameterName, object value, Type columnType)
     {
-        var valueType = value is null || value is DBNull ? columnType : value.GetType();
-        var sqlDbType = _dotNetToSqlDbTypeMap.TryGetValue(valueType, out var mappedType) ? mappedType : SqlDbType.NVarChar;
+        return CreateParameter(parameterName, value, GetSqlDbType(value, columnType));
+    }
 
+    /// <summary>
+    /// Creates a parameter declared with <paramref name="sqlDbType"/>, as <see cref="GetSqlDbType"/> returns it for the value.
+    /// </summary>
+    internal static SqlParameter CreateParameter(string parameterName, object value, SqlDbType sqlDbType)
+    {
         var parameter = new SqlParameter(parameterName, sqlDbType)
         {
             Value = value,
