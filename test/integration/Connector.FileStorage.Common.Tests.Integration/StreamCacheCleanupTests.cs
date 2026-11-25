@@ -1,0 +1,206 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+using Castle.Windsor;
+
+using CluedIn.Connector.FileStorage.Common.Connector;
+using CluedIn.Core;
+
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
+
+using Moq;
+
+using Xunit;
+
+namespace CluedIn.Connector.FileStorage.Common.Tests.Integration;
+
+/// <summary>
+/// Removes real tables of a stream. Only the tables of the test's own stream are cleaned up, the database is shared with other tests.
+/// Needs INTEGRATIONTEST_STREAMCACHE (a base64 encoded SQL Server connection string).
+/// </summary>
+public class StreamCacheCleanupTests
+{
+    private readonly Guid _streamId = Guid.NewGuid();
+    private readonly Mock<ILogger> _logger = new();
+    private readonly string _connectionString = Encoding.UTF8.GetString(Convert.FromBase64String(Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE") ?? string.Empty));
+
+    private string Table => CacheTableHelper.GetCacheTableName(_streamId);
+
+    private StreamCacheTableRemover Remover => new(_logger.Object, _connectionString);
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CleanUpStream_RemovesTheArchivedTablesExceptTheMostRecent_AndWarnsWhenTheStreamDoesNotExist(bool streamExists)
+    {
+        await CreateTablesAsync();
+        try
+        {
+            var streamTables = StreamCacheTables.FromTableNames(await Remover.GetTableNamesAsync()).Single(tables => tables.StreamId == _streamId);
+            var cleaner = new StreamCacheCleaner(_logger.Object, new ApplicationContext(new WindsorContainer()));
+
+            await cleaner.CleanUpStreamAsync(Remover, streamTables, streamExists);
+
+            var expectedTables = new[]
+            {
+                Table,
+                $"{Table}_20250103000000",
+                $"{Table}_ExportHistory_ExportHistory",
+                $"{Table}_History",
+                $"{Table}_History_20250103000000",
+            };
+            Assert.Equal(expectedTables.OrderBy(name => name, StringComparer.Ordinal), await GetStreamTablesAsync());
+            Assert.Equal(1, await CountRowsAsync(Table));
+            Assert.Equal(1, await CountRowsAsync($"{Table}_History"));
+            Assert.Equal(1, await CountRowsAsync($"{Table}_20250103000000"));
+            Assert.Equal(1, await CountRowsAsync($"{Table}_History_20250103000000"));
+            Assert.Empty(GetLogged(LogLevel.Error));
+            Assert.NotEmpty(GetLogged(LogLevel.Information));
+            if (streamExists)
+            {
+                Assert.Empty(GetLogged(LogLevel.Warning));
+            }
+            else
+            {
+                var warning = Assert.Single(GetLogged(LogLevel.Warning));
+                Assert.Contains($"{Table}_20250103000000", warning);
+                Assert.DoesNotContain($"{Table}_20250102000000", warning);
+            }
+        }
+        finally
+        {
+            await Remover.RemoveAllTablesAsync(_streamId);
+        }
+    }
+
+    [Fact]
+    public async Task CleanUpStream_WhenATableCannotBeDropped_TruncatesIt()
+    {
+        await CreateTablesAsync();
+        var blockedTable = $"{Table}_20250102000000";
+        var blockedHistoryTable = $"{Table}_History_20250102000000";
+        var trigger = $"PreventDrop_{_streamId}";
+
+        // only prevents the drop of that table, the database is shared with other tests
+        await ExecuteAsync($"""
+            CREATE TRIGGER [{trigger}] ON DATABASE FOR DROP_TABLE AS
+            IF EVENTDATA().value('(/EVENT_INSTANCE/ObjectName)[1]', 'nvarchar(256)') = N'{blockedTable}'
+            BEGIN
+                RAISERROR('Simulated failure to drop the table.', 16, 1);
+                ROLLBACK;
+            END
+            """);
+        try
+        {
+            var streamTables = StreamCacheTables.FromTableNames(await Remover.GetTableNamesAsync()).Single(tables => tables.StreamId == _streamId);
+            var cleaner = new StreamCacheCleaner(_logger.Object, new ApplicationContext(new WindsorContainer()));
+
+            await cleaner.CleanUpStreamAsync(Remover, streamTables, streamExists: false);
+
+            var tables = await GetStreamTablesAsync();
+            Assert.Contains(blockedTable, tables);
+            Assert.Contains(blockedHistoryTable, tables);
+            Assert.DoesNotContain($"{Table}_20250101000000", tables);
+            Assert.Equal(0, await CountRowsAsync(blockedTable));
+            Assert.Equal(0, await CountRowsAsync(blockedHistoryTable));
+            Assert.Equal(1, await CountRowsAsync(Table));
+            Assert.Equal(1, await CountRowsAsync($"{Table}_History"));
+            Assert.Equal(1, await CountRowsAsync($"{Table}_20250103000000"));
+            Assert.Equal(1, await CountRowsAsync($"{Table}_History_20250103000000"));
+            Assert.Single(GetLogged(LogLevel.Error));
+
+            // one for the truncated table, one for the tables that are left of the stream that does not exist
+            var warnings = GetLogged(LogLevel.Warning);
+            Assert.Equal(2, warnings.Count);
+            Assert.All(warnings, warning => Assert.Contains(blockedTable, warning));
+            Assert.All(warnings, warning => Assert.Contains("manually", warning));
+
+            // the truncated table is removed by a later run
+            await ExecuteAsync($"DROP TRIGGER [{trigger}] ON DATABASE");
+            await cleaner.CleanUpStreamAsync(Remover, streamTables, streamExists: true);
+            Assert.DoesNotContain(blockedTable, await GetStreamTablesAsync());
+            Assert.DoesNotContain(blockedHistoryTable, await GetStreamTablesAsync());
+        }
+        finally
+        {
+            await ExecuteAsync($"DROP TRIGGER IF EXISTS [{trigger}] ON DATABASE");
+            await Remover.RemoveAllTablesAsync(_streamId);
+        }
+    }
+
+    [Fact]
+    public async Task RemoveAllTables_RemovesEveryTableOfTheStream()
+    {
+        await CreateTablesAsync();
+
+        await Remover.RemoveAllTablesAsync(_streamId);
+
+        Assert.Empty(await GetStreamTablesAsync());
+        Assert.Empty(GetLogged(LogLevel.Error));
+    }
+
+    private List<string> GetLogged(LogLevel level)
+    {
+        return _logger.Invocations
+            .Where(invocation => invocation.Method.Name == nameof(ILogger.Log) && level.Equals(invocation.Arguments[0]))
+            .Select(invocation => invocation.Arguments[2].ToString())
+            .ToList();
+    }
+
+    private async Task<List<string>> GetStreamTablesAsync()
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand($"SELECT name FROM sys.tables WHERE name LIKE '{Table}%'", connection);
+        await using var reader = await command.ExecuteReaderAsync();
+        var names = new List<string>();
+        while (await reader.ReadAsync())
+        {
+            names.Add(reader.GetString(0));
+        }
+
+        return names.OrderBy(name => name, StringComparer.Ordinal).ToList();
+    }
+
+    private async Task<int> CountRowsAsync(string tableName)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand($"SELECT COUNT(*) FROM [{tableName}]", connection);
+        return (int)await command.ExecuteScalarAsync();
+    }
+
+    private async Task CreateTablesAsync()
+    {
+        foreach (var suffix in new[] { string.Empty, "_20250101000000", "_20250102000000", "_20250103000000" })
+        {
+            await ExecuteAsync($"""
+                CREATE TABLE [{Table}{suffix}] (
+                    [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                    [Value] INT NOT NULL,
+                    [ValidFrom] DATETIME2 GENERATED ALWAYS AS ROW START HIDDEN,
+                    [ValidTo] DATETIME2 GENERATED ALWAYS AS ROW END HIDDEN,
+                    PERIOD FOR SYSTEM_TIME(ValidFrom, ValidTo)
+                ) WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.[{Table}_History{suffix}]));
+                """);
+
+            // the update adds a row to the history table
+            await ExecuteAsync($"INSERT [{Table}{suffix}] ([Id], [Value]) VALUES (NEWID(), 0)");
+            await ExecuteAsync($"UPDATE [{Table}{suffix}] SET [Value] = 1");
+        }
+
+        await ExecuteAsync($"CREATE TABLE [{StorageExportEntitiesJobBase.GetExportHistoryTableName(_streamId)}] ([Id] INT)");
+    }
+
+    private async Task ExecuteAsync(string sql)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+}
