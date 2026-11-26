@@ -44,7 +44,7 @@ public class OpenMirroringConnector : StorageConnectorBase
         _storageStorageFactory = storageFactory ?? throw new ArgumentNullException(nameof(storageFactory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-        var createDatabaseRetryIntervalMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.MirroredDatabaseCreationRetryIntervalKeyName, constants.MirroredDatabaseCreationRetryIntervalDefaultValue);
+        var createDatabaseRetryIntervalMilliseconds = ConfigurationHelper.GetValue(constants.MirroredDatabaseCreationRetryIntervalKeyName, constants.MirroredDatabaseCreationRetryIntervalDefaultValue);
 
         _mirroredDatabaseCreationRetryInterval = createDatabaseRetryIntervalMilliseconds > 0
             ? TimeSpan.FromMilliseconds(createDatabaseRetryIntervalMilliseconds)
