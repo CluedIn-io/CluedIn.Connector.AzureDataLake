@@ -209,6 +209,8 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         constants.Setup(x => x.CacheBufferStrategyDefaultValue).Returns(nameof(BufferStrategy.Safe));
         constants.Setup(x => x.HealthCheckErrorLogIntervalKeyName).Returns("HealthCheckErrorLogInterval");
         constants.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
+        constants.Setup(x => x.StoreRetryCountKeyName).Returns("StoreRetryCount");
+        constants.Setup(x => x.StoreRetryDelayKeyName).Returns("StoreRetryDelay");
         constants.Setup(x => x.ProviderId).Returns(StorageProviderId);
         return constants;
     }
