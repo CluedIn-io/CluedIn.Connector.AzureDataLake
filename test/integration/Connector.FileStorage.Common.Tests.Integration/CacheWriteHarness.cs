@@ -43,9 +43,11 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
 
     private readonly TestStorageConnector _connector;
     private readonly StreamModel _streamModel;
+    private readonly bool _isConnectionStringOverridden;
 
-    private CacheWriteHarness(TestStorageConnector connector, StreamModel streamModel, CapturingLogger logger, string connectionString, bool softDelete)
+    private CacheWriteHarness(TestStorageConnector connector, StreamModel streamModel, CapturingLogger logger, string connectionString, bool softDelete, bool isConnectionStringOverridden)
     {
+        _isConnectionStringOverridden = isConnectionStringOverridden;
         _connector = connector;
         _streamModel = streamModel;
         Logger = logger;
@@ -74,9 +76,10 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
 
     public string TableName => CacheTableHelper.GetCacheTableName(StreamId);
 
-    public static CacheWriteHarness Create(bool batching, bool softDelete, int batchSize = 50, int batchTimeoutMilliseconds = 0, int outputThreads = 10, bool collectBatchSizeStats = true)
+    public static CacheWriteHarness Create(bool batching, bool softDelete, int batchSize = 50, int batchTimeoutMilliseconds = 0, int outputThreads = 10, bool collectBatchSizeStats = true, string connectionString = null, int storeRetryCount = 0, int storeRetryDelayMilliseconds = 0)
     {
-        var connectionString = StreamCacheConnectionString
+        var isConnectionStringOverridden = connectionString != null;
+        connectionString ??= StreamCacheConnectionString
             ?? throw new InvalidOperationException("INTEGRATIONTEST_STREAMCACHE environment variable is not set.");
 
         var container = new WindsorContainer();
@@ -105,6 +108,10 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
         constants.Setup(x => x.CacheBatchTimeoutDefaultValue).Returns(batchTimeoutMilliseconds);
         constants.Setup(x => x.CacheBatchOutputThreadsKeyName).Returns("CacheBatchOutputThreads");
         constants.Setup(x => x.CacheBatchOutputThreadsDefaultValue).Returns(outputThreads);
+        constants.Setup(x => x.StoreRetryCountKeyName).Returns("StoreRetryCount");
+        constants.Setup(x => x.StoreRetryCountDefaultValue).Returns(storeRetryCount);
+        constants.Setup(x => x.StoreRetryDelayKeyName).Returns("StoreRetryDelay");
+        constants.Setup(x => x.StoreRetryDelayDefaultValue).Returns(storeRetryDelayMilliseconds);
 
         var configuration = new TestStorageConfiguration(connectionString, softDelete);
         var storageFactory = new Mock<IStorageFactory>();
@@ -127,7 +134,7 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
             OrganizationId = Guid.NewGuid(),
         };
 
-        return new CacheWriteHarness(connector, streamModel, logger, connectionString, softDelete);
+        return new CacheWriteHarness(connector, streamModel, logger, connectionString, softDelete, isConnectionStringOverridden);
     }
 
     public Task<SaveResult> StoreAsync(ConnectorEntityData entity) => _connector.StoreData(null, _streamModel, entity);
@@ -223,7 +230,14 @@ internal sealed class CacheWriteHarness : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _connector.Dispose();
-        await DropTableAsync();
+        try
+        {
+            await DropTableAsync();
+        }
+        catch (SqlException) when (_isConnectionStringOverridden)
+        {
+            // A test that wrote to a SQL Server or a database that cannot be reached on purpose: there is no table to drop
+        }
     }
 
     private sealed class TestStorageConnector : StorageConnectorBase

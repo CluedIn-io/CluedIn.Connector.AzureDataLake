@@ -10,7 +10,7 @@ using Azure.Storage;
 using Azure.Storage.Files.DataLake;
 
 using CluedIn.Connector.DataLake.Common.Connector;
-using CluedIn.Core.Configuration;
+using CluedIn.Connector.FileStorage.Common;
 
 using Microsoft.Extensions.Logging;
 
@@ -29,7 +29,7 @@ internal class AzureDataLakeStorageClient : DataLakeStorageClient
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _storageConfiguration = storageConfiguration ?? throw new ArgumentNullException(nameof(storageConfiguration));
         _constants = constants ?? throw new ArgumentNullException(nameof(constants));
-        _shouldEnableWorkloadIdentity = ConfigurationManagerEx.AppSettings.GetValue(
+        _shouldEnableWorkloadIdentity = ConfigurationHelper.GetValue(
             constants.WorkloadIdentityAuthenticationMethodEnabledKeyName,
             constants.WorkloadIdentityAuthenticationMethodEnabledDefaultValue);
     }

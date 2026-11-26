@@ -40,6 +40,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
         private static readonly ConcurrentDictionary<Type, DateTimeOffset> _lastHealthCheckErrorLogs = new ConcurrentDictionary<Type, DateTimeOffset>();
         private readonly TimeSpan _delayBetweenHealthCheckErrorLog;
+        private readonly StoreRetryPolicy _storeRetryPolicy;
         private readonly bool _cacheBatchingEnabled;
         private readonly int _cacheBatchSize;
         private readonly int _cacheBatchTimeoutMilliseconds;
@@ -83,11 +84,11 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _timeProvider = timeProvider;
             _storageFactory = storageFactory;
 
-            var cacheRecordsThreshold = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
-            var backgroundFlushMaxIdleDefaultValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
-            var cacheStrategyValue = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
+            var cacheRecordsThreshold = ConfigurationHelper.GetValue(constants.CacheRecordsThresholdKeyName, constants.CacheRecordsThresholdDefaultValue);
+            var backgroundFlushMaxIdleDefaultValue = ConfigurationHelper.GetValue(constants.CacheSyncIntervalKeyName, constants.CacheSyncIntervalDefaultValue);
+            var cacheStrategyValue = ConfigurationHelper.GetValue(constants.CacheBufferStrategyKeyName, constants.CacheBufferStrategyDefaultValue);
 
-            var healthCheckErrorLogDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
+            var healthCheckErrorLogDelayMilliseconds = ConfigurationHelper.GetValue(constants.HealthCheckErrorLogIntervalKeyName, constants.HealthCheckErrorLogIntervalDefaultValue);
 
             _delayBetweenHealthCheckErrorLog = healthCheckErrorLogDelayMilliseconds > 0 ? TimeSpan.FromMilliseconds(healthCheckErrorLogDelayMilliseconds) : TimeSpan.Zero;
 
@@ -102,13 +103,17 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             SetupBufferStatusSubscription();
 
             _cacheBatchingEnabled = !string.IsNullOrEmpty(constants.CacheBatchingEnabledKeyName)
-                && ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchingEnabledKeyName, constants.CacheBatchingEnabledDefaultValue);
+                && ConfigurationHelper.GetValue(constants.CacheBatchingEnabledKeyName, constants.CacheBatchingEnabledDefaultValue);
             if (_cacheBatchingEnabled)
             {
-                _cacheBatchSize = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchSizeKeyName, constants.CacheBatchSizeDefaultValue);
-                _cacheBatchTimeoutMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchTimeoutKeyName, constants.CacheBatchTimeoutDefaultValue);
-                _cacheBatchOutputThreads = ConfigurationManagerEx.AppSettings.GetValue(constants.CacheBatchOutputThreadsKeyName, constants.CacheBatchOutputThreadsDefaultValue);
+                _cacheBatchSize = ConfigurationHelper.GetValue(constants.CacheBatchSizeKeyName, constants.CacheBatchSizeDefaultValue);
+                _cacheBatchTimeoutMilliseconds = ConfigurationHelper.GetValue(constants.CacheBatchTimeoutKeyName, constants.CacheBatchTimeoutDefaultValue);
+                _cacheBatchOutputThreads = ConfigurationHelper.GetValue(constants.CacheBatchOutputThreadsKeyName, constants.CacheBatchOutputThreadsDefaultValue);
             }
+
+            var storeRetryCount = ConfigurationHelper.GetValue(constants.StoreRetryCountKeyName, constants.StoreRetryCountDefaultValue);
+            var storeRetryDelayMilliseconds = ConfigurationHelper.GetValue(constants.StoreRetryDelayKeyName, constants.StoreRetryDelayDefaultValue);
+            _storeRetryPolicy = new StoreRetryPolicy(storeRetryCount, TimeSpan.FromMilliseconds(storeRetryDelayMilliseconds));
         }
 
         ~StorageConnectorBase()
@@ -209,16 +214,31 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 AddToData("IncomingEdges", connectorEntityData.IncomingEdges.SafeEnumerate());
             }
 
+            var writesToCacheTable = configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync;
+
             try
             {
-                if (configuration.IsStreamCacheEnabled && streamModel.Mode == StreamMode.Sync)
+                // WriteToOutputImmediately writes the data of a stream that is not in sync mode with its change type. It is added
+                // here, once, as every attempt of the retries below would add it again.
+                if (streamModel.Mode != StreamMode.Sync)
                 {
-                    return await WriteToCacheTable(streamModel, connectorEntityData, configuration, data, dataValueTypes);
+                    data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
                 }
-                else
-                {
-                    return await WriteToOutputImmediately(executionContext, streamModel, connectorEntityData, configuration, data);
-                }
+
+                // A write that fails is retried, with a delay, before the failure is returned as a ReQueue
+                return await _storeRetryPolicy.RunAsync(
+                    async () =>
+                    {
+                        if (writesToCacheTable)
+                        {
+                            return await WriteToCacheTable(streamModel, connectorEntityData, configuration, data, dataValueTypes);
+                        }
+                        else
+                        {
+                            return await WriteToOutputImmediately(executionContext, streamModel, connectorEntityData, configuration, data);
+                        }
+                    },
+                    _logger);
             }
             catch (Exception ex)
             {
@@ -674,8 +694,6 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             }
             else
             {
-                data.Add("ChangeType", connectorEntityData.ChangeType.ToString());
-
                 var json = JsonConvert.SerializeObject(data);
 
                 await _buffer.Add(new (executionContext.Organization.Id, configurations), json);
