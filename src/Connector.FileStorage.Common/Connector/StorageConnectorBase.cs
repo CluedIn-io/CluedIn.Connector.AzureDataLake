@@ -40,6 +40,8 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
         private static readonly JsonSerializerSettings _cacheTableSerializerSettings = GetJsonSerializerSettings(Formatting.None);
         private static readonly ConcurrentDictionary<Type, DateTimeOffset> _lastHealthCheckErrorLogs = new ConcurrentDictionary<Type, DateTimeOffset>();
         private readonly TimeSpan _delayBetweenHealthCheckErrorLog;
+        private readonly StreamCacheThrottle _streamCacheThrottle;
+        private readonly IDisposable _streamCacheThrottleSubscription;
 
         // TODO: Handle ushort, ulong, uint
         private static readonly Dictionary<Type, string> _dotNetToSqlTypeMap = new()
@@ -92,6 +94,18 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
             _buffer = new PartitionedBuffer<Partition, string>(cacheRecordsThreshold,
                 backgroundFlushMaxIdleDefaultValue, Flush, timeProvider, cacheBufferStrategy);
             SetupBufferStatusSubscription();
+
+            var throttleWriteDelayMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.ThrottleStreamCacheWriteDelayKeyName, constants.ThrottleStreamCacheWriteDelayDefaultValue);
+            var throttleDurationMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(constants.ThrottleStreamCacheDurationKeyName, constants.ThrottleStreamCacheDurationDefaultValue);
+            _streamCacheThrottle = new StreamCacheThrottle(
+                timeProvider,
+                TimeSpan.FromMilliseconds(Math.Max(0, throttleWriteDelayMilliseconds)),
+                TimeSpan.FromMilliseconds(Math.Max(0, throttleDurationMilliseconds)));
+            _streamCacheThrottleSubscription = _applicationContext.System.Events.SubscribeAsync<ThrottleStreamCacheRequestedEvent>(request =>
+            {
+                _streamCacheThrottle.Request(request);
+                return Task.CompletedTask;
+            });
         }
 
         ~StorageConnectorBase()
@@ -107,6 +121,7 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 {
                     _buffer.Dispose();
                     _bufferStatusSubscription?.Dispose();
+                    _streamCacheThrottleSubscription?.Dispose();
                 }
 
                 _disposedValue = true;
@@ -284,6 +299,9 @@ namespace CluedIn.Connector.FileStorage.Common.Connector
                 data,
                 dataValueTypes);
             var tableName = GetCacheTableName(syncItem.StreamId);
+
+            // While the stream is exported, the export asks the writers to slow down, so that its read gets more of the database.
+            await _streamCacheThrottle.DelayWriteAsync(streamModel.OrganizationId, streamModel.Id);
 
             var useSoftDelete = GetUseSoftDelete(streamModel, configurations);
             try

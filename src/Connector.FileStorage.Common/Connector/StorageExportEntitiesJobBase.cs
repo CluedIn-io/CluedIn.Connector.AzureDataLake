@@ -12,6 +12,7 @@ using CluedIn.ComponentHealth.Services.Models;
 using CluedIn.ComponentHealth.Storage;
 using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
+using CluedIn.Core.Configuration;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 using CluedIn.Streams.StreamLog;
@@ -214,6 +215,19 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         var shouldProduceDelta = configuration.IsDeltaMode && !exportJobData.IsInitialExport;
         var validFrom = shouldProduceDelta ? exportJobData.LastExportedFile?.DataTime : null;
 
+        // From the first read of the cache table until the full read has ended, the writers into it are asked to slow down,
+        // so that the reads get more of the database.
+        var throttleRequestIntervalMilliseconds = ConfigurationManagerEx.AppSettings.GetValue(
+            _dataLakeConstants.ThrottleStreamCacheRequestIntervalKeyName,
+            _dataLakeConstants.ThrottleStreamCacheRequestIntervalDefaultValue);
+        await using var streamCacheThrottleRequester = StreamCacheThrottleRequester.Start(
+            context.ApplicationContext.System.Events,
+            _timeProvider,
+            context.Log,
+            streamModel.OrganizationId,
+            streamId,
+            TimeSpan.FromMilliseconds(throttleRequestIntervalMilliseconds));
+
         var getDataCommandWithLimit = GetDataSql(exportConnection, asOfTime, tableName, validFrom, limit: 1);
         var hasData = false;
         try
@@ -273,6 +287,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
             args.InstanceTime);
 
         await reader.CloseAsync();
+        await streamCacheThrottleRequester.DisposeAsync();
 
         await UpdateHistoryWithStatus(CompleteStatus, totalRows: totalRows);
         context.Log.LogInformation(

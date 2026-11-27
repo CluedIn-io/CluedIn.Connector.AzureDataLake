@@ -639,6 +639,12 @@ public class SnowflakeDeltaExportIntegrationTests
         constantsMock.Setup(x => x.CacheBufferStrategyDefaultValue).Returns(nameof(BufferStrategy.Safe));
         constantsMock.Setup(x => x.HealthCheckErrorLogIntervalKeyName).Returns("HealthCheckErrorLogInterval");
         constantsMock.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
+        constantsMock.Setup(x => x.ThrottleStreamCacheWriteDelayKeyName).Returns("ThrottleStreamCacheWriteDelay");
+        constantsMock.Setup(x => x.ThrottleStreamCacheWriteDelayDefaultValue).Returns(10_000);
+        constantsMock.Setup(x => x.ThrottleStreamCacheDurationKeyName).Returns("ThrottleStreamCacheDuration");
+        constantsMock.Setup(x => x.ThrottleStreamCacheDurationDefaultValue).Returns(30_000);
+        constantsMock.Setup(x => x.ThrottleStreamCacheRequestIntervalKeyName).Returns("ThrottleStreamCacheRequestInterval");
+        constantsMock.Setup(x => x.ThrottleStreamCacheRequestIntervalDefaultValue).Returns(25_000);
         constantsMock.Setup(x => x.ProviderId).Returns(SnowflakeConfigurationConstants.SnowflakeProviderId);
 
         var tableName = tableNamePattern ?? $"CLUEDIN_DELTA_TEST_{Guid.NewGuid():N}".ToUpperInvariant();
