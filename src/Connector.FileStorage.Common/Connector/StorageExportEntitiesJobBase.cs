@@ -12,6 +12,7 @@ using CluedIn.ComponentHealth.Services.Models;
 using CluedIn.ComponentHealth.Storage;
 using CluedIn.Connector.FileStorage.Common.Connector.SqlDataWriter;
 using CluedIn.Core;
+using CluedIn.Core.Configuration;
 using CluedIn.Core.Streams;
 using CluedIn.Core.Streams.Models;
 using CluedIn.Streams.StreamLog;
@@ -214,7 +215,11 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         var shouldProduceDelta = configuration.IsDeltaMode && !exportJobData.IsInitialExport;
         var validFrom = shouldProduceDelta ? exportJobData.LastExportedFile?.DataTime : null;
 
-        var getDataCommandWithLimit = GetDataSql(exportConnection, asOfTime, tableName, validFrom, limit: 1);
+        // Per call (ExecuteReader, each Read), not for the whole export.
+        var commandTimeoutInSeconds = ConfigurationManagerEx.AppSettings.GetValue(
+            _dataLakeConstants.ExportCommandTimeoutKeyName,
+            _dataLakeConstants.ExportCommandTimeoutDefaultValue);
+        var getDataCommandWithLimit = GetDataSql(exportConnection, asOfTime, tableName, validFrom, commandTimeoutInSeconds, limit: 1);
         var hasData = false;
         try
         {
@@ -259,7 +264,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         // the same moment. With snapshot isolation it does not block the entity writes.
         await using var snapshotReader = await SnapshotSqlDataReader.OpenAsync(
             exportConnection,
-            dataConnection => GetDataSql(dataConnection, asOfTime, tableName, validFrom));
+            dataConnection => GetDataSql(dataConnection, asOfTime, tableName, validFrom, commandTimeoutInSeconds));
         if (!snapshotReader.IsSnapshotIsolation)
         {
             context.Log.LogWarning(
@@ -295,7 +300,7 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
         await this.AddInformationToStreamIngestionLog(context, streamModel, $"Exported {outputFileName} with {totalRows} rows.");
         return ExportResult.CreateSuccess(outputDirectoryPath.GetFilePath(outputFileName));
 
-        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int? limit = null)
+        static SqlCommand GetDataSql(SqlConnection connection, DateTimeOffset asOfTime, string tableName, DateTimeOffset? validFrom, int commandTimeoutInSeconds, int? limit = null)
         {
             var limitClause = limit.HasValue ? $"TOP ({limit.Value}) " : string.Empty;
             var getDataSql = validFrom.HasValue
@@ -303,7 +308,8 @@ internal abstract class StorageExportEntitiesJobBase : StorageJobBase
                 : $"SELECT {limitClause}* FROM [{tableName}] FOR SYSTEM_TIME AS OF '{asOfTime:o}'";
             var command = new SqlCommand(getDataSql, connection)
             {
-                CommandType = CommandType.Text
+                CommandType = CommandType.Text,
+                CommandTimeout = commandTimeoutInSeconds,
             };
 
             if (validFrom.HasValue)

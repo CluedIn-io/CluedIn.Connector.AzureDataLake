@@ -112,6 +112,17 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     /// </summary>
     public int HealthCheckErrorLogIntervalDefaultValue => 60 * 60 * 1000; // 1 hour in milliseconds
 
+    /// <summary>
+    /// Environment key name for the longest a read of the cache table may wait for the server when exporting.
+    /// </summary>
+    public string ExportCommandTimeoutKeyName => $"Streams.{CacheKeyword}.ExportCommandTimeout";
+
+    /// <summary>
+    /// Default value for the export command timeout in seconds. The SqlClient default of 30 seconds is too short when the
+    /// database's IO is saturated, or when the read goes through history rows that are not exported.
+    /// </summary>
+    public int ExportCommandTimeoutDefaultValue => 10 * 60; // 10 minutes in seconds
+
     public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
 
     public string CacheBufferStrategyDefaultValue => nameof(BufferStrategy.Safe);
