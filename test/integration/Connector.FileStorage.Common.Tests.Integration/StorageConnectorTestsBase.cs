@@ -209,6 +209,12 @@ public abstract partial class StorageConnectorTestsBase<TConnector, TClientFacto
         constants.Setup(x => x.CacheBufferStrategyDefaultValue).Returns(nameof(BufferStrategy.Safe));
         constants.Setup(x => x.HealthCheckErrorLogIntervalKeyName).Returns("HealthCheckErrorLogInterval");
         constants.Setup(x => x.HealthCheckErrorLogIntervalDefaultValue).Returns(0);
+        constants.Setup(x => x.ThrottleStreamCacheWriteDelayKeyName).Returns("ThrottleStreamCacheWriteDelay");
+        constants.Setup(x => x.ThrottleStreamCacheWriteDelayDefaultValue).Returns(10_000);
+        constants.Setup(x => x.ThrottleStreamCacheDurationKeyName).Returns("ThrottleStreamCacheDuration");
+        constants.Setup(x => x.ThrottleStreamCacheDurationDefaultValue).Returns(30_000);
+        constants.Setup(x => x.ThrottleStreamCacheRequestIntervalKeyName).Returns("ThrottleStreamCacheRequestInterval");
+        constants.Setup(x => x.ThrottleStreamCacheRequestIntervalDefaultValue).Returns(25_000);
         constants.Setup(x => x.ProviderId).Returns(StorageProviderId);
         return constants;
     }

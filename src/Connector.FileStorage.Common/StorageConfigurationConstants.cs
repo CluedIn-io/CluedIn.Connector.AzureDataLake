@@ -112,6 +112,37 @@ public abstract class StorageConfigurationConstants : ConfigurationConstantsBase
     /// </summary>
     public int HealthCheckErrorLogIntervalDefaultValue => 60 * 60 * 1000; // 1 hour in milliseconds
 
+    /// <summary>
+    /// Environment key name for how long a write into the stream cache waits while an export asks the writers to slow down.
+    /// </summary>
+    public string ThrottleStreamCacheWriteDelayKeyName => $"Streams.{CacheKeyword}.ThrottleStreamCache.WriteDelay";
+
+    /// <summary>
+    /// Default value for the throttled write delay in milliseconds.
+    /// </summary>
+    public int ThrottleStreamCacheWriteDelayDefaultValue => 10_000;
+
+    /// <summary>
+    /// Environment key name for how long after an export's request the writes into the stream cache are delayed.
+    /// </summary>
+    public string ThrottleStreamCacheDurationKeyName => $"Streams.{CacheKeyword}.ThrottleStreamCache.Duration";
+
+    /// <summary>
+    /// Default value for the throttle duration in milliseconds.
+    /// </summary>
+    public int ThrottleStreamCacheDurationDefaultValue => 30_000;
+
+    /// <summary>
+    /// Environment key name for how often an export asks the writers into the stream cache to slow down.
+    /// </summary>
+    public string ThrottleStreamCacheRequestIntervalKeyName => $"Streams.{CacheKeyword}.ThrottleStreamCache.RequestInterval";
+
+    /// <summary>
+    /// Default value for the throttle request interval in milliseconds. Shorter than the duration, so that the writers stay
+    /// throttled for the whole export.
+    /// </summary>
+    public int ThrottleStreamCacheRequestIntervalDefaultValue => 25_000;
+
     public string CacheBufferStrategyKeyName => $"Streams.{CacheKeyword}.CacheBufferStrategy";
 
     public string CacheBufferStrategyDefaultValue => nameof(BufferStrategy.Safe);

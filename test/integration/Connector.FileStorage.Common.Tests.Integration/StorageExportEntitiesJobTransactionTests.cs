@@ -128,6 +128,33 @@ public class StorageExportEntitiesJobTransactionTests
     }
 
     [Fact]
+    public async Task Export_WhileReading_AsksTheWritersToSlowDownAtEveryInterval_AndStopsWhenDone()
+    {
+        await using var harness = await ExportHarness.CreateAsync(throttleRequestIntervalMilliseconds: 100);
+        var requestsWhileWriting = 0;
+        harness.Job.Writer.DelayWhileWriting = TimeSpan.FromSeconds(1);
+        harness.Job.Writer.WhileWriting = () =>
+        {
+            requestsWhileWriting = harness.ThrottleRequests.Count;
+            return Task.CompletedTask;
+        };
+
+        var result = await harness.RunExportAsync();
+        var requestsWhenDone = harness.ThrottleRequests.Count;
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+        Assert.True(result.HasExported, $"Export did not run. Reason: {result.Reason}");
+        Assert.True(requestsWhileWriting >= 1, "The writers should be asked to slow down as soon as the export starts reading.");
+        Assert.True(requestsWhenDone >= requestsWhileWriting + 3, $"Expected a request every 100 ms while the export ran, got {requestsWhenDone}.");
+        Assert.Equal(requestsWhenDone, harness.ThrottleRequests.Count);
+        Assert.All(harness.ThrottleRequests, request =>
+        {
+            Assert.Equal(harness.OrganizationId, request.OrganizationId);
+            Assert.Equal(harness.StreamId, request.StreamId);
+        });
+    }
+
+    [Fact]
     public async Task Export_WhenWritingFails_MarksHistoryFailed_AndRethrows()
     {
         await using var harness = await ExportHarness.CreateAsync();
@@ -365,13 +392,15 @@ public class StorageExportEntitiesJobTransactionTests
             Guid streamId,
             ExecutionContext context,
             TestExportJob job,
-            InMemoryStorage storage)
+            InMemoryStorage storage,
+            ConcurrentQueue<ThrottleStreamCacheRequestedEvent> throttleRequests)
         {
             _connectionString = connectionString;
             _streamId = streamId;
             _context = context;
             Job = job;
             Storage = storage;
+            ThrottleRequests = throttleRequests;
             _cacheTableName = CacheTableHelper.GetCacheTableName(streamId);
             HistoryTableName = StorageExportEntitiesJobBase.GetExportHistoryTableName(streamId);
         }
@@ -380,13 +409,20 @@ public class StorageExportEntitiesJobTransactionTests
 
         public InMemoryStorage Storage { get; }
 
+        public ConcurrentQueue<ThrottleStreamCacheRequestedEvent> ThrottleRequests { get; }
+
+        public Guid StreamId => _streamId;
+
+        public Guid OrganizationId => _context.Organization.Id;
+
         public string HistoryTableName { get; }
 
         /// <param name="jobConnectionStringOptions">
         /// Extra connection string options for the connection string the export job itself uses (for example a small
         /// "Max Pool Size"). Its connection pool is separate from the one the harness uses to set up and inspect the database.
         /// </param>
-        public static async Task<ExportHarness> CreateAsync(string jobConnectionStringOptions = null)
+        /// <param name="throttleRequestIntervalMilliseconds">How often the export asks the writers to slow down.</param>
+        public static async Task<ExportHarness> CreateAsync(string jobConnectionStringOptions = null, int throttleRequestIntervalMilliseconds = 25_000)
         {
             var encodedConnectionString = Environment.GetEnvironmentVariable("INTEGRATIONTEST_STREAMCACHE");
             Assert.False(
@@ -426,7 +462,13 @@ public class StorageExportEntitiesJobTransactionTests
 
             var container = new WindsorContainer();
             var applicationContext = new ApplicationContext(container);
-            container.Register(Component.For<ISystemEvents>().Instance(new Mock<ISystemEvents>().Object));
+            var throttleRequests = new ConcurrentQueue<ThrottleStreamCacheRequestedEvent>();
+            var systemEvents = new Mock<ISystemEvents>();
+            systemEvents
+                .Setup(x => x.PublishAsync(It.IsAny<ThrottleStreamCacheRequestedEvent>()))
+                .Callback<ThrottleStreamCacheRequestedEvent>(throttleRequests.Enqueue)
+                .Returns(Task.CompletedTask);
+            container.Register(Component.For<ISystemEvents>().Instance(systemEvents.Object));
 
             var streamLogService = new Mock<IStreamLogService>();
             streamLogService
@@ -487,6 +529,8 @@ public class StorageExportEntitiesJobTransactionTests
 
             var constants = new Mock<IStorageConfigurationConstants>();
             constants.Setup(x => x.ProviderId).Returns(providerId);
+            constants.Setup(x => x.ThrottleStreamCacheRequestIntervalKeyName).Returns("ThrottleStreamCacheRequestInterval");
+            constants.Setup(x => x.ThrottleStreamCacheRequestIntervalDefaultValue).Returns(throttleRequestIntervalMilliseconds);
 
             var jobConnectionString = string.IsNullOrEmpty(jobConnectionStringOptions)
                 ? connectionString
@@ -505,7 +549,7 @@ public class StorageExportEntitiesJobTransactionTests
                 .ReturnsAsync(() => new InMemoryStorageClient(storage));
 
             var job = new TestExportJob(applicationContext, streamRepository.Object, constants.Object, storageFactory.Object, timeProvider.Object);
-            return new ExportHarness(connectionString, streamId, context, job, storage);
+            return new ExportHarness(connectionString, streamId, context, job, storage, throttleRequests);
         }
 
         public async Task<StorageExportEntitiesJobBase.ExportResult> RunExportAsync()
