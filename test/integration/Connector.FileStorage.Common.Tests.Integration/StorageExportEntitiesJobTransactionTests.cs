@@ -487,6 +487,8 @@ public class StorageExportEntitiesJobTransactionTests
 
             var constants = new Mock<IStorageConfigurationConstants>();
             constants.Setup(x => x.ProviderId).Returns(providerId);
+            constants.Setup(x => x.ExportCommandTimeoutKeyName).Returns("ExportCommandTimeout");
+            constants.Setup(x => x.ExportCommandTimeoutDefaultValue).Returns(600);
 
             var jobConnectionString = string.IsNullOrEmpty(jobConnectionStringOptions)
                 ? connectionString

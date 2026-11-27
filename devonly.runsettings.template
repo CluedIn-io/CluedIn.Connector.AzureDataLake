@@ -5,6 +5,8 @@
         <EnvironmentVariables>
             <!-- Stream cache connection string (base64 encoded) to be used by all integration tests -->
             <INTEGRATIONTEST_STREAMCACHE>dummy_base64_encoded</INTEGRATIONTEST_STREAMCACHE>
+            <!-- The same on a database without ALLOW_SNAPSHOT_ISOLATION, for the tests of the export without it -->
+            <INTEGRATIONTEST_STREAMCACHE_NOSNAPSHOT>dummy_base64_encoded</INTEGRATIONTEST_STREAMCACHE_NOSNAPSHOT>
             
             <!-- Amazon S3 -->
             <S3_ACCESSKEY>dummy</S3_ACCESSKEY>

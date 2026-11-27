@@ -42,5 +42,15 @@ namespace CluedIn.Connector.FileStorage.Common
         /// Default value for health-check error log interval in milliseconds.
         /// </summary>
         int HealthCheckErrorLogIntervalDefaultValue { get; }
+
+        /// <summary>
+        /// Environment key name for the longest a read of the cache table may wait for the server when exporting.
+        /// </summary>
+        string ExportCommandTimeoutKeyName { get; }
+
+        /// <summary>
+        /// Default value for the export command timeout in seconds (0 waits without a limit).
+        /// </summary>
+        int ExportCommandTimeoutDefaultValue { get; }
     }
 }

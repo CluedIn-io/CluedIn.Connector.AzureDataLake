@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
+using CluedIn.Connector.FileStorage.Common.Connector;
 using CluedIn.Connector.FileStorage.Common.EventHandlers;
 using CluedIn.Core;
 using CluedIn.Core.Configuration;
@@ -49,6 +50,8 @@ public abstract class StorageConnectorComponentBase : ServiceApplicationComponen
 
             _ = Task.Run(scheduler.RunAsync);
 
+            _ = Task.Run(CheckSnapshotIsolationAsync);
+
             SubscribeToEvents(dataLakeConstants, jobDataFactory, scheduler);
         }
         else
@@ -69,6 +72,20 @@ public abstract class StorageConnectorComponentBase : ServiceApplicationComponen
         }
 
         State = ServiceState.Stopped;
+    }
+
+    private Task CheckSnapshotIsolationAsync()
+    {
+        var connectionStrings = ApplicationContext.System.ConnectionStrings;
+        if (!connectionStrings.ConnectionStringExists(StorageConfigurationConstants.StreamCacheConnectionStringKey))
+        {
+            return Task.CompletedTask;
+        }
+
+        return SnapshotIsolationCheck.LogIfNotEnabledAsync(
+            Log,
+            ConnectorComponentName,
+            connectionStrings.GetConnectionString(StorageConfigurationConstants.StreamCacheConnectionStringKey));
     }
 
     private protected virtual void SubscribeToEvents(IStorageConfigurationConstants constants, IStorageFactory jobDataFactory, IScheduledJobQueue jobQueue)
